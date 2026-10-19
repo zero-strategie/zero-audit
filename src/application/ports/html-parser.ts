@@ -12,6 +12,8 @@ export interface ParsedHtml {
   links: RawLink[];
   title: string | null;
   metaDescription: string | null;
+  /** Absolute URL of `<link rel="canonical">`, resolved against the page URL. */
+  canonical: string | null;
   h1: string[];
   wordCount: number;
   contentHash: string;

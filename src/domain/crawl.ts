@@ -11,6 +11,8 @@ export interface Page {
   readonly isHtml: boolean;
   readonly title: string | null;
   readonly metaDescription: string | null;
+  /** Absolute URL declared by `<link rel="canonical">`, null when absent. */
+  readonly canonical: string | null;
   readonly h1: readonly string[];
   readonly wordCount: number | null;
   readonly contentHash: string | null;

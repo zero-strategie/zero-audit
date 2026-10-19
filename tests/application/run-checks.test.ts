@@ -17,6 +17,7 @@ const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   isHtml: true,
   title: null,
   metaDescription: null,
+  canonical: null,
   h1: [],
   wordCount: null,
   contentHash: null,

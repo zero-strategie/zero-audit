@@ -103,3 +103,16 @@ describe('CheerioHtmlParser metadata', () => {
     expect(parsed.wordCount).toBeGreaterThan(0);
   });
 });
+
+describe('CheerioHtmlParser canonical', () => {
+  const parser = new CheerioHtmlParser();
+  const canonicalOf = (html: string) => parser.parse(html, PAGE_URL).canonical;
+
+  it('resolves the canonical href into an absolute URL', () => {
+    expect(canonicalOf('<head><link rel="canonical" href="/a"></head>')).toBe('https://h/a');
+  });
+
+  it('is null without a canonical link', () => {
+    expect(canonicalOf('<head><link rel="stylesheet" href="/s.css"></head>')).toBeNull();
+  });
+});

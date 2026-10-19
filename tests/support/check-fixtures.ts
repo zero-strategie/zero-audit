@@ -18,6 +18,7 @@ export const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   isHtml: true,
   title: 'Un titre de page suffisamment long',
   metaDescription: 'Une description',
+  canonical: null,
   h1: ['Titre'],
   wordCount: 300,
   contentHash: null,

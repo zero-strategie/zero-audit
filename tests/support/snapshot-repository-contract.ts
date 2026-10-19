@@ -21,6 +21,7 @@ const page = (overrides: Partial<Page> = {}): Page => ({
   isHtml: true,
   title: 'Home',
   metaDescription: 'A description',
+  canonical: 'https://example.test/home',
   h1: ['Home'],
   wordCount: 250,
   contentHash: 'abc123',

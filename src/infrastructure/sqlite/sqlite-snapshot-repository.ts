@@ -39,6 +39,7 @@ interface PageRow {
   is_html: number;
   title: string | null;
   meta_description: string | null;
+  canonical: string | null;
   h1: string;
   word_count: number | null;
   content_hash: string | null;
@@ -98,6 +99,7 @@ const toPage = (row: PageRow): Page => ({
   isHtml: row.is_html === 1,
   title: row.title,
   metaDescription: row.meta_description,
+  canonical: row.canonical,
   h1: JSON.parse(row.h1) as string[],
   wordCount: row.word_count,
   contentHash: row.content_hash,
@@ -162,9 +164,9 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     return this.writeToRunning(id, () => {
       const insert = this.db.prepare(
         `INSERT INTO pages (snapshot_id, url, depth, status, error, redirect_target, redirect_chain, headers,
-           response_time_ms, content_type, is_html, title, meta_description, h1, word_count, content_hash,
-           blocked_by_robots)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           response_time_ms, content_type, is_html, title, meta_description, canonical, h1, word_count,
+           content_hash, blocked_by_robots)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const page of pages) {
         insert.run(
@@ -181,6 +183,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
           page.isHtml ? 1 : 0,
           page.title,
           page.metaDescription,
+          page.canonical,
           JSON.stringify(page.h1),
           page.wordCount,
           page.contentHash,
