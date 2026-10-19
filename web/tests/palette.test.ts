@@ -32,6 +32,8 @@ const TEXT_PAIRS = [
   ['--color-error-text', '--color-error-bg'],
   ['--color-warning-text', '--color-warning-bg'],
   ['--color-notice-text', '--color-notice-bg'],
+  ['--color-error-text', '--color-bg'],
+  ['--color-success-text', '--color-bg'],
 ] as const;
 
 const ratioIn = (

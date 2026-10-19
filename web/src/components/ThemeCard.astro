@@ -1,0 +1,18 @@
+---
+import type { Theme } from '../lib/api/types';
+import { THEME_LABELS } from '../lib/labels';
+import { formatScoreWithVariation } from '../lib/presentation';
+
+interface Props {
+  theme: Theme;
+  score: number | null;
+  variation: number | null;
+}
+
+const { theme, score, variation } = Astro.props;
+---
+
+<li class="theme-card" data-testid={`theme-${theme}`}>
+  <span class="theme-name">{THEME_LABELS[theme]}</span>
+  <strong class="theme-score">{formatScoreWithVariation(score, variation)}</strong>
+</li>

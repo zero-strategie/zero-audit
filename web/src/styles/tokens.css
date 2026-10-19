@@ -13,6 +13,8 @@
   --color-warning-text: #7a4a00;
   --color-notice-bg: #dbeafe;
   --color-notice-text: #1e40af;
+  --color-success-text: #166534;
+  --color-gauge-arc: #1d4ed8;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -37,5 +39,7 @@
     --color-warning-text: #fcd34d;
     --color-notice-bg: #1b3358;
     --color-notice-text: #bcd4ff;
+    --color-success-text: #86efac;
+    --color-gauge-arc: #8ab4ff;
   }
 }
