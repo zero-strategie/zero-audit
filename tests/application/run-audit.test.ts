@@ -16,6 +16,7 @@ const crawlResult: CrawlResult = {
   rootUrl: ROOT,
   internalHost: 'exemple.com',
   pages: [makePage(ROOT), makePage('https://exemple.com/a')],
+  blockedPages: [],
   links: [makeLink(ROOT, 'https://exemple.com/a')],
   site: { robotsFound: true, sitemapFound: true },
 };
@@ -42,7 +43,28 @@ const build = (crawler: Crawler) => {
   return { repository, projects, useCase };
 };
 
+const blocked = makePage('https://exemple.com/private/a', {
+  blockedByRobots: true,
+  status: null,
+  isHtml: false,
+});
+
 describe('RunAudit', () => {
+  it('stores blocked pages without counting them as crawled or examining them', async () => {
+    const { useCase, repository } = build({
+      crawl: () => Promise.resolve({ ...crawlResult, blockedPages: [blocked] }),
+    });
+
+    const details = await useCase.execute({ rootUrl: ROOT, limit: 10, delayMs: 0 });
+
+    const stored = await repository.getById(details.snapshot.id);
+    expect(stored?.pages).toHaveLength(3);
+    expect(stored?.pages.filter((p) => p.blockedByRobots).map((p) => p.url)).toEqual([blocked.url]);
+    expect(stored?.snapshot.pagesCrawled).toBe(2);
+    const titleMissing = stored?.checkResults.find((r) => r.checkId === 3);
+    expect(titleMissing?.examined).toBe(2);
+  });
+
   it('persists pages, links and all check results, then finishes the snapshot', async () => {
     const crawler = new FakeCrawler();
     const { useCase, repository } = build(crawler);

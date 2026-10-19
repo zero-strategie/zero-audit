@@ -24,6 +24,7 @@ const page = (overrides: Partial<Page> = {}): Page => ({
   h1: ['Home'],
   wordCount: 250,
   contentHash: 'abc123',
+  blockedByRobots: false,
   ...overrides,
 });
 
@@ -84,6 +85,21 @@ export const describeSnapshotRepositoryContract = (
     it('returns null for an unknown id', async () => {
       const { snapshots: repo } = await factory();
       expect(await repo.getById('missing')).toBeNull();
+    });
+
+    it('keeps the blocked-by-robots flag of a page', async () => {
+      const { repo, id } = await createRunning();
+      const blocked = page({
+        url: 'https://example.test/private',
+        status: null,
+        isHtml: false,
+        blockedByRobots: true,
+      });
+      await repo.addPages(id, [page(), blocked]);
+
+      const details = await repo.getById(id);
+
+      expect(details?.pages.map((p) => p.blockedByRobots)).toEqual([false, true]);
     });
 
     it('reads back exactly what was written', async () => {

@@ -159,6 +159,41 @@ describe('BfsCrawler traversal', () => {
     expect(result.pages.map((p) => p.url)).toEqual([`${SITE}/`, `${SITE}/a`]);
   });
 
+  it('records URLs disallowed by robots.txt as blocked pages without requesting them', async () => {
+    const { site, result } = await crawl({
+      [`${SITE}/robots.txt`]: text('User-agent: *\nDisallow: /private'),
+      [`${SITE}/`]: page('/private/a'),
+    });
+
+    expect(site.requested).not.toContain(`${SITE}/private/a`);
+    expect(result.blockedPages).toEqual([
+      expect.objectContaining({
+        url: `${SITE}/private/a`,
+        depth: 1,
+        blockedByRobots: true,
+        status: null,
+        error: null,
+      }),
+    ]);
+    expect(result.pages.every((p) => !p.blockedByRobots)).toBe(true);
+  });
+
+  it('records blocked URLs found after the page limit is reached', async () => {
+    const { result } = await crawl(
+      {
+        [`${SITE}/robots.txt`]: text('User-agent: *\nDisallow: /private'),
+        [`${SITE}/`]: page('/a', '/private/1', '/private/2', '/private/3'),
+        [`${SITE}/a`]: page(),
+      },
+      { limit: 2 },
+    );
+
+    expect(result.pages).toHaveLength(2);
+    expect(result.blockedPages.map((p) => p.url)).toEqual(
+      ['/private/1', '/private/2', '/private/3'].map((path) => `${SITE}${path}`),
+    );
+  });
+
   it('never requests an external host, even a loopback alias', async () => {
     const { site } = await crawl(
       {

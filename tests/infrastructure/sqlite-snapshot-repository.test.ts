@@ -33,7 +33,7 @@ describe('SqliteSnapshotRepository file handling', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'nested', 'deeper', 'audit.db');
     SqliteSnapshotRepository.open(path).close();
     expect(existsSync(path)).toBe(true);
-    expect(schemaVersion(path)).toBe(2);
+    expect(schemaVersion(path)).toBe(3);
   });
 
   it('does not replay migrations and keeps existing snapshots readable', async () => {
@@ -51,7 +51,7 @@ describe('SqliteSnapshotRepository file handling', () => {
     second.close();
 
     expect(details?.snapshot.pagesLimit).toBe(5);
-    expect(schemaVersion(path)).toBe(2);
+    expect(schemaVersion(path)).toBe(3);
   });
 
   it('leaves the row count unchanged when a write on a finished snapshot is refused', async () => {
@@ -159,7 +159,7 @@ describe('migration 002 on a milestone 1 database', () => {
     SqliteSnapshotRepository.open(path).close();
     SqliteSnapshotRepository.open(path).close();
 
-    expect(schemaVersion(path)).toBe(2);
+    expect(schemaVersion(path)).toBe(3);
     expect(count(path, 'projects')).toBe(2);
   });
 

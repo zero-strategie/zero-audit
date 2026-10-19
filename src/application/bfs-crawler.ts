@@ -78,6 +78,7 @@ export class BfsCrawler {
 class CrawlRun {
   private readonly http: PoliteHttpClient;
   private readonly pages: Page[] = [];
+  private readonly blockedPages: Page[] = [];
   private readonly links: Link[] = [];
   private readonly seen = new Set<string>();
   private readonly queue: QueueItem[] = [];
@@ -110,6 +111,7 @@ class CrawlRun {
       rootUrl: this.request.rootUrl,
       internalHost: this.internalHost,
       pages: this.withRedirectChains(),
+      blockedPages: this.blockedPages,
       links: this.links,
       site: { robotsFound: discovery.robotsFound, sitemapFound: discovery.sitemapFound },
     };
@@ -137,14 +139,15 @@ class CrawlRun {
     return chain;
   }
 
+  /** Blocked URLs are recorded even once the limit is reached: they cost no request. */
   private async crawlQueue(robots: RobotsPolicy): Promise<void> {
-    for (
-      let index = 0;
-      index < this.queue.length && this.pages.length < this.request.limit;
-      index++
-    ) {
+    for (let index = 0; index < this.queue.length; index++) {
       const item = this.queue[index] as QueueItem;
-      if (!robots.isAllowed(item.url)) continue;
+      if (!robots.isAllowed(item.url)) {
+        this.blockedPages.push(this.toBlockedPage(item));
+        continue;
+      }
+      if (this.pages.length >= this.request.limit) continue;
       this.record(await this.fetch(item));
     }
   }
@@ -187,6 +190,7 @@ class CrawlRun {
       h1: parsed?.h1 ?? [],
       wordCount: parsed?.wordCount ?? null,
       contentHash: parsed?.contentHash ?? null,
+      blockedByRobots: false,
     };
     if (isNetworkFailure(response)) {
       return {
@@ -208,6 +212,27 @@ class CrawlRun {
       headers: retainedHeaders(response.headers),
       contentType,
       isHtml: isHtmlContentType(contentType ?? undefined),
+    };
+  }
+
+  private toBlockedPage({ url, depth }: QueueItem): Page {
+    return {
+      url,
+      depth,
+      status: null,
+      error: null,
+      redirectTarget: null,
+      redirectChain: [],
+      headers: {},
+      responseTimeMs: 0,
+      contentType: null,
+      isHtml: false,
+      title: null,
+      metaDescription: null,
+      h1: [],
+      wordCount: null,
+      contentHash: null,
+      blockedByRobots: true,
     };
   }
 

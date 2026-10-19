@@ -20,6 +20,7 @@ const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   h1: [],
   wordCount: null,
   contentHash: null,
+  blockedByRobots: false,
   ...overrides,
 });
 
@@ -31,6 +32,7 @@ const crawl: CrawlResult = {
     makePage('https://exemple.com/a'),
     makePage('https://exemple.com/img.png', { isHtml: false }),
   ],
+  blockedPages: [],
   links: [],
   site: { robotsFound: false, sitemapFound: false },
 };

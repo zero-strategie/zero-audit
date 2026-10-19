@@ -42,6 +42,7 @@ interface PageRow {
   h1: string;
   word_count: number | null;
   content_hash: string | null;
+  blocked_by_robots: number;
 }
 
 interface LinkRow {
@@ -93,6 +94,7 @@ const toPage = (row: PageRow): Page => ({
   h1: JSON.parse(row.h1) as string[],
   wordCount: row.word_count,
   contentHash: row.content_hash,
+  blockedByRobots: row.blocked_by_robots === 1,
 });
 
 const toLink = (row: LinkRow): Link => ({
@@ -146,8 +148,9 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     return this.writeToRunning(id, () => {
       const insert = this.db.prepare(
         `INSERT INTO pages (snapshot_id, url, depth, status, error, redirect_target, redirect_chain, headers,
-           response_time_ms, content_type, is_html, title, meta_description, h1, word_count, content_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           response_time_ms, content_type, is_html, title, meta_description, h1, word_count, content_hash,
+           blocked_by_robots)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const page of pages) {
         insert.run(
@@ -167,6 +170,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
           JSON.stringify(page.h1),
           page.wordCount,
           page.contentHash,
+          page.blockedByRobots ? 1 : 0,
         );
       }
     });

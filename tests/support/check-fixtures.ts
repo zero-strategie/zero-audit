@@ -21,6 +21,7 @@ export const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   h1: ['Titre'],
   wordCount: 300,
   contentHash: null,
+  blockedByRobots: false,
   ...overrides,
 });
 
@@ -38,6 +39,7 @@ export const crawlOf = (
   rootUrl: 'https://exemple.com/',
   internalHost: 'exemple.com',
   pages,
+  blockedPages: [],
   links,
   site,
 });

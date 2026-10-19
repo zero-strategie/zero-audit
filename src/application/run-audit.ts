@@ -58,7 +58,7 @@ export class RunAudit {
       delayMs: request.delayMs,
       ...(request.onProgress && { onProgress: request.onProgress }),
     });
-    await repository.addPages(snapshotId, crawl.pages);
+    await repository.addPages(snapshotId, [...crawl.pages, ...crawl.blockedPages]);
     await repository.addLinks(snapshotId, crawl.links);
     await repository.addCheckResults(snapshotId, runChecks(crawl, registry));
     await repository.finish(snapshotId, {
