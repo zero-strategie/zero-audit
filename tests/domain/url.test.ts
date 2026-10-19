@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isInternal, normalizeUrl, resolveUrl } from '../../src/domain/url.js';
+import { alternateHostUrl, isInternal, normalizeUrl, resolveUrl } from '../../src/domain/url.js';
 
 describe('normalizeUrl', () => {
   it('lowercases scheme and host and drops default port and fragment', () => {
@@ -31,4 +31,21 @@ describe('isInternal', () => {
     expect(isInternal('https://exemple.com/b', 'exemple.com')).toBe(true);
     expect(isInternal('https://www.exemple.com/c', 'exemple.com')).toBe(false);
   });
+});
+
+describe('alternateHostUrl', () => {
+  it.each([
+    ['https://x.test/', 'https://www.x.test/'],
+    ['https://www.x.test/', 'https://x.test/'],
+    ['http://x.test:8080/a/b?q=1', 'http://www.x.test:8080/'],
+  ])('probes the home page of the other host for %s', (root, expected) => {
+    expect(alternateHostUrl(root)).toBe(expected);
+  });
+
+  it.each(['http://localhost:3000/', 'http://127.0.0.1/', 'http://[::1]:8080/'])(
+    'has no alternate host for %s',
+    (root) => {
+      expect(alternateHostUrl(root)).toBeNull();
+    },
+  );
 });
