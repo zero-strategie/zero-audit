@@ -95,8 +95,8 @@ describe('renderSummary', () => {
 
   it('shows the health, its variation and every theme, https being not computable', () => {
     const text = lines.join('\n');
-    expect(text).toContain('Santé du site : 70 / 100 (+13)');
-    expect(text).toContain('on-page : 70 / 100 (+13)');
+    expect(text).toContain('Santé du site : 70 (+13)');
+    expect(text).toContain('on-page : 70 (+13)');
     expect(text).toContain('crawlability : non calculable');
     expect(text).toContain('https : non calculable');
     expect(text).toContain('linking : non calculable');
@@ -118,7 +118,7 @@ describe('renderSummary', () => {
 
   it('omits the variation when there is no previous snapshot', () => {
     const first = { ...report, scores: buildScoreCard(null, details.checkResults) };
-    expect(renderSummary(first, labels)).toContain('Santé du site : 70 / 100\n');
+    expect(renderSummary(first, labels)).toContain('Santé du site : 70\n');
   });
 
   it('shows the snapshot id and the page count per status class', () => {

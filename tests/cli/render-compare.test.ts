@@ -78,8 +78,8 @@ describe('renderComparison', () => {
   it('shows the health and each theme with their variation between A and B', () => {
     const output = renderComparison(comparison(diff({ count: 1 })), labels);
 
-    expect(output).toContain('Santé du site : A 60 → B 80 (Δ +20)');
-    expect(output).toContain('on-page : A 60 → B 80 (Δ +20)');
+    expect(output).toContain('Santé du site : A 60 → B 80 (+20)');
+    expect(output).toContain('on-page : A 60 → B 80 (+20)');
     expect(output).toContain('https : non calculable');
   });
 
