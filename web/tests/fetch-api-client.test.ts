@@ -112,7 +112,9 @@ describe('fetchApiClient', () => {
 
   it('keeps the API error message in InvalidRequest', async () => {
     const client = fetchApiClient(BASE_URL, () =>
-      Promise.resolve(json({ error: { code: 'invalid_request', message: 'projets différents' } }, 400)),
+      Promise.resolve(
+        json({ error: { code: 'invalid_request', message: 'projets différents' } }, 400),
+      ),
     );
 
     await expect(client.compare('a', 'b')).rejects.toThrow('projets différents');

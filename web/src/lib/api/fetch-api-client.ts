@@ -23,7 +23,8 @@ export const fetchApiClient = (baseUrl: string, fetchImpl: typeof fetch): ApiCli
       throw new ApiUnreachable(error instanceof Error ? error.message : String(error));
     }
     if (response.status === HTTP_NOT_FOUND) throw new NotFound(resource);
-    if (response.status === HTTP_BAD_REQUEST) throw new InvalidRequest(await readErrorMessage(response));
+    if (response.status === HTTP_BAD_REQUEST)
+      throw new InvalidRequest(await readErrorMessage(response));
     if (!response.ok) throw new ApiUnreachable(`HTTP ${String(response.status)}`);
     return (await response.json()) as T;
   };
@@ -50,9 +51,6 @@ export const fetchApiClient = (baseUrl: string, fetchImpl: typeof fetch): ApiCli
     listProjectSnapshots: (projectId) =>
       get(`/projects/${encodeURIComponent(projectId)}/snapshots`, 'Project'),
     compare: (baseId, targetId) =>
-      get(
-        `/compare?a=${encodeURIComponent(baseId)}&b=${encodeURIComponent(targetId)}`,
-        'Snapshot',
-      ),
+      get(`/compare?a=${encodeURIComponent(baseId)}&b=${encodeURIComponent(targetId)}`, 'Snapshot'),
   };
 };

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateFr, formatThemeScore, formatVariation } from '../src/lib/presentation';
+import {
+  formatDateFr,
+  formatStatus,
+  formatThemeScore,
+  formatVariation,
+} from '../src/lib/presentation';
 
 describe('formatVariation', () => {
   it('prefixes a positive variation with +', () => {
@@ -31,5 +36,12 @@ describe('formatDateFr', () => {
   });
   it('shows a dash when there is no date', () => {
     expect(formatDateFr(null)).toBe('—');
+  });
+});
+
+describe('formatStatus', () => {
+  it('shows the HTTP status or a dash when the request failed', () => {
+    expect(formatStatus(404)).toBe('404');
+    expect(formatStatus(null)).toBe('—');
   });
 });

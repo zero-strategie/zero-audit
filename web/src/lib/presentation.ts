@@ -18,3 +18,6 @@ const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
 
 export const formatDateFr = (iso: string | null): string =>
   iso === null ? NO_VALUE : dateFormatter.format(new Date(iso));
+
+export const formatStatus = (status: number | null): string =>
+  status === null ? NO_VALUE : String(status);
