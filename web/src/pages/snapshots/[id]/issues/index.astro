@@ -30,6 +30,7 @@ const groups = groupBySeverity(rows);
     <Layout title="Problèmes – zero-audit">
       <h1>Problèmes</h1>
       <p><a href={`/snapshots/${snapshotId}`}>Retour à la vue d'ensemble</a></p>
+      <p><a href={`/snapshots/${snapshotId}/pages`}>Pages explorées</a></p>
 
       {filter.kind === 'invalid' && (
         <p data-testid="invalid-filter">

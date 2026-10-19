@@ -93,3 +93,9 @@ it('renders the not-found page with status 404 for an unknown snapshot', async (
 
   expect(response.status).toBe(404);
 });
+
+it('links to the crawled pages screen', async () => {
+  const html = await (await render(rows)).text();
+
+  expect(html).toContain('href="/snapshots/s1/pages"');
+});

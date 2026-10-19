@@ -1,5 +1,7 @@
 import type { ApiClient } from '../src/lib/api/api-client';
 import type {
+  CheckComparison,
+  Comparison,
   IssueRow,
   PageRow,
   ProjectOverview,
@@ -105,5 +107,27 @@ export const aSnapshotListing = (overrides: Partial<SnapshotListing> = {}): Snap
   finishedAt: '2026-03-05T10:00:00.000Z',
   pagesCrawled: 40,
   health: 82,
+  ...overrides,
+});
+
+export const aCheckComparison = (overrides: Partial<CheckComparison> = {}): CheckComparison => ({
+  checkId: 15,
+  label: 'Même meta description sur plusieurs pages',
+  severity: 'warning',
+  theme: 'on-page',
+  countA: 5,
+  countB: 5,
+  delta: 0,
+  newCount: 0,
+  fixedCount: 0,
+  ...overrides,
+});
+
+export const aComparison = (overrides: Partial<Comparison> = {}): Comparison => ({
+  base: { id: 's1' },
+  target: { id: 's2' },
+  health: aReport().health,
+  themes: aReport().themes,
+  checks: [],
   ...overrides,
 });
