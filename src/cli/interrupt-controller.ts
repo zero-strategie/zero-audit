@@ -3,22 +3,30 @@ import type { Storage } from './storage-factory.js';
 export const EXIT_INTERRUPTED = 130;
 
 export interface InterruptController {
-  onAuditStarted(storage: Storage, snapshotId: string): void;
-  /** Meant for SIGINT: fails the running snapshot, releases the storage, then exits. */
+  onStorageOpened(storage: Storage): void;
+  onAuditStarted(snapshotId: string): void;
+  /** Meant for SIGINT: fails the running snapshot if any, releases the storage, then exits. */
   interrupt(): Promise<void>;
 }
 
 export const createInterruptController = (exit: (code: number) => void): InterruptController => {
-  let running: { storage: Storage; snapshotId: string } | null = null;
+  let storage: Storage | null = null;
+  let snapshotId: string | null = null;
   return {
-    onAuditStarted: (storage, snapshotId) => {
-      running = { storage, snapshotId };
+    onStorageOpened: (opened) => {
+      storage = opened;
+    },
+    onAuditStarted: (id) => {
+      snapshotId = id;
     },
     interrupt: async () => {
       try {
-        if (running !== null) {
-          await running.storage.snapshots.fail(running.snapshotId, new Date());
-          await running.storage.close();
+        try {
+          if (storage !== null && snapshotId !== null) {
+            await storage.snapshots.fail(snapshotId, new Date());
+          }
+        } finally {
+          await storage?.close();
         }
       } finally {
         exit(EXIT_INTERRUPTED);

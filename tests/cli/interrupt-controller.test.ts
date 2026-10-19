@@ -22,7 +22,8 @@ describe('createInterruptController', () => {
     const controller = createInterruptController((code) => {
       calls.push(`exit:${String(code)}`);
     });
-    controller.onAuditStarted(fakeStorage(calls), 'snap-1');
+    controller.onStorageOpened(fakeStorage(calls));
+    controller.onAuditStarted('snap-1');
 
     await controller.interrupt();
 
@@ -38,5 +39,32 @@ describe('createInterruptController', () => {
     await controller.interrupt();
 
     expect(calls).toEqual(['exit:130']);
+  });
+
+  it('closes the storage and exits 130 when interrupted before any snapshot exists', async () => {
+    const calls: string[] = [];
+    const controller = createInterruptController((code) => {
+      calls.push(`exit:${String(code)}`);
+    });
+    controller.onStorageOpened(fakeStorage(calls));
+
+    await controller.interrupt();
+
+    expect(calls).toEqual(['close', 'exit:130']);
+  });
+
+  it('closes the storage even when marking the snapshot failed rejects', async () => {
+    const calls: string[] = [];
+    const storage = fakeStorage(calls);
+    storage.snapshots.fail = () => Promise.reject(new Error('db down'));
+    const controller = createInterruptController((code) => {
+      calls.push(`exit:${String(code)}`);
+    });
+    controller.onStorageOpened(storage);
+    controller.onAuditStarted('snap-1');
+
+    await expect(controller.interrupt()).rejects.toThrow('db down');
+
+    expect(calls).toEqual(['close', 'exit:130']);
   });
 });

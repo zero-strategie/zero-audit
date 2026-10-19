@@ -35,8 +35,10 @@ export interface CliIo {
 }
 
 export interface CliHooks {
-  /** Lets the process entry point mark the snapshot failed and release the storage on SIGINT. */
-  onAuditStarted?(storage: Storage, snapshotId: string): void;
+  /** Lets the process entry point release the storage on SIGINT. */
+  onStorageOpened?(storage: Storage): void;
+  /** Lets the process entry point mark the snapshot failed on SIGINT. */
+  onAuditStarted?(snapshotId: string): void;
   /** Composition root override; defaults to the real SQLite / Postgres factory. */
   storageFactory?: StorageFactory;
 }
@@ -75,6 +77,7 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
   try {
     const opened = await (hooks.storageFactory ?? createStorage)(config);
     storage = opened;
+    hooks.onStorageOpened?.(opened);
     const details = await buildRunAudit(opened).execute({
       rootUrl: config.rootUrl,
       limit: config.limit,
@@ -83,7 +86,7 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
         progress.update(crawled, limit);
       },
       onSnapshotCreated: (id) => {
-        hooks.onAuditStarted?.(opened, id);
+        hooks.onAuditStarted?.(id);
       },
     });
     progress.finish();
@@ -113,6 +116,7 @@ const compare = async (config: CompareConfig, io: CliIo, hooks: CliHooks): Promi
   let storage: Storage | null = null;
   try {
     storage = await (hooks.storageFactory ?? createStorage)(config);
+    hooks.onStorageOpened?.(storage);
     const comparison = await new CompareSnapshots(storage.snapshots).execute(
       config.baseId,
       config.targetId,

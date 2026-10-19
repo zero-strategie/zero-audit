@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createInterruptController } from '../../src/cli/interrupt-controller.js';
 import { runCli, type CliIo } from '../../src/cli/run-cli.js';
 import {
   createStorage,
@@ -36,11 +37,14 @@ interface SpiedFactory {
   factory: StorageFactory;
   configs: StorageConfig[];
   closeCalls: () => number;
+  /** Closes that reached the real storage: the real close() is idempotent, so a second call is a no-op. */
+  effectiveCloses: () => number;
 }
 
 const spyOnFactory = (): SpiedFactory => {
   const configs: StorageConfig[] = [];
   let closes = 0;
+  let effective = 0;
   const factory: StorageFactory = async (config) => {
     configs.push(config);
     const real: Storage = await createStorage(config);
@@ -49,11 +53,12 @@ const spyOnFactory = (): SpiedFactory => {
       snapshots: real.snapshots,
       close: async () => {
         closes += 1;
+        if (closes === 1) effective += 1;
         await real.close();
       },
     };
   };
-  return { factory, configs, closeCalls: () => closes };
+  return { factory, configs, closeCalls: () => closes, effectiveCloses: () => effective };
 };
 
 describe('runCli storage wiring', () => {
@@ -112,6 +117,51 @@ describe('runCli storage wiring', () => {
     expect(spy.closeCalls()).toBe(1);
   });
 
+  it('closes the storage and exits 130 when interrupted during an audit', async () => {
+    const spy = spyOnFactory();
+    const closesAtExit: number[] = [];
+    const controller = createInterruptController((code) => {
+      closesAtExit.push(spy.effectiveCloses(), code);
+    });
+    let pending: Promise<void> = Promise.resolve();
+
+    await runCli([server.baseUrl, '--delay', '0', '--db', dbPath], {}, silentIo().io, {
+      storageFactory: spy.factory,
+      onStorageOpened: (storage) => {
+        controller.onStorageOpened(storage);
+      },
+      onAuditStarted: (id) => {
+        controller.onAuditStarted(id);
+        pending = controller.interrupt();
+      },
+    });
+    await pending;
+
+    expect(closesAtExit).toEqual([1, 130]);
+    expect(spy.effectiveCloses()).toBe(1);
+  });
+
+  it('closes the storage and exits 130 when interrupted during a compare', async () => {
+    const spy = spyOnFactory();
+    const closesAtExit: number[] = [];
+    const controller = createInterruptController((code) => {
+      closesAtExit.push(spy.effectiveCloses(), code);
+    });
+    let pending: Promise<void> = Promise.resolve();
+
+    await runCli(['compare', 'unknown-a', 'unknown-b', '--db', dbPath], {}, silentIo().io, {
+      storageFactory: spy.factory,
+      onStorageOpened: (storage) => {
+        controller.onStorageOpened(storage);
+        pending = controller.interrupt();
+      },
+    });
+    await pending;
+
+    expect(closesAtExit).toEqual([1, 130]);
+    expect(spy.effectiveCloses()).toBe(1);
+  });
+
   it('exits 2 and starts nothing for an unknown store', async () => {
     const spy = spyOnFactory();
     const run = silentIo();
@@ -157,12 +207,18 @@ describe('runCli storage wiring', () => {
     async () => {
       const spy = spyOnFactory();
       const env = { DATABASE_URL: TEST_DATABASE_URL };
+      let snapshotId = '';
 
       const code = await runCli(
         [server.baseUrl, '--delay', '0', '--store', 'postgres'],
         env,
         silentIo().io,
-        { storageFactory: spy.factory },
+        {
+          storageFactory: spy.factory,
+          onAuditStarted: (id) => {
+            snapshotId = id;
+          },
+        },
       );
 
       expect(code).toBe(0);
@@ -171,6 +227,8 @@ describe('runCli storage wiring', () => {
         const projects = await storage.projects.list();
         const project = projects.find(({ rootUrl }) => rootUrl.startsWith(server.baseUrl));
         expect(project).toBeDefined();
+        const snapshot = await storage.snapshots.getById(snapshotId);
+        expect(snapshot?.snapshot.status).toBe('finished');
       } finally {
         await storage.close();
       }

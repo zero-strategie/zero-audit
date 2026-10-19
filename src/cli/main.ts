@@ -17,8 +17,11 @@ const exitCode = await runCli(
     stderrIsTty: process.stderr.isTTY,
   },
   {
-    onAuditStarted: (storage, snapshotId) => {
-      interrupts.onAuditStarted(storage, snapshotId);
+    onStorageOpened: (storage) => {
+      interrupts.onStorageOpened(storage);
+    },
+    onAuditStarted: (snapshotId) => {
+      interrupts.onAuditStarted(snapshotId);
     },
   },
 );
