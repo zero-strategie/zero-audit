@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { SnapshotComparison } from '../../src/application/compare-snapshots.js';
 import { renderComparison } from '../../src/cli/render-compare.js';
+import type { CheckResult } from '../../src/domain/check.js';
 import { Snapshot } from '../../src/domain/snapshot.js';
+import { buildScoreCard } from '../../src/domain/scoring.js';
 import type { CheckDiff } from '../../src/domain/snapshot-diff.js';
 
 const snapshot = (id: string): Snapshot =>
@@ -28,10 +30,23 @@ const diff = (overrides: Partial<CheckDiff>): CheckDiff => ({
   ...overrides,
 });
 
+const CHECK_15: CheckResult = {
+  checkId: 15,
+  severity: 'warning',
+  theme: 'on-page',
+  count: 0,
+  examined: 5,
+  occurrences: [],
+};
+
 const comparison = (...checkDiffs: CheckDiff[]): SnapshotComparison => ({
   base: snapshot('snap-a'),
   target: snapshot('snap-b'),
   checkDiffs,
+  scores: buildScoreCard(
+    [{ ...CHECK_15, count: 2 }],
+    [{ ...CHECK_15, count: 1 }],
+  ),
 });
 
 const labels = new Map([[15, 'Meta descriptions en double']]);
@@ -61,6 +76,14 @@ describe('renderComparison', () => {
     expect(output).toContain('+ https://e.com/new2');
     expect(output).toContain('- https://e.com/old');
     expect(output).not.toContain('Aucune différence');
+  });
+
+  it('shows the health and each theme with their variation between A and B', () => {
+    const output = renderComparison(comparison(diff({ count: 1 })), labels);
+
+    expect(output).toContain('Santé du site : A 60 → B 80 (Δ +20)');
+    expect(output).toContain('on-page : A 60 → B 80 (Δ +20)');
+    expect(output).toContain('https : non calculable');
   });
 
   it('states there is no difference when nothing changed', () => {

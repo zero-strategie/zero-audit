@@ -3,6 +3,7 @@ import type { SnapshotDetails } from '../../src/application/ports/snapshot-repos
 import type { CheckResult, Severity } from '../../src/domain/check.js';
 import { Snapshot } from '../../src/domain/snapshot.js';
 import type { SnapshotReport } from '../../src/application/get-snapshot-report.js';
+import { buildScoreCard } from '../../src/domain/scoring.js';
 import { diffChecks } from '../../src/domain/snapshot-diff.js';
 import { renderSummary } from '../../src/cli/render-summary.js';
 import { makePage } from '../support/check-fixtures.js';
@@ -69,10 +70,26 @@ const previousResults: CheckResult[] = [
 const report: SnapshotReport = {
   details,
   checkDiffs: diffChecks(previousResults, details.checkResults),
+  scores: buildScoreCard(previousResults, details.checkResults),
 };
 
 describe('renderSummary', () => {
   const lines = renderSummary(report, labels).split('\n');
+
+  it('shows the health, its variation and every theme, https being not computable', () => {
+    const text = lines.join('\n');
+    expect(text).toContain('Santé du site : 70 / 100 (+13)');
+    expect(text).toContain('on-page : 70 / 100 (+13)');
+    expect(text).toContain('crawlability : non calculable');
+    expect(text).toContain('https : non calculable');
+    expect(text).toContain('linking : non calculable');
+    expect(text).toContain('other : non calculable');
+  });
+
+  it('omits the variation when there is no previous snapshot', () => {
+    const first = { ...report, scores: buildScoreCard(null, details.checkResults) };
+    expect(renderSummary(first, labels)).toContain('Santé du site : 70 / 100\n');
+  });
 
   it('shows the snapshot id and the page count per status class', () => {
     const text = lines.join('\n');

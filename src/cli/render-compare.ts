@@ -1,6 +1,7 @@
 import type { SnapshotComparison } from '../application/compare-snapshots.js';
 import type { IssueOccurrence } from '../domain/check.js';
 import type { CheckDiff } from '../domain/snapshot-diff.js';
+import { comparisonScoreLines } from './render-scores.js';
 
 const signedDelta = (delta: number): string => (delta > 0 ? `+${String(delta)}` : String(delta));
 
@@ -19,10 +20,15 @@ const checkLines = (diff: CheckDiff, labels: ReadonlyMap<number, string>): strin
 ];
 
 export const renderComparison = (
-  { base, target, checkDiffs }: SnapshotComparison,
+  { base, target, checkDiffs, scores }: SnapshotComparison,
   labels: ReadonlyMap<number, string>,
 ): string => {
-  const lines = [`Comparaison : A ${base.id} → B ${target.id}`, ''];
+  const lines = [`Comparaison : A ${base.id} → B ${target.id}`,
+    '',
+    'Scores',
+    ...comparisonScoreLines(scores),
+    '',
+  ];
   if (!checkDiffs.some(hasChanged)) lines.push('Aucune différence entre les deux snapshots.');
   const listed = [...checkDiffs]
     .filter((diff) => diff.count > 0 || hasChanged(diff))

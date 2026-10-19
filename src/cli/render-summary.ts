@@ -2,6 +2,7 @@ import type { SnapshotReport } from '../application/get-snapshot-report.js';
 import type { CheckResult, Severity } from '../domain/check.js';
 import type { Page } from '../domain/crawl.js';
 import type { CheckDiff } from '../domain/snapshot-diff.js';
+import { summaryScoreLines } from './render-scores.js';
 
 const SEVERITY_ORDER: readonly Severity[] = ['error', 'warning', 'notice'];
 const SEVERITY_TITLES: Readonly<Record<Severity, string>> = {
@@ -56,13 +57,16 @@ const triggeredLines = (
     );
 
 export const renderSummary = (
-  { details, checkDiffs }: SnapshotReport,
+  { details, checkDiffs, scores }: SnapshotReport,
   labels: ReadonlyMap<number, string>,
 ): string => {
   const { snapshot, pages, checkResults } = details;
   return [
     `Audit ${snapshot.id} (${snapshot.status})`,
     `Pages explorées : ${String(snapshot.pagesCrawled)} / ${String(snapshot.pagesLimit)}`,
+    '',
+    'Scores',
+    ...summaryScoreLines(scores),
     '',
     'Pages par statut',
     ...statusClassLines(pages),
