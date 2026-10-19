@@ -1,7 +1,7 @@
-import type { CrawlResult, Link, Page } from '../domain/crawl.js';
+import type { CrawlResult, HostProbe, Link, Page } from '../domain/crawl.js';
 import { RootUnreachable } from '../domain/errors.js';
 import { computeRedirectChain, MAX_REDIRECT_HOPS } from '../domain/redirect-chain.js';
-import { isInternal, normalizeUrl, resolveUrl } from '../domain/url.js';
+import { alternateHostUrl, isInternal, normalizeUrl, resolveUrl } from '../domain/url.js';
 import { DiscoverSite } from './discover-site.js';
 import { PoliteHttpClient } from './polite-http-client.js';
 import type { Clock } from './ports/clock.js';
@@ -106,6 +106,7 @@ class CrawlRun {
     for (const url of discovery.sitemapUrls) this.enqueue(url, 1);
     for (const fetched of rootChain) this.record(fetched);
     await this.crawlQueue(discovery.robotsPolicy);
+    const hostProbe = await this.probeAlternateHost(finalRoot.url);
 
     return {
       rootUrl: this.request.rootUrl,
@@ -114,6 +115,7 @@ class CrawlRun {
       blockedPages: this.blockedPages,
       links: this.links,
       siteFiles: discovery.siteFiles,
+      hostProbe,
       site: { robotsFound: discovery.robotsFound, sitemapFound: discovery.sitemapFound },
     };
   }
@@ -153,6 +155,24 @@ class CrawlRun {
     }
   }
 
+  /** One request, outside the crawl: its page is never recorded nor counted. */
+  private async probeAlternateHost(finalRootUrl: string): Promise<HostProbe | null> {
+    const url = alternateHostUrl(finalRootUrl);
+    if (url === null) return null;
+    const response = await this.http.get(url);
+    if (isNetworkFailure(response)) {
+      return { url, status: null, error: response.kind, isHtml: false, canonical: null };
+    }
+    const parsed = this.parseSuccessfulHtml({ url, response });
+    return {
+      url,
+      status: response.status,
+      error: null,
+      isHtml: isHtmlContentType(response.headers['content-type']),
+      canonical: parsed?.canonical ?? null,
+    };
+  }
+
   private async fetch({ url, depth }: QueueItem): Promise<Fetched> {
     await this.http.waitTurn();
     const startedAt = this.dependencies.clock.now();
@@ -171,7 +191,10 @@ class CrawlRun {
     if (parsed !== null) this.collectLinks(fetched, parsed);
   }
 
-  private parseSuccessfulHtml({ url, response }: Fetched): ParsedHtml | null {
+  private parseSuccessfulHtml({
+    url,
+    response,
+  }: Pick<Fetched, 'url' | 'response'>): ParsedHtml | null {
     if (isNetworkFailure(response) || !isSuccess(response.status)) return null;
     if (!isHtmlContentType(response.headers['content-type'])) return null;
     return this.dependencies.htmlParser.parse(response.body, url);

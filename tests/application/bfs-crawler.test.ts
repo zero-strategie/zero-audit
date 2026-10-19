@@ -14,6 +14,7 @@ import { UndiciHttpClient } from '../../src/infrastructure/undici-http-client.js
 import { startFixtureServer } from '../support/fixture-server.js';
 
 const SITE = 'http://site.test';
+const ALTERNATE_HOME = 'http://www.site.test/';
 const NS = 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"';
 
 type Reply = { status: number; headers?: Record<string, string>; body?: string } | 'timeout';
@@ -68,9 +69,12 @@ class FakeSite implements HttpClient {
     });
   }
 
+  /** Crawled pages only: technical files and the alternate host probe are left out. */
   get pagesRequested(): string[] {
     return this.requested.filter(
-      (url) => !['/robots.txt', '/sitemap.xml', '/llms.txt'].some((path) => url.endsWith(path)),
+      (url) =>
+        url !== ALTERNATE_HOME &&
+        !['/robots.txt', '/sitemap.xml', '/llms.txt'].some((path) => url.endsWith(path)),
     );
   }
 }

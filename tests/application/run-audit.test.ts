@@ -22,6 +22,7 @@ const crawlResult: CrawlResult = {
     { kind: 'robots', url: `${ROOT}robots.txt`, status: 200, error: null },
     { kind: 'llms', url: `${ROOT}llms.txt`, status: null, error: 'connection' },
   ],
+  hostProbe: null,
   site: { robotsFound: true, sitemapFound: true },
 };
 

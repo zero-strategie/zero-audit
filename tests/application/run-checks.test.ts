@@ -36,6 +36,7 @@ const crawl: CrawlResult = {
   blockedPages: [],
   links: [],
   siteFiles: [],
+  hostProbe: null,
   site: { robotsFound: false, sitemapFound: false },
 };
 

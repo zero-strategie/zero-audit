@@ -3,6 +3,7 @@ import type { Page } from '../../../src/domain/crawl.js';
 import { check1000 } from '../../../src/domain/checks/site/check-1000-url-variants.js';
 import {
   crawlOf,
+  makeHostProbe,
   expectNoCatalogueTitleCopied,
   makePage,
   runCheck,
@@ -69,6 +70,55 @@ describe('check 1000 (trailing-slash URL variants)', () => {
     const result = run([...pages, makePage(u('gone'), { status: 404 })]);
 
     expect(result.examined).toBe(6);
+  });
+});
+
+describe('check 1000 (alternate host)', () => {
+  const home = 'https://exemple.com/';
+  const runHost = (
+    probe: Parameters<typeof makeHostProbe>[0],
+    rootCanonical: string | null = null,
+  ) =>
+    runCheck(
+      [check1000],
+      1000,
+      crawlOf(
+        [makePage(home, { canonical: rootCanonical })],
+        [],
+        { robotsFound: false, sitemapFound: false },
+        makeHostProbe(probe),
+      ),
+    );
+
+  it('warns on the home page when the alternate host answers 200 HTML without common canonical', () => {
+    expect(runHost({}).occurrences).toEqual([
+      {
+        checkId: 1000,
+        pageUrl: home,
+        info: { variantUrl: 'https://www.exemple.com/', kind: 'host' },
+      },
+    ]);
+  });
+
+  it.each([
+    ['redirects (301)', { status: 301, isHtml: false }],
+    ['is unreachable', { status: null, isHtml: false, error: 'dns' }],
+    ['answers 404', { status: 404 }],
+    ['answers a non-HTML file', { isHtml: false }],
+  ])('stays silent when the alternate host %s', (_name, probe) => {
+    expect(runHost(probe).count).toBe(0);
+  });
+
+  it('stays silent when both canonicals are the same absolute URL', () => {
+    expect(runHost({ canonical: home }, home).count).toBe(0);
+  });
+
+  it('still warns when only the alternate host declares a canonical', () => {
+    expect(runHost({ canonical: home }).count).toBe(1);
+  });
+
+  it('does nothing without a probe', () => {
+    expect(run([makePage(home)]).count).toBe(0);
   });
 });
 

@@ -41,6 +41,17 @@ export interface SiteFile {
   readonly error: string | null;
 }
 
+/** Single request to the home page of the alternate host (www. or apex); never a crawled page. */
+export interface HostProbe {
+  readonly url: string;
+  readonly status: number | null;
+  /** Network failure kind when no response was received. */
+  readonly error: string | null;
+  readonly isHtml: boolean;
+  /** Absolute canonical URL declared by the probed page, null when absent. */
+  readonly canonical: string | null;
+}
+
 export interface CrawlResult {
   readonly rootUrl: string;
   readonly internalHost: string;
@@ -49,6 +60,8 @@ export interface CrawlResult {
   readonly blockedPages: readonly Page[];
   readonly links: readonly Link[];
   readonly siteFiles: readonly SiteFile[];
+  /** Null when the root host is an IP or localhost: no alternate host exists. */
+  readonly hostProbe: HostProbe | null;
   /** Whether the file was usable (a sitemap must also parse), which a status alone cannot tell. */
   readonly site: { readonly robotsFound: boolean; readonly sitemapFound: boolean };
 }
