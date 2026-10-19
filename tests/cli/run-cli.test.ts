@@ -220,7 +220,7 @@ describe('runCli', () => {
         {
           checkId: 15,
           severity: 'warning',
-          theme: 'markup',
+          theme: 'on-page',
           count: 1,
           examined: 1,
           occurrences: [{ checkId: 15, pageUrl: 'https://added.test/x', info: {} }],

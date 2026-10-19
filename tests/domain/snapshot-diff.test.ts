@@ -11,7 +11,7 @@ const occurrence = (checkId: number, pageUrl: string): IssueOccurrence => ({
 const result = (checkId: number, occurrences: IssueOccurrence[]): CheckResult => ({
   checkId,
   severity: 'warning',
-  theme: 'markup',
+  theme: 'on-page',
   count: occurrences.length,
   examined: 10,
   occurrences,

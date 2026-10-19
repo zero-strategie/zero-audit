@@ -4,7 +4,7 @@ import { isHtml2xx } from './page-predicates.js';
 export const check3: PageCheck = {
   id: 3,
   severity: 'error',
-  theme: 'markup',
+  theme: 'on-page',
   scope: 'page',
   label: 'Page sans balise title',
   applies: isHtml2xx,

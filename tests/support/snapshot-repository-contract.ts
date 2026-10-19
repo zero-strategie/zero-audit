@@ -38,7 +38,7 @@ const link: Link = {
 const checkResult = (overrides: Partial<CheckResult> = {}): CheckResult => ({
   checkId: 3,
   severity: 'error',
-  theme: 'content',
+  theme: 'on-page',
   count: 1,
   examined: 5,
   occurrences: [{ checkId: 3, pageUrl: 'https://example.test/', info: { length: 12 } }],

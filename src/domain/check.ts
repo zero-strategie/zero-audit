@@ -1,6 +1,9 @@
 import type { CrawlResult, Page } from './crawl.js';
 import { DomainError } from './errors.js';
 
+export const THEMES = ['crawlability', 'https', 'linking', 'on-page', 'other'] as const;
+export type Theme = (typeof THEMES)[number];
+
 export type Severity = 'error' | 'warning' | 'notice';
 
 export interface IssueOccurrence {
@@ -12,7 +15,7 @@ export interface IssueOccurrence {
 export interface CheckResult {
   readonly checkId: number;
   readonly severity: Severity;
-  readonly theme: string;
+  readonly theme: Theme;
   readonly count: number;
   readonly examined: number;
   readonly occurrences: readonly IssueOccurrence[];
@@ -25,7 +28,7 @@ export interface CheckContext {
 interface CheckBase {
   readonly id: number;
   readonly severity: Severity;
-  readonly theme: string;
+  readonly theme: Theme;
   readonly label: string;
   run(context: CheckContext): readonly IssueOccurrence[];
 }

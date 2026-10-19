@@ -15,7 +15,7 @@ const result = (
 ): CheckResult => ({
   checkId,
   severity,
-  theme: 'markup',
+  theme: 'on-page',
   count,
   examined,
   occurrences: Array.from({ length: count }, () => ({ checkId, pageUrl: null, info: {} })),

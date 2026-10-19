@@ -11,7 +11,7 @@ const isFailed = (page: Page): boolean =>
 export const check8: PageCheck = {
   id: 8,
   severity: 'error',
-  theme: 'links',
+  theme: 'linking',
   scope: 'page',
   label: 'Lien interne vers une page en échec',
   applies: (page, { crawl }) =>

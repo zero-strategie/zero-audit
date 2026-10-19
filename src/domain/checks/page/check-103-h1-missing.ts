@@ -4,7 +4,7 @@ import { isHtml2xx } from './page-predicates.js';
 export const check103: PageCheck = {
   id: 103,
   severity: 'warning',
-  theme: 'markup',
+  theme: 'on-page',
   scope: 'page',
   label: 'Page sans titre H1',
   applies: isHtml2xx,

@@ -7,7 +7,7 @@ const SERVER_ERROR_MAX = 599;
 export const check1: PageCheck = {
   id: 1,
   severity: 'error',
-  theme: 'status',
+  theme: 'crawlability',
   scope: 'page',
   label: 'Page en erreur serveur (5xx)',
   applies: hasHttpResponse,

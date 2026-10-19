@@ -7,7 +7,7 @@ const CLIENT_ERROR_MAX = 499;
 export const check2: PageCheck = {
   id: 2,
   severity: 'error',
-  theme: 'status',
+  theme: 'crawlability',
   scope: 'page',
   label: 'Page introuvable ou refusée (4xx)',
   applies: hasHttpResponse,

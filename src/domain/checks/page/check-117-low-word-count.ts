@@ -5,7 +5,7 @@ import { isHtml2xx } from './page-predicates.js';
 export const check117: PageCheck = {
   id: 117,
   severity: 'warning',
-  theme: 'content',
+  theme: 'on-page',
   scope: 'page',
   label: 'Page au contenu trop pauvre',
   applies: isHtml2xx,

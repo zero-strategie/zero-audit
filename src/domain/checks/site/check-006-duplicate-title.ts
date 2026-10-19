@@ -5,7 +5,7 @@ import { duplicateOccurrences } from './duplicates.js';
 export const check6: PageCheck = {
   id: 6,
   severity: 'error',
-  theme: 'markup',
+  theme: 'on-page',
   scope: 'page',
   label: 'Même titre utilisé sur plusieurs pages',
   applies: isHtml2xx,

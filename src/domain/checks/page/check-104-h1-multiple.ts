@@ -4,7 +4,7 @@ import { isHtml2xx } from './page-predicates.js';
 export const check104: PageCheck = {
   id: 104,
   severity: 'notice',
-  theme: 'markup',
+  theme: 'on-page',
   scope: 'page',
   label: 'Page avec plusieurs titres H1',
   applies: (page) => isHtml2xx(page) && page.h1.length > 0,

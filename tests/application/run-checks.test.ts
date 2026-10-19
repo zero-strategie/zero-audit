@@ -38,7 +38,7 @@ const crawl: CrawlResult = {
 const pageCheck = (id: number, flagged: readonly string[]): PageCheck => ({
   id,
   severity: 'error',
-  theme: 'fake',
+  theme: 'other',
   scope: 'page',
   label: `fake ${String(id)}`,
   applies: (page) => page.isHtml,
@@ -48,7 +48,7 @@ const pageCheck = (id: number, flagged: readonly string[]): PageCheck => ({
 const siteCheck = (id: number, flagged: boolean): SiteCheck => ({
   id,
   severity: 'warning',
-  theme: 'fake',
+  theme: 'other',
   scope: 'site',
   label: `site ${String(id)}`,
   run: () => (flagged ? [{ checkId: id, pageUrl: null, info: {} }] : []),
@@ -63,7 +63,7 @@ describe('runChecks', () => {
     expect(result).toMatchObject({
       checkId: 1,
       severity: 'error',
-      theme: 'fake',
+      theme: 'other',
       count: 1,
       examined: 2,
     });

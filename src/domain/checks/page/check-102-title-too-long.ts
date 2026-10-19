@@ -5,7 +5,7 @@ import { isHtml2xx } from './page-predicates.js';
 export const check102: PageCheck = {
   id: 102,
   severity: 'warning',
-  theme: 'markup',
+  theme: 'on-page',
   scope: 'page',
   label: 'Titre de page trop long',
   applies: isHtml2xx,

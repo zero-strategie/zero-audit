@@ -106,9 +106,13 @@ describe('migration 002 on a milestone 1 database', () => {
     db.prepare(
       "INSERT INTO links (snapshot_id, source_url, target_url, type) VALUES ('with-pages', 'https://x.test/', 'https://x.test/a', 'internal')",
     ).run();
-    db.prepare(
-      "INSERT INTO check_results (snapshot_id, check_id, severity, theme, count, examined) VALUES ('with-pages', 3, 'error', 'content', 1, 2)",
-    ).run();
+    const insertResult = db.prepare(
+      "INSERT INTO check_results (snapshot_id, check_id, severity, theme, count, examined) VALUES ('with-pages', ?, 'error', ?, 1, 2)",
+    );
+    insertResult.run(3, 'markup');
+    insertResult.run(117, 'content');
+    insertResult.run(1, 'status');
+    insertResult.run(8, 'links');
     db.close();
     return path;
   };
@@ -146,7 +150,7 @@ describe('migration 002 on a milestone 1 database', () => {
     SqliteSnapshotRepository.open(path).close();
 
     expect([count(path, 'pages'), count(path, 'links'), count(path, 'check_results')]).toEqual([
-      3, 1, 1,
+      3, 1, 4,
     ]);
   });
 
@@ -169,5 +173,28 @@ describe('migration 002 on a milestone 1 database', () => {
     repo.close();
 
     expect(listed.map(({ id }) => id)).toEqual(['with-pages-again', 'with-pages']);
+  });
+
+  it('exposes milestone 1 themes as milestone 2 themes without rewriting the rows', async () => {
+    const path = buildMilestone1Database();
+    const repo = SqliteSnapshotRepository.open(path);
+    const details = await repo.getById('with-pages');
+    repo.close();
+
+    expect(details?.checkResults.map(({ checkId, theme }) => [checkId, theme])).toEqual([
+      [3, 'on-page'],
+      [117, 'on-page'],
+      [1, 'crawlability'],
+      [8, 'linking'],
+    ]);
+    const db = new Database(path, { readonly: true });
+    const stored = db.prepare('SELECT theme FROM check_results ORDER BY id').all();
+    db.close();
+    expect(stored).toEqual([
+      { theme: 'markup' },
+      { theme: 'content' },
+      { theme: 'status' },
+      { theme: 'links' },
+    ]);
   });
 });

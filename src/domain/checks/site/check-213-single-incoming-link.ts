@@ -6,7 +6,7 @@ import { internalLinks } from './internal-links.js';
 export const check213: PageCheck = {
   id: 213,
   severity: 'notice',
-  theme: 'links',
+  theme: 'linking',
   scope: 'page',
   label: 'Page recevant un seul lien interne',
   applies: isHtml2xx,

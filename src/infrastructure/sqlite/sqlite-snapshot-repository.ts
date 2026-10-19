@@ -9,6 +9,7 @@ import type {
 import type { CheckResult, IssueOccurrence, Severity } from '../../domain/check.js';
 import type { Link, LinkType, Page } from '../../domain/crawl.js';
 import { SnapshotNotFound } from '../../domain/errors.js';
+import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
 import { migrate } from './migrate.js';
@@ -286,7 +287,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     return results.map((row) => ({
       checkId: row.check_id,
       severity: row.severity,
-      theme: row.theme,
+      theme: toTheme(row.theme),
       count: row.count,
       examined: row.examined,
       occurrences: occurrences

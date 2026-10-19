@@ -13,7 +13,7 @@ const minutes = (n: number): Date => new Date(Date.UTC(2026, 0, 1, 10, n));
 const check15 = (...paths: string[]): CheckResult => ({
   checkId: 15,
   severity: 'warning',
-  theme: 'markup',
+  theme: 'on-page',
   count: paths.length,
   examined: 5,
   occurrences: paths.map((path) => ({ checkId: 15, pageUrl: `https://e.com/${path}`, info: {} })),
