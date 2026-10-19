@@ -66,3 +66,37 @@ describe('parseCommand usage errors', () => {
     expect(parseCommand([URL_ARG], { ZERO_AUDIT_DELAY_MS: 'x' }).kind).toBe('usage-error');
   });
 });
+
+describe('parseCommand subcommands', () => {
+  it('treats `audit <url>` like `<url>`', () => {
+    const argv = [URL_ARG, '--limit', '5'];
+    expect(parseCommand(['audit', ...argv], {})).toEqual(parseCommand(argv, {}));
+    expect(parseCommand(['audit', ...argv], {}).kind).toBe('audit');
+  });
+
+  it('parses `serve` as a serve command, never as a URL', () => {
+    expect(parseCommand(['serve'], {})).toEqual({ kind: 'serve' });
+  });
+
+  it('parses `compare <A> <B>` with the database path', () => {
+    expect(parseCommand(['compare', 'a1', 'b2', '--db', '/tmp/x.db'], {})).toEqual({
+      kind: 'compare',
+      baseId: 'a1',
+      targetId: 'b2',
+      dbPath: '/tmp/x.db',
+    });
+    expect(parseCommand(['compare', 'a1', 'b2'], { ZERO_AUDIT_DB_PATH: '/tmp/e.db' })).toMatchObject({
+      dbPath: '/tmp/e.db',
+    });
+  });
+
+  it.each([
+    ['no snapshot', ['compare']],
+    ['a single snapshot', ['compare', 'a1']],
+    ['three snapshots', ['compare', 'a', 'b', 'c']],
+    ['an unknown option', ['compare', 'a', 'b', '--bogus']],
+    ['audit without url', ['audit']],
+  ])('rejects compare/audit with %s', (_name, argv) => {
+    expect(parseCommand(argv, {}).kind).toBe('usage-error');
+  });
+});

@@ -8,10 +8,18 @@ export interface AuditConfig {
   jsonPath: string | null;
 }
 
+export interface CompareConfig {
+  baseId: string;
+  targetId: string;
+  dbPath: string;
+}
+
 export type ParsedCommand =
   | { kind: 'help' }
   | { kind: 'usage-error'; message: string }
-  | { kind: 'audit'; config: AuditConfig };
+  | { kind: 'audit'; config: AuditConfig }
+  | ({ kind: 'compare' } & CompareConfig)
+  | { kind: 'serve' };
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -65,10 +73,30 @@ const buildConfig = (argv: readonly string[], env: Environment): AuditConfig => 
   };
 };
 
+const buildCompareConfig = (argv: readonly string[], env: Environment): CompareConfig => {
+  const { values, positionals } = parseArgs({
+    args: [...argv],
+    allowPositionals: true,
+    options: { db: { type: 'string' } },
+  });
+  const [baseId, targetId, ...extra] = positionals;
+  if (baseId === undefined || targetId === undefined || extra.length > 0) {
+    throw new UsageError('compare expects exactly two snapshot ids: compare <A> <B>');
+  }
+  return { baseId, targetId, dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH };
+};
+
+const buildCommand = (argv: readonly string[], env: Environment): ParsedCommand => {
+  const [first, ...rest] = argv;
+  if (first === 'serve') return { kind: 'serve' };
+  if (first === 'compare') return { kind: 'compare', ...buildCompareConfig(rest, env) };
+  return { kind: 'audit', config: buildConfig(first === 'audit' ? rest : argv, env) };
+};
+
 export const parseCommand = (argv: readonly string[], env: Environment): ParsedCommand => {
   if (argv.includes('--help')) return { kind: 'help' };
   try {
-    return { kind: 'audit', config: buildConfig(argv, env) };
+    return buildCommand(argv, env);
   } catch (error) {
     if (error instanceof Error && (error instanceof UsageError || 'code' in error)) {
       return { kind: 'usage-error', message: error.message };
