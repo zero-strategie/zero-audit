@@ -1,5 +1,11 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { ProjectNotFound, SnapshotNotFound } from '../domain/errors.js';
+import {
+  ProjectNotFound,
+  SnapshotNotFinished,
+  SnapshotNotFound,
+  SnapshotsFromDifferentProjects,
+  UnknownCheck,
+} from '../domain/errors.js';
 
 export type ApiErrorCode = 'not_found' | 'invalid_request' | 'internal_error';
 
@@ -32,8 +38,15 @@ export const registerErrorHandlers = (app: FastifyInstance): void => {
   );
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error.validation) return send(reply, HTTP_BAD_REQUEST, 'invalid_request', error.message);
-    if (error instanceof ProjectNotFound || error instanceof SnapshotNotFound) {
+    if (
+      error instanceof ProjectNotFound ||
+      error instanceof SnapshotNotFound ||
+      error instanceof UnknownCheck
+    ) {
       return send(reply, HTTP_NOT_FOUND, 'not_found', error.message);
+    }
+    if (error instanceof SnapshotNotFinished || error instanceof SnapshotsFromDifferentProjects) {
+      return send(reply, HTTP_BAD_REQUEST, 'invalid_request', error.message);
     }
     request.log.error({ err: error }, 'Unhandled error');
     return send(reply, HTTP_INTERNAL_ERROR, 'internal_error', INTERNAL_MESSAGE);

@@ -1,12 +1,15 @@
 import type { ProjectOverview } from '../application/list-projects.js';
 import type { SnapshotListing } from '../application/list-project-snapshots.js';
+import type { SnapshotComparison } from '../application/compare-snapshots.js';
 import type { SnapshotReport } from '../application/get-snapshot-report.js';
 import { THEMES } from '../domain/check.js';
 import { allChecks } from '../domain/checks/index.js';
+import type { ScoreCard } from '../domain/scoring.js';
 import { PAGE_GROUPS } from '../domain/page-groups.js';
 
 const UNKNOWN_CHECK_LABEL = 'Check inconnu';
 const labels = new Map(allChecks.map(({ id, label }) => [id, label]));
+const checksById = new Map(allChecks.map((check) => [check.id, check]));
 
 const isoOrNull = (date: Date | null): string | null => date?.toISOString() ?? null;
 
@@ -30,6 +33,11 @@ export const presentSnapshotListing = ({ snapshot, health }: SnapshotListing) =>
   health,
 });
 
+const presentScoreCard = (scores: ScoreCard) => ({
+  health: scores.health,
+  themes: Object.fromEntries(THEMES.map((theme) => [theme, scores.themes[theme]])),
+});
+
 export const presentSnapshotReport = (report: SnapshotReport) => {
   const { snapshot, siteFiles } = report.details;
   return {
@@ -42,8 +50,7 @@ export const presentSnapshotReport = (report: SnapshotReport) => {
       pagesCrawled: snapshot.pagesCrawled,
       pagesLimit: snapshot.pagesLimit,
     },
-    health: report.scores.health,
-    themes: Object.fromEntries(THEMES.map((theme) => [theme, report.scores.themes[theme]])),
+    ...presentScoreCard(report.scores),
     counts: {
       errors: report.severityCounts.error,
       warnings: report.severityCounts.warning,
@@ -66,3 +73,25 @@ export const presentSnapshotReport = (report: SnapshotReport) => {
     })),
   };
 };
+
+export const presentComparison = ({ base, target, checkDiffs, scores }: SnapshotComparison) => ({
+  base: { id: base.id },
+  target: { id: target.id },
+  ...presentScoreCard(scores),
+  checks: checkDiffs.map((diff) => {
+    const check = checksById.get(diff.checkId);
+    return {
+      checkId: diff.checkId,
+      label: check?.label ?? UNKNOWN_CHECK_LABEL,
+      severity: check?.severity ?? null,
+      theme: check?.theme ?? null,
+      countA: diff.count - diff.delta,
+      countB: diff.count,
+      delta: diff.delta,
+      newCount: diff.newCount,
+      fixedCount: diff.fixedCount,
+      added: diff.added.map(({ pageUrl, info }) => ({ pageUrl, info })),
+      removed: diff.removed.map(({ pageUrl, info }) => ({ pageUrl, info })),
+    };
+  }),
+});
