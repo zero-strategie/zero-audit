@@ -3,13 +3,22 @@ import { expect, it } from 'vitest';
 import OverviewPage from '../src/pages/snapshots/[id]/index.astro';
 import { ApiUnreachable, NotFound } from '../src/lib/api/errors';
 import type { SnapshotReport } from '../src/lib/api/types';
-import { aReport, fakeApiClient } from './fake-api-client';
+import type { SnapshotListing } from '../src/lib/api/types';
+import { aReport, aSnapshotListing, fakeApiClient } from './fake-api-client';
 
-const render = async (getSnapshotReport: (id: string) => Promise<SnapshotReport>) => {
+const render = async (
+  getSnapshotReport: (id: string) => Promise<SnapshotReport>,
+  snapshots: SnapshotListing[] = [aSnapshotListing()],
+) => {
   const container = await AstroContainer.create();
   return container.renderToResponse(OverviewPage, {
     params: { id: 's1' },
-    locals: { apiClient: fakeApiClient({ getSnapshotReport }) },
+    locals: {
+      apiClient: fakeApiClient({
+        getSnapshotReport,
+        listProjectSnapshots: () => Promise.resolve(snapshots),
+      }),
+    },
   });
 };
 
@@ -85,4 +94,30 @@ it('links to the issues screen', async () => {
   const html = await renderReport(aReport());
 
   expect(html).toMatch(/href="\/snapshots\/s1\/issues"/);
+});
+
+it('lists the audits of the project with date and status, the failed one being disabled', async () => {
+  const html = await (
+    await render(
+      () => Promise.resolve(aReport()),
+      [
+        aSnapshotListing({ id: 's1', startedAt: '2026-03-05T09:00:00.000Z' }),
+        aSnapshotListing({ id: 's2', status: 'failed', startedAt: '2026-02-05T09:00:00.000Z' }),
+        aSnapshotListing({ id: 's3', startedAt: '2026-01-05T09:00:00.000Z' }),
+      ],
+    )
+  ).text();
+
+  expect(html).toMatch(/<form[^>]*action="\/snapshots"[^>]*method="get"/i);
+  expect(html).toMatch(/<option[^>]*value="s1"[^>]*selected[^>]*>[^<]*05\/03\/2026[^<]*terminé/);
+  expect(html).toMatch(/<option[^>]*value="s2"[^>]*disabled[^>]*>[^<]*05\/02\/2026[^<]*échoué/);
+  expect(html).toMatch(/<option[^>]*value="s3"[^>]*>[^<]*05\/01\/2026[^<]*terminé/);
+  expect(html.match(/<option[^>]*disabled/g)).toHaveLength(1);
+});
+
+it('links to the pages screen and to the comparison of the project', async () => {
+  const html = await (await render(() => Promise.resolve(aReport()))).text();
+
+  expect(html).toContain('href="/snapshots/s1/pages"');
+  expect(html).toContain('href="/projects/p1/compare"');
 });

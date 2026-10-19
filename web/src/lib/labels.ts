@@ -33,3 +33,9 @@ export const SEVERITY_GROUP_LABELS = {
   warning: 'Avertissements',
   notice: 'Notices',
 } as const;
+
+export const SNAPSHOT_STATUS_LABELS = {
+  running: 'en cours',
+  finished: 'terminé',
+  failed: 'échoué',
+} as const;

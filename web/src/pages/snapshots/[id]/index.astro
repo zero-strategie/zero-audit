@@ -1,16 +1,19 @@
 ---
 import ErrorView from '../../../components/ErrorView.astro';
+import SnapshotSelector from '../../../components/SnapshotSelector.astro';
 import Layout from '../../../layouts/Layout.astro';
-import type { Severity, SnapshotReport } from '../../../lib/api/types';
+import type { Severity, SnapshotListing, SnapshotReport } from '../../../lib/api/types';
 import { toFailure } from '../../../lib/failure';
 import { PAGE_GROUP_LABELS, SEVERITY_LABELS, SITE_FILE_LABELS, THEME_LABELS } from '../../../lib/labels';
 import { formatThemeScore, formatVariation } from '../../../lib/presentation';
 
 const snapshotId = Astro.params.id ?? '';
 let report: SnapshotReport | null = null;
+let snapshots: SnapshotListing[] = [];
 let failure = null;
 try {
   report = await Astro.locals.apiClient.getSnapshotReport(snapshotId);
+  snapshots = await Astro.locals.apiClient.listProjectSnapshots(report.snapshot.projectId);
 } catch (error) {
   failure = toFailure(error);
   Astro.response.status = failure.status;
@@ -31,6 +34,12 @@ const siteFileStatus = (status: number | null, error: string | null) =>
   ) : (
     <Layout title="Vue d'ensemble – zero-audit">
       <h1>Vue d'ensemble</h1>
+      <nav>
+        <a href={`/snapshots/${report.snapshot.id}/issues`}>Problèmes</a> ·
+        <a href={`/snapshots/${report.snapshot.id}/pages`}>Pages explorées</a> ·
+        <a href={`/projects/${report.snapshot.projectId}/compare`}>Comparaison</a>
+      </nav>
+      <SnapshotSelector snapshots={snapshots} currentId={report.snapshot.id} />
 
       <section>
         <h2>Santé du site</h2>

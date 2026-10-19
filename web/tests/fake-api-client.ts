@@ -1,5 +1,11 @@
 import type { ApiClient } from '../src/lib/api/api-client';
-import type { IssueRow, PageRow, ProjectOverview, SnapshotReport } from '../src/lib/api/types';
+import type {
+  IssueRow,
+  PageRow,
+  ProjectOverview,
+  SnapshotListing,
+  SnapshotReport,
+} from '../src/lib/api/types';
 
 const unexpected = (): never => {
   throw new Error('unexpected call on fake client');
@@ -89,5 +95,15 @@ export const aPageRow = (overrides: Partial<PageRow> = {}): PageRow => ({
   canonical: null,
   issues: 0,
   responseTimeMs: 120,
+  ...overrides,
+});
+
+export const aSnapshotListing = (overrides: Partial<SnapshotListing> = {}): SnapshotListing => ({
+  id: 's1',
+  status: 'finished',
+  startedAt: '2026-03-05T09:00:00.000Z',
+  finishedAt: '2026-03-05T10:00:00.000Z',
+  pagesCrawled: 40,
+  health: 82,
   ...overrides,
 });
