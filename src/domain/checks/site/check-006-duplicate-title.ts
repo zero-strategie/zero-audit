@@ -9,6 +9,5 @@ export const check6: PageCheck = {
   scope: 'page',
   label: 'Même titre utilisé sur plusieurs pages',
   applies: isHtml2xx,
-  run: ({ crawl }) =>
-    duplicateOccurrences(6, crawl.pages.filter(isHtml2xx), (page) => page.title),
+  run: ({ crawl }) => duplicateOccurrences(6, crawl.pages.filter(isHtml2xx), (page) => page.title),
 };
