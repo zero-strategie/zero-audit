@@ -1,0 +1,30 @@
+---
+import type { Failure } from '../lib/failure';
+import Layout from '../layouts/Layout.astro';
+
+interface Props {
+  failure: Failure;
+}
+const { failure } = Astro.props;
+---
+
+<Layout title={failure.kind === 'not-found' ? 'Audit introuvable' : "L'API ne répond pas"}>
+  {
+    failure.kind === 'not-found' ? (
+      <>
+        <h1>Audit introuvable</h1>
+        <p>Cet audit n'existe pas ou a été supprimé.</p>
+        <p><a href="/">Retour aux projets</a></p>
+      </>
+    ) : (
+      <>
+        <h1>L'API ne répond pas</h1>
+        <p>
+          Le tableau de bord n'a pas pu joindre l'API. Vérifiez l'adresse configurée dans
+          <code>ZERO_AUDIT_API_URL</code> (par défaut <code>http://127.0.0.1:3000</code>) et
+          démarrez l'API avec <code>pnpm zero-audit serve</code>.
+        </p>
+      </>
+    )
+  }
+</Layout>

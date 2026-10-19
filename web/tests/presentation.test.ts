@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateFr, formatThemeScore, formatVariation } from '../../src/lib/presentation';
+import { formatDateFr, formatThemeScore, formatVariation } from '../src/lib/presentation';
 
 describe('formatVariation', () => {
   it('prefixes a positive variation with +', () => {

@@ -1,0 +1,99 @@
+---
+import ErrorView from '../../../components/ErrorView.astro';
+import Layout from '../../../layouts/Layout.astro';
+import type { Severity, SnapshotReport } from '../../../lib/api/types';
+import { toFailure } from '../../../lib/failure';
+import { PAGE_GROUP_LABELS, SEVERITY_LABELS, SITE_FILE_LABELS, THEME_LABELS } from '../../../lib/labels';
+import { formatThemeScore, formatVariation } from '../../../lib/presentation';
+
+const snapshotId = Astro.params.id ?? '';
+let report: SnapshotReport | null = null;
+let failure = null;
+try {
+  report = await Astro.locals.apiClient.getSnapshotReport(snapshotId);
+} catch (error) {
+  failure = toFailure(error);
+  Astro.response.status = failure.status;
+}
+
+const counters = report && [
+  { key: 'errors', label: 'Erreurs', value: report.counts.errors },
+  { key: 'warnings', label: 'Avertissements', value: report.counts.warnings },
+  { key: 'notices', label: 'Notices', value: report.counts.notices },
+];
+const siteFileStatus = (status: number | null, error: string | null) =>
+  status === null ? (error ?? 'Injoignable') : String(status);
+---
+
+{
+  failure || !report ? (
+    <ErrorView failure={failure ?? { kind: 'not-found', status: 404 }} />
+  ) : (
+    <Layout title="Vue d'ensemble – zero-audit">
+      <h1>Vue d'ensemble</h1>
+
+      <section>
+        <h2>Santé du site</h2>
+        <p>
+          <strong data-testid="health-score">{report.health.score ?? 'Non calculable'}</strong>
+          <span data-testid="health-variation">{formatVariation(report.health.variation)}</span>
+        </p>
+      </section>
+
+      <section>
+        <h2>Thèmes</h2>
+        <ul>
+          {Object.entries(report.themes).map(([theme, { score, variation }]) => (
+            <li data-testid={`theme-${theme}`}>
+              {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatThemeScore(score)}
+              {score !== null && <> ({formatVariation(variation)})</>}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <h2>Problèmes</h2>
+        <ul>
+          {(counters ?? []).map(({ key, label, value }) => (
+            <li>{label} : <span data-testid={`count-${key}`}>{value}</span></li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <h2>Pages explorées</h2>
+        <ul>
+          {Object.entries(report.pageGroups).map(([group, { count, variation }]) => (
+            <li data-testid={`group-${group}`}>
+              {PAGE_GROUP_LABELS[group as keyof typeof PAGE_GROUP_LABELS]} : {count} ({formatVariation(variation)})
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section>
+        <h2>Principaux problèmes</h2>
+        <ol>
+          {report.topIssues.map(({ checkId, label, severity, count }) => (
+            <li>
+              <a href={`/snapshots/${report.snapshot.id}/issues/${String(checkId)}`}>{label}</a>
+              ({SEVERITY_LABELS[severity as Severity]}, {count})
+            </li>
+          ))}
+        </ol>
+      </section>
+
+      <section>
+        <h2>Fichiers techniques</h2>
+        <ul>
+          {report.siteFiles.map(({ kind, url, status, error }) => (
+            <li data-testid={`site-file-${kind}`}>
+              {SITE_FILE_LABELS[kind]} ({url}) : {siteFileStatus(status, error)}
+            </li>
+          ))}
+        </ul>
+      </section>
+    </Layout>
+  )
+}

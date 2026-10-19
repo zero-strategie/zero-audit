@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ApiUnreachable, InvalidRequest, NotFound } from '../../src/lib/api/errors';
-import { resolveApiBaseUrl } from '../../src/lib/api/config';
-import { fetchApiClient } from '../../src/lib/api/fetch-api-client';
+import { ApiUnreachable, InvalidRequest, NotFound } from '../src/lib/api/errors';
+import { resolveApiBaseUrl } from '../src/lib/api/config';
+import { fetchApiClient } from '../src/lib/api/fetch-api-client';
 
 const BASE_URL = 'http://api.test:3000';
 const json = (body: unknown, status = 200) =>
@@ -23,7 +23,7 @@ describe('fetchApiClient', () => {
   it('calls <base>/snapshots/:id', async () => {
     const calls: string[] = [];
     const fetchImpl: typeof fetch = (input) => {
-      calls.push(String(input));
+      calls.push(typeof input === 'string' ? input : '');
       return Promise.resolve(json({ snapshot: { id: 'abc' } }));
     };
 
@@ -35,7 +35,7 @@ describe('fetchApiClient', () => {
   it('encodes the snapshot id in the path', async () => {
     const calls: string[] = [];
     const fetchImpl: typeof fetch = (input) => {
-      calls.push(String(input));
+      calls.push(typeof input === 'string' ? input : '');
       return Promise.resolve(json({}));
     };
 
@@ -73,7 +73,9 @@ describe('fetchApiClient', () => {
   });
 
   it('returns the parsed projects', async () => {
-    const projects = [{ id: 'p', rootUrl: 'https://a.test/', createdAt: 'x', latestSnapshot: null }];
+    const projects = [
+      { id: 'p', rootUrl: 'https://a.test/', createdAt: 'x', latestSnapshot: null },
+    ];
     const client = fetchApiClient(BASE_URL, () => Promise.resolve(json(projects)));
 
     expect(await client.listProjects()).toEqual(projects);

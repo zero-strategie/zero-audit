@@ -1,13 +1,52 @@
 ---
+import ErrorView from '../components/ErrorView.astro';
+import Layout from '../layouts/Layout.astro';
+import type { ProjectOverview } from '../lib/api/types';
+import { toFailure } from '../lib/failure';
+import { formatDateFr } from '../lib/presentation';
+
+let projects: ProjectOverview[] = [];
+let failure = null;
+try {
+  projects = await Astro.locals.apiClient.listProjects();
+} catch (error) {
+  failure = toFailure(error);
+  Astro.response.status = failure.status;
+}
 ---
 
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>zero-audit</title>
-  </head>
-  <body>
-    <h1>zero-audit</h1>
-  </body>
-</html>
+{
+  failure ? (
+    <ErrorView failure={failure} />
+  ) : (
+    <Layout title="Projets – zero-audit">
+      <h1>Projets</h1>
+      {projects.length === 0 ? (
+        <p>
+          Aucun audit n'a encore été lancé. Lancez-en un avec <code>pnpm zero-audit &lt;url&gt;</code>.
+        </p>
+      ) : (
+        <table>
+          <thead>
+            <tr><th>Site</th><th>Santé</th><th>Dernier audit</th></tr>
+          </thead>
+          <tbody>
+            {projects.map(({ id, rootUrl, latestSnapshot }) => (
+              <tr data-testid={`project-${id}`}>
+                <td>{rootUrl}</td>
+                {latestSnapshot ? (
+                  <>
+                    <td>{latestSnapshot.health ?? 'Non calculable'}</td>
+                    <td><a href={`/snapshots/${latestSnapshot.id}`}>{formatDateFr(latestSnapshot.finishedAt)}</a></td>
+                  </>
+                ) : (
+                  <td colspan="2">Aucun audit terminé</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Layout>
+  )
+}
