@@ -6,3 +6,8 @@ coverage/
 .env.*
 !.env.example
 !.env.test
+
+# per-story agent outputs (dev report, review verdict, PR body) stay local
+docs/missions/*/S[0-9]*-rapport.md
+docs/missions/*/S[0-9]*-verdict.json
+docs/missions/*/S[0-9]*-pr.md
