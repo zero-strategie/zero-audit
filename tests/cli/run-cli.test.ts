@@ -181,4 +181,107 @@ describe('runCli', () => {
       expect(run.out).toContain(token);
     }
   });
+
+  describe('compare', () => {
+    const auditId = async (url: string): Promise<string> => {
+      const jsonPath = join(dir, `${String(Math.random())}.json`);
+      await runCli(
+        [url, '--limit', '10', '--delay', '0', '--db', dbPath, '--json', jsonPath],
+        {},
+        capture().io,
+      );
+      return (JSON.parse(readFileSync(jsonPath, 'utf8')) as { snapshot: { id: string } }).snapshot
+        .id;
+    };
+
+    it('reports no difference between two audits of an unchanged site and exits 0', async () => {
+      const a = await auditId(server.baseUrl);
+      const b = await auditId(server.baseUrl);
+      const run = capture();
+
+      const code = await runCli(['compare', a, b, '--db', dbPath], {}, run.io);
+
+      expect(code).toBe(0);
+      expect(run.out).toContain('Aucune différence');
+      expect(run.out).toMatch(/Δ 0 – nouvelles 0 – corrigées 0/);
+    });
+
+    it('lists occurrences added between two audits', async () => {
+      const a = await auditId(server.baseUrl);
+      const repository = SqliteSnapshotRepository.open(dbPath);
+      const base = await repository.getById(a);
+      const projectId = base?.snapshot.projectId ?? '';
+      const target = await repository.create({
+        projectId,
+        pagesLimit: 10,
+        startedAt: new Date(),
+      });
+      await repository.addCheckResults(target.id, [
+        {
+          checkId: 15,
+          severity: 'warning',
+          theme: 'markup',
+          count: 1,
+          examined: 1,
+          occurrences: [{ checkId: 15, pageUrl: 'https://added.test/x', info: {} }],
+        },
+      ]);
+      await repository.finish(target.id, { finishedAt: new Date(), pagesCrawled: 1 });
+      repository.close();
+      const run = capture();
+
+      const code = await runCli(['compare', a, target.id, '--db', dbPath], {}, run.io);
+
+      expect(code).toBe(0);
+      expect(run.out).toContain('+ https://added.test/x');
+      expect(run.out).toMatch(/15 – .* – A 0 → B 1 – Δ \+1 – nouvelles 1/);
+    });
+
+    it('refuses snapshots of two different sites', async () => {
+      const other = await startFixtureServer(SITE);
+      const a = await auditId(server.baseUrl);
+      const b = await auditId(other.baseUrl);
+      await other.close();
+      const run = capture();
+
+      const code = await runCli(['compare', a, b, '--db', dbPath], {}, run.io);
+
+      expect(code).not.toBe(0);
+      expect(run.err).toContain('pas du même site');
+    });
+
+    it('refuses a target that is not finished', async () => {
+      const a = await auditId(server.baseUrl);
+      const repository = SqliteSnapshotRepository.open(dbPath);
+      const projectId = (await repository.getById(a))?.snapshot.projectId ?? '';
+      const running = await repository.create({ projectId, pagesLimit: 1, startedAt: new Date() });
+      repository.close();
+      const run = capture();
+
+      const code = await runCli(['compare', a, running.id, '--db', dbPath], {}, run.io);
+
+      expect(code).not.toBe(0);
+      expect(run.err).toContain('pas terminé');
+    });
+
+    it('reports an unknown snapshot', async () => {
+      const a = await auditId(server.baseUrl);
+      const run = capture();
+
+      const code = await runCli(['compare', a, 'inconnu', '--db', dbPath], {}, run.io);
+
+      expect(code).not.toBe(0);
+      expect(run.err).toContain('introuvable');
+    });
+
+    it('prints the usage and exits 2 when the second snapshot is missing', async () => {
+      const run = capture();
+
+      const code = await runCli(['compare', 'a', '--db', dbPath], {}, run.io);
+
+      expect(code).toBe(2);
+      expect(run.err).toContain('Usage');
+      expect(existsSync(dbPath)).toBe(false);
+    });
+  });
 });

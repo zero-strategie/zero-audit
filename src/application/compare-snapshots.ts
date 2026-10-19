@@ -24,7 +24,8 @@ export class CompareSnapshots {
       throw new SnapshotsFromDifferentProjects(baseId, targetId);
     }
     for (const { snapshot } of [base, target]) {
-      if (snapshot.status !== 'finished') throw new SnapshotNotFinished(snapshot.id, snapshot.status);
+      if (snapshot.status !== 'finished')
+        throw new SnapshotNotFinished(snapshot.id, snapshot.status);
     }
     return {
       base: base.snapshot,

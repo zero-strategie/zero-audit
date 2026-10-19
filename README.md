@@ -26,6 +26,8 @@ pnpm zero-audit https://exemple.com --limit 50 --delay 500 --json audit.json
 pnpm run audit https://exemple.com
 ```
 
+`pnpm zero-audit audit <url>` is the explicit form of `pnpm zero-audit <url>`; `audit`, `compare` and `serve` are reserved words and are never read as URLs.
+
 Use `pnpm run audit`, not `pnpm audit`: `pnpm audit` is pnpm's built-in vulnerability audit and never reaches the `audit` script. `pnpm zero-audit` is an alias without that conflict. After `pnpm build`, the `zero-audit` bin (`dist/cli/main.js`) can also be linked and run directly.
 
 Options (an option wins over its environment variable, which wins over the default):
@@ -40,5 +42,13 @@ Options (an option wins over its environment variable, which wins over the defau
 | `--help` | | | prints the usage |
 
 The summary goes to stdout; the progress line (`crawled/limit`) goes to stderr, so stdout stays clean.
+
+### Comparing two audits
+
+```
+pnpm zero-audit compare <A> <B> [--db <path>]
+```
+
+`A` is the base and `B` the target (snapshot ids are printed by the audit summary). For each check the output gives the counts in A and B, the delta, the new and fixed occurrences, then the occurrences added and removed. Both snapshots must be `finished` and belong to the same site. Exit codes: 0 success, 1 unknown, unfinished or cross-site snapshots, 2 invalid usage.
 
 Exit codes: 0 success, 1 crawl failure (snapshot marked `failed`), 2 invalid usage (nothing is requested or stored), 130 interrupted with Ctrl+C (snapshot marked `failed`).

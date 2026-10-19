@@ -85,7 +85,9 @@ describe('parseCommand subcommands', () => {
       targetId: 'b2',
       dbPath: '/tmp/x.db',
     });
-    expect(parseCommand(['compare', 'a1', 'b2'], { ZERO_AUDIT_DB_PATH: '/tmp/e.db' })).toMatchObject({
+    expect(
+      parseCommand(['compare', 'a1', 'b2'], { ZERO_AUDIT_DB_PATH: '/tmp/e.db' }),
+    ).toMatchObject({
       dbPath: '/tmp/e.db',
     });
   });

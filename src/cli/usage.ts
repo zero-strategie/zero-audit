@@ -1,4 +1,11 @@
-export const USAGE = `Usage : zero-audit <url> [options]
+export const USAGE = `Usage : zero-audit [audit] <url> [options]
+        zero-audit compare <A> <B> [--db <chemin>]
+        zero-audit serve
+
+Commandes
+  audit <url>       lance un audit (commande par défaut : « audit » est facultatif)
+  compare <A> <B>   compare deux snapshots terminés du même site (A = base, B = cible)
+  serve             réservé (non disponible)
 
 Arguments
   url               URL de départ de l'audit (http ou https)

@@ -27,10 +27,17 @@ const build = () => {
     outcome: 'finished' | 'failed' | 'running',
     results: CheckResult[] = [],
   ): Promise<string> => {
-    const snapshot = await repository.create({ projectId, pagesLimit: 10, startedAt: minutes(startMinute) });
+    const snapshot = await repository.create({
+      projectId,
+      pagesLimit: 10,
+      startedAt: minutes(startMinute),
+    });
     await repository.addCheckResults(snapshot.id, results);
     if (outcome === 'finished') {
-      await repository.finish(snapshot.id, { finishedAt: minutes(startMinute + 1), pagesCrawled: 1 });
+      await repository.finish(snapshot.id, {
+        finishedAt: minutes(startMinute + 1),
+        pagesCrawled: 1,
+      });
     } else if (outcome === 'failed') {
       await repository.fail(snapshot.id, minutes(startMinute + 1));
     }
