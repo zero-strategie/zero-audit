@@ -68,3 +68,10 @@ it('SeverityBadge falls back to a neutral style for an unknown severity', async 
   expect(html).toContain('severity-unknown');
   expect(html).toMatch(/>\s*autre\s*</);
 });
+
+it('SeverityBadge treats an inherited object key as an unknown severity', async () => {
+  const html = await render(SeverityBadge, { severity: 'toString' });
+
+  expect(html).toContain('severity-unknown');
+  expect(html).not.toContain('severity-toString');
+});

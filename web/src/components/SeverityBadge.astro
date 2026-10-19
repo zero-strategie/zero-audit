@@ -6,7 +6,7 @@ interface Props {
 }
 
 const { severity } = Astro.props;
-const known = severity in SEVERITY_LABELS ? (severity as keyof typeof SEVERITY_LABELS) : null;
+const known = Object.hasOwn(SEVERITY_LABELS, severity) ? (severity as keyof typeof SEVERITY_LABELS) : null;
 ---
 
 <span class:list={['severity-badge', known ? `severity-${known}` : 'severity-unknown']}>

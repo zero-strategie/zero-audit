@@ -108,3 +108,22 @@ it('shows the severity badge of the checked issue', async () => {
 
   expect(await response.text()).toContain('severity-badge severity-error');
 });
+
+it('still shows the occurrences without a badge when the issues cannot be listed', async () => {
+  const container = await AstroContainer.create();
+  const response = await container.renderToResponse(DetailPage, {
+    params: { id: 's1', checkId: '15' },
+    request: new Request('http://localhost/snapshots/s1/issues/15'),
+    locals: {
+      apiClient: fakeApiClient({
+        getOccurrences: () => Promise.resolve(occurrences(2, 1, 2)),
+        listIssues: () => Promise.reject(new Error('down')),
+      }),
+    },
+  });
+  const html = await response.text();
+
+  expect(response.status).toBe(200);
+  expect(countRows(html)).toBe(2);
+  expect(html).not.toContain('severity-badge');
+});
