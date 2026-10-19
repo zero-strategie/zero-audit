@@ -17,6 +17,14 @@ pnpm typecheck
 pnpm test        # no test may reach the Internet (global network guard)
 ```
 
+The repository is a pnpm workspace (`pnpm-workspace.yaml`): the root package holds the core, the CLI and the API; `web/` is the Astro dashboard. `pnpm install` at the root installs both. The root `lint`, `typecheck` (including `astro check`) and `test` (including web/'s Vitest project, which renders components with Astro's Container API) cover `web/`, and CI runs them without a browser. `web/` must not import `src/` (enforced by ESLint): it only talks to the HTTP API.
+
+```
+pnpm --filter web dev      # dev server on http://127.0.0.1:4321
+pnpm --filter web build
+pnpm --filter web start    # serves the build on http://127.0.0.1:4321
+```
+
 Tests start a local HTTP fixture server (`tests/support/fixture-server.ts`). Production code must use undici's global dispatcher so the guard applies.
 
 ## Running an audit

@@ -1,4 +1,5 @@
 import js from '@eslint/js';
+import astro from 'eslint-plugin-astro';
 import tseslint from 'typescript-eslint';
 
 const forbid = (patterns, message) => ({
@@ -14,7 +15,7 @@ const infrastructureDependencies = [
 ];
 
 export default tseslint.config(
-  { ignores: ['dist/', 'node_modules/', 'coverage/', '.zero-audit/'] },
+  { ignores: ['dist/', 'web/dist/', 'web/.astro/', 'node_modules/', 'coverage/', '.zero-audit/'] },
   js.configs.recommended,
   tseslint.configs.strictTypeChecked,
   {
@@ -44,5 +45,22 @@ export default tseslint.config(
       'The application layer must not depend on infrastructure or CLI.',
     ),
   },
-  { files: ['*.js'], ...tseslint.configs.disableTypeChecked },
+  ...astro.configs.recommended,
+  {
+    files: ['web/**/*.{ts,astro}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: '^(\\.\\./){2,}src(/|$)',
+              message: 'web/ must not import the core (src/): it talks to the API over HTTP.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  { files: ['*.js', '**/*.astro', 'web/*.{mjs,ts}'], ...tseslint.configs.disableTypeChecked },
 );
