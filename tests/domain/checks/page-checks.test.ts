@@ -1,50 +1,20 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { runChecks } from '../../../src/application/run-checks.js';
-import { CheckRegistry } from '../../../src/domain/check.js';
 import type { CheckResult } from '../../../src/domain/check.js';
-import type { CrawlResult, Page } from '../../../src/domain/crawl.js';
+import type { Page } from '../../../src/domain/crawl.js';
 import { pageChecks } from '../../../src/domain/checks/page/index.js';
+import {
+  crawlOf,
+  expectCatalogueMetadata,
+  expectNoCatalogueTitleCopied,
+  flaggedUrls,
+  makePage,
+  runCheck,
+  u,
+} from '../../support/check-fixtures.js';
 
-const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
-  url,
-  depth: 0,
-  status: 200,
-  error: null,
-  redirectTarget: null,
-  redirectChain: [],
-  headers: {},
-  responseTimeMs: 10,
-  contentType: 'text/html',
-  isHtml: true,
-  title: 'Un titre de page suffisamment long',
-  metaDescription: 'Une description',
-  h1: ['Titre'],
-  wordCount: 300,
-  contentHash: null,
-  ...overrides,
-});
+const run = (checkId: number, pages: Page[]): CheckResult =>
+  runCheck(pageChecks, checkId, crawlOf(pages));
 
-const crawlOf = (pages: Page[]): CrawlResult => ({
-  rootUrl: 'https://exemple.com/',
-  internalHost: 'exemple.com',
-  pages,
-  links: [],
-  site: { robotsFound: false, sitemapFound: false },
-});
-
-const run = (checkId: number, pages: Page[]): CheckResult => {
-  const result = runChecks(crawlOf(pages), new CheckRegistry(pageChecks)).find(
-    (r) => r.checkId === checkId,
-  );
-  if (!result) throw new Error(`check ${String(checkId)} missing`);
-  return result;
-};
-
-const flaggedUrls = (result: CheckResult): (string | null)[] =>
-  result.occurrences.map((o) => o.pageUrl);
-
-const u = (name: string): string => `https://exemple.com/${name}`;
 const titleOfLength = (n: number): string => 'a'.repeat(n);
 
 describe('check 1 (5xx)', () => {
@@ -183,47 +153,21 @@ describe('non-HTML resources', () => {
 });
 
 describe('registry metadata', () => {
-  const expected: Record<number, string> = {
-    1: 'error',
-    2: 'error',
-    3: 'error',
-    101: 'warning',
-    102: 'warning',
-    103: 'warning',
-    106: 'warning',
-    117: 'warning',
-    104: 'notice',
-  };
-  const catalogue = JSON.parse(
-    readFileSync(
-      new URL('../../../docs/reference/site-audit-issues.json', import.meta.url),
-      'utf8',
-    ),
-  ) as {
-    issues: { id: number; severity: string; title_fr: string | null; title_en: string | null }[];
-  };
-
   it('uses the id and severity of the catalogue', () => {
-    expect(pageChecks.map((c) => c.id).sort((a, b) => a - b)).toEqual(
-      Object.keys(expected)
-        .map(Number)
-        .sort((a, b) => a - b),
-    );
-    for (const check of pageChecks) {
-      const entry = catalogue.issues.find((i) => i.id === check.id);
-      expect(entry?.severity).toBe(check.severity);
-      expect(check.severity).toBe(expected[check.id]);
-    }
+    expectCatalogueMetadata(pageChecks, {
+      1: 'error',
+      2: 'error',
+      3: 'error',
+      101: 'warning',
+      102: 'warning',
+      103: 'warning',
+      106: 'warning',
+      117: 'warning',
+      104: 'notice',
+    });
   });
 
   it('never copies a catalogue title', () => {
-    const titles = new Set(
-      catalogue.issues.flatMap((i) =>
-        [i.title_fr, i.title_en].flatMap((t) => (t === null ? [] : [t.toLowerCase()])),
-      ),
-    );
-    for (const check of pageChecks) {
-      expect(titles.has(check.label.toLowerCase())).toBe(false);
-    }
+    expectNoCatalogueTitleCopied(pageChecks);
   });
 });
