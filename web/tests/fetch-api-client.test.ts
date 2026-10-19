@@ -109,4 +109,48 @@ describe('fetchApiClient', () => {
 
     expect(calls).toEqual([`${BASE_URL}/snapshots/abc/issues/15?page=2`]);
   });
+
+  it('keeps the API error message in InvalidRequest', async () => {
+    const client = fetchApiClient(BASE_URL, () =>
+      Promise.resolve(json({ error: { code: 'invalid_request', message: 'projets différents' } }, 400)),
+    );
+
+    await expect(client.compare('a', 'b')).rejects.toThrow('projets différents');
+  });
+
+  it('calls /compare with a as base and b as target', async () => {
+    const calls: string[] = [];
+    const client = fetchApiClient(BASE_URL, (input) => {
+      calls.push(typeof input === 'string' ? input : '');
+      return Promise.resolve(json({}));
+    });
+
+    await client.compare('x', 'y z');
+
+    expect(calls).toEqual([`${BASE_URL}/compare?a=x&b=y%20z`]);
+  });
+
+  it('calls the pages endpoint with page and sort', async () => {
+    const calls: string[] = [];
+    const client = fetchApiClient(BASE_URL, (input) => {
+      calls.push(typeof input === 'string' ? input : '');
+      return Promise.resolve(json({}));
+    });
+
+    await client.listPages('s1', 2, '-status');
+
+    expect(calls).toEqual([`${BASE_URL}/snapshots/s1/pages?page=2&sort=-status`]);
+  });
+
+  it('calls the project snapshots endpoint', async () => {
+    const calls: string[] = [];
+    const client = fetchApiClient(BASE_URL, (input) => {
+      calls.push(typeof input === 'string' ? input : '');
+      return Promise.resolve(json([]));
+    });
+
+    await client.listProjectSnapshots('p1');
+
+    expect(calls).toEqual([`${BASE_URL}/projects/p1/snapshots`]);
+  });
 });

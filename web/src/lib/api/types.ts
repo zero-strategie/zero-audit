@@ -64,3 +64,49 @@ export interface OccurrencePage {
   page: number;
   limit: number;
 }
+
+export interface PageRow {
+  url: string;
+  status: number | null;
+  depth: number;
+  group: PageGroup;
+  canonical: string | null;
+  issues: number;
+  responseTimeMs: number;
+}
+
+export interface PageListing {
+  items: PageRow[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+export interface SnapshotListing {
+  id: string;
+  status: 'running' | 'finished' | 'failed';
+  startedAt: string;
+  finishedAt: string | null;
+  pagesCrawled: number;
+  health: number | null;
+}
+
+export interface CheckComparison {
+  checkId: number;
+  label: string;
+  severity: Severity | null;
+  theme: Theme | null;
+  countA: number;
+  countB: number;
+  delta: number;
+  newCount: number;
+  fixedCount: number;
+}
+
+export interface Comparison {
+  base: { id: string };
+  target: { id: string };
+  health: Score;
+  themes: Record<Theme, Score>;
+  checks: CheckComparison[];
+}

@@ -10,6 +10,9 @@ export const fakeApiClient = (overrides: Partial<ApiClient>): ApiClient => ({
   getSnapshotReport: unexpected,
   listIssues: unexpected,
   getOccurrences: unexpected,
+  listPages: unexpected,
+  listProjectSnapshots: unexpected,
+  compare: unexpected,
   ...overrides,
 });
 
