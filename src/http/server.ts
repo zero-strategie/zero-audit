@@ -13,6 +13,12 @@ export interface ServerDependencies {
   readonly snapshots: SnapshotRepository;
 }
 
+/** What the process entry point needs from the server: start it and stop it. */
+export interface HttpServer {
+  listen(options: { host: string; port: number }): Promise<unknown>;
+  close(): Promise<void>;
+}
+
 /** Builds the read-only API without listening, so that tests can use `inject()`. */
 export const buildServer = ({ projects, snapshots }: ServerDependencies): FastifyInstance => {
   const app = Fastify();

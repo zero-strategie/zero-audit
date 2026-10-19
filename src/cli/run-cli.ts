@@ -16,7 +16,8 @@ import { RobotsParserAdapter } from '../infrastructure/robots-parser-adapter.js'
 import { SystemClock } from '../infrastructure/system-clock.js';
 import { UndiciHttpClient } from '../infrastructure/undici-http-client.js';
 import { buildUserAgent } from '../infrastructure/user-agent.js';
-import { parseCommand, type AuditConfig, type CompareConfig } from './config.js';
+import { buildServer, type HttpServer, type ServerDependencies } from '../http/server.js';
+import { parseCommand, type AuditConfig, type CompareConfig, type ServeConfig } from './config.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
 import { renderComparison } from './render-compare.js';
@@ -27,6 +28,9 @@ import { USAGE } from './usage.js';
 export const EXIT_SUCCESS = 0;
 export const EXIT_CRAWL_FAILED = 1;
 export const EXIT_USAGE = 2;
+
+/** Local only until the API gets authentication. */
+export const SERVE_HOST = '127.0.0.1';
 
 export interface CliIo {
   stdout(text: string): void;
@@ -39,6 +43,12 @@ export interface CliHooks {
   onStorageOpened?(storage: Storage): void;
   /** Lets the process entry point mark the snapshot failed on SIGINT. */
   onAuditStarted?(snapshotId: string): void;
+  /** Lets the process entry point stop the server on SIGINT. */
+  onServerStarted?(server: HttpServer): void;
+  /** Builds the HTTP server; defaults to the Fastify API. */
+  createServer?(dependencies: ServerDependencies): HttpServer;
+  /** Resolves when `serve` must stop; defaults to never (the process is stopped by a signal). */
+  untilStopped?: Promise<void>;
   /** Composition root override; defaults to the real SQLite / Postgres factory. */
   storageFactory?: StorageFactory;
 }
@@ -103,6 +113,30 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
   }
 };
 
+const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<number> => {
+  let storage: Storage | null = null;
+  let server: HttpServer | null = null;
+  try {
+    storage = await (hooks.storageFactory ?? createStorage)(config);
+    hooks.onStorageOpened?.(storage);
+    server = (hooks.createServer ?? buildServer)({
+      projects: storage.projects,
+      snapshots: storage.snapshots,
+    });
+    hooks.onServerStarted?.(server);
+    await server.listen({ host: SERVE_HOST, port: config.port });
+    io.stdout(`API à l'écoute sur http://${SERVE_HOST}:${String(config.port)}\n`);
+    await (hooks.untilStopped ?? new Promise<never>(() => undefined));
+    return EXIT_SUCCESS;
+  } catch (error) {
+    io.stderr(`Démarrage du serveur échoué : ${errorMessage(error)}\n`);
+    return EXIT_CRAWL_FAILED;
+  } finally {
+    await server?.close();
+    await storage?.close();
+  }
+};
+
 const compareFailureMessage = (error: unknown, { baseId, targetId }: CompareConfig): string => {
   if (error instanceof SnapshotNotFound) return `Snapshot introuvable : ${error.message}`;
   if (error instanceof SnapshotsFromDifferentProjects) {
@@ -146,10 +180,7 @@ export const runCli = async (
     io.stderr(`Erreur : ${command.message}\n\n${USAGE}`);
     return EXIT_USAGE;
   }
-  if (command.kind === 'serve') {
-    io.stderr(`Erreur : la commande serve n'est pas encore disponible.\n`);
-    return EXIT_USAGE;
-  }
+  if (command.kind === 'serve') return serve(command, io, hooks);
   if (command.kind === 'compare') return compare(command, io, hooks);
   return audit(command.config, io, hooks);
 };

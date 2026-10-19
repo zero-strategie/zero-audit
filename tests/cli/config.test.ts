@@ -110,7 +110,32 @@ describe('parseCommand subcommands', () => {
   });
 
   it('parses `serve` as a serve command, never as a URL', () => {
-    expect(parseCommand(['serve'], {})).toEqual({ kind: 'serve' });
+    expect(parseCommand(['serve'], {})).toEqual({
+      kind: 'serve',
+      port: 3000,
+      dbPath: './.zero-audit/audit.db',
+      store: 'sqlite',
+      databaseUrl: null,
+    });
+  });
+
+  it('reads the serve port from --port', () => {
+    expect(parseCommand(['serve', '--port', '4000'], {})).toMatchObject({ port: 4000 });
+  });
+
+  it.each(['abc', '0', '65536', '-1', '30.5'])('rejects the serve port "%s"', (port) => {
+    const command = parseCommand(['serve', '--port', port], {});
+
+    expect(command.kind).toBe('usage-error');
+    expect(command).toMatchObject({ message: expect.stringContaining('--port') as string });
+  });
+
+  it('applies --store and --db to serve', () => {
+    expect(
+      parseCommand(['serve', '--store', 'postgres', '--db', 'x.db'], {
+        DATABASE_URL: 'postgresql://h/d',
+      }),
+    ).toMatchObject({ store: 'postgres', databaseUrl: 'postgresql://h/d', dbPath: 'x.db' });
   });
 
   it('parses `compare <A> <B>` with the database path', () => {

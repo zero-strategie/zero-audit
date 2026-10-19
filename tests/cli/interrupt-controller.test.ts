@@ -67,4 +67,22 @@ describe('createInterruptController', () => {
 
     expect(calls).toEqual(['close', 'exit:130']);
   });
+
+  it('closes the server before the storage, then exits 130', async () => {
+    const calls: string[] = [];
+    const controller = createInterruptController((code) => {
+      calls.push(`exit:${String(code)}`);
+    });
+    controller.onStorageOpened(fakeStorage(calls));
+    controller.onServerStarted({
+      close: () => {
+        calls.push('server-close');
+        return Promise.resolve();
+      },
+    });
+
+    await controller.interrupt();
+
+    expect(calls).toEqual(['server-close', 'close', 'exit:130']);
+  });
 });

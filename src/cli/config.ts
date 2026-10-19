@@ -23,23 +23,30 @@ export interface CompareConfig extends StoreSelection {
   dbPath: string;
 }
 
+export interface ServeConfig extends StoreSelection {
+  port: number;
+  dbPath: string;
+}
+
 export type ParsedCommand =
   | { kind: 'help' }
   | { kind: 'usage-error'; message: string }
   | { kind: 'audit'; config: AuditConfig }
   | ({ kind: 'compare' } & CompareConfig)
-  | { kind: 'serve' };
+  | ({ kind: 'serve' } & ServeConfig);
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
 export const DEFAULT_LIMIT = 100;
 export const DEFAULT_DELAY_MS = 1000;
+export const DEFAULT_PORT = 3000;
 export const DEFAULT_DB_PATH = './.zero-audit/audit.db';
 
 const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
 const DB_ENV = 'ZERO_AUDIT_DB_PATH';
 const STORE_ENV = 'ZERO_AUDIT_STORE';
 const DATABASE_URL_ENV = 'DATABASE_URL';
+const MAX_PORT = 65_535;
 const DIGITS = /^\d+$/;
 
 class UsageError extends Error {}
@@ -118,9 +125,27 @@ const buildCompareConfig = (argv: readonly string[], env: Environment): CompareC
   };
 };
 
+const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfig => {
+  const { values } = parseArgs({
+    args: [...argv],
+    options: { port: { type: 'string' }, db: { type: 'string' }, store: { type: 'string' } },
+  });
+  const port = values.port === undefined ? DEFAULT_PORT : parseInteger(values.port, '--port', 1);
+  if (port > MAX_PORT) {
+    throw new UsageError(
+      `--port must be an integer <= ${String(MAX_PORT)} (received "${String(port)}")`,
+    );
+  }
+  return {
+    port,
+    dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
+    ...parseStore(values.store, env),
+  };
+};
+
 const buildCommand = (argv: readonly string[], env: Environment): ParsedCommand => {
   const [first, ...rest] = argv;
-  if (first === 'serve') return { kind: 'serve' };
+  if (first === 'serve') return { kind: 'serve', ...buildServeConfig(rest, env) };
   if (first === 'compare') return { kind: 'compare', ...buildCompareConfig(rest, env) };
   return { kind: 'audit', config: buildConfig(first === 'audit' ? rest : argv, env) };
 };

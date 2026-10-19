@@ -29,6 +29,7 @@ export default tseslint.config(
         '**/application/**',
         '**/infrastructure/**',
         '**/cli/**',
+        '**/http/**',
         ...infrastructureDependencies,
         ...infrastructureDependencies.map((name) => `${name}/*`),
         'node:*',
@@ -39,7 +40,7 @@ export default tseslint.config(
   {
     files: ['src/application/**/*.ts'],
     rules: forbid(
-      ['**/infrastructure/**', '**/cli/**', ...infrastructureDependencies],
+      ['**/infrastructure/**', '**/cli/**', '**/http/**', ...infrastructureDependencies],
       'The application layer must not depend on infrastructure or CLI.',
     ),
   },

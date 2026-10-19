@@ -66,3 +66,19 @@ pnpm zero-audit compare <A> <B> [--db <path>]
 `A` is the base and `B` the target (snapshot ids are printed by the audit summary). For each check the output gives the counts in A and B, the delta, the new and fixed occurrences, then the occurrences added and removed. Both snapshots must be `finished` and belong to the same site. Exit codes: 0 success, 1 unknown, unfinished or cross-site snapshots, 2 invalid usage.
 
 Exit codes: 0 success, 1 crawl failure (snapshot marked `failed`), 2 invalid usage (nothing is requested or stored), 130 interrupted with Ctrl+C (snapshot marked `failed`).
+
+### Serving the API
+
+```
+pnpm zero-audit serve [--port <n>] [--db <path>] [--store <sqlite|postgres>]
+```
+
+Starts a read-only HTTP API on `127.0.0.1` (port 3000 by default, `--port` to change it; there is no host option). There is no authentication and no CORS: the API is meant to be read by the dashboard's server on the same machine, so do not expose the port. `--db`, `--store` and `DATABASE_URL` behave as for an audit. Ctrl+C stops the server and releases the storage.
+
+| Route | Answer |
+| --- | --- |
+| `GET /projects` | projects with their latest finished snapshot (`id`, `finishedAt`, rounded `health`, or `null`) |
+| `GET /projects/:id/snapshots` | snapshots of a project (UUID), most recent first, with `status` and `health` (`null` unless finished) |
+| `GET /snapshots/:id` | summary: health and themes with variation, counters, page groups, site files, top 5 checks |
+
+Errors share one format: `{ "error": { "code": "not_found" | "invalid_request", "message": "…" } }` (404 unknown id or route, 400 malformed id). Any non-GET method answers 404. An unexpected failure answers 500 with the code `internal_error` and a generic message.

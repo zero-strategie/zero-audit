@@ -20,6 +20,9 @@ const exitCode = await runCli(
     onStorageOpened: (storage) => {
       interrupts.onStorageOpened(storage);
     },
+    onServerStarted: (server) => {
+      interrupts.onServerStarted(server);
+    },
     onAuditStarted: (snapshotId) => {
       interrupts.onAuditStarted(snapshotId);
     },
