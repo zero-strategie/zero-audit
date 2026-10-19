@@ -1,5 +1,5 @@
 import type { ApiClient } from '../src/lib/api/api-client';
-import type { ProjectOverview, SnapshotReport } from '../src/lib/api/types';
+import type { IssueRow, ProjectOverview, SnapshotReport } from '../src/lib/api/types';
 
 const unexpected = (): never => {
   throw new Error('unexpected call on fake client');
@@ -62,5 +62,18 @@ export const aReport = (overrides: Partial<SnapshotReport> = {}): SnapshotReport
       delta: 1,
     },
   ],
+  ...overrides,
+});
+
+export const anIssue = (overrides: Partial<IssueRow> = {}): IssueRow => ({
+  checkId: 15,
+  label: 'Même meta description sur plusieurs pages',
+  severity: 'warning',
+  theme: 'on-page',
+  count: 7,
+  examined: 40,
+  delta: 2,
+  newCount: 3,
+  fixedCount: 1,
   ...overrides,
 });

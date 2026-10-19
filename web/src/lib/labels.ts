@@ -27,3 +27,9 @@ export const SEVERITY_LABELS = {
   warning: 'Avertissement',
   notice: 'Notice',
 } as const;
+
+export const SEVERITY_GROUP_LABELS = {
+  error: 'Erreurs',
+  warning: 'Avertissements',
+  notice: 'Notices',
+} as const;
