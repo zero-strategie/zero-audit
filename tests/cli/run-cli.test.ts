@@ -110,7 +110,7 @@ describe('runCli', () => {
     expect(exported.siteFiles.map(({ kind }) => kind)).toEqual(['llms', 'robots', 'sitemap']);
     expect(run.out).toContain('llms.txt :');
     expect(exported.links.length).toBeGreaterThan(0);
-    expect(exported.checkResults).toHaveLength(15);
+    expect(exported.checkResults).toHaveLength(16);
     expect(exported.checkResults.some((result) => result.count === 0)).toBe(true);
 
     const stored = await snapshots(exported.snapshot.id);
@@ -135,7 +135,7 @@ describe('runCli', () => {
     const exported = JSON.parse(readFileSync(jsonPath, 'utf8')) as {
       checkResults: { delta: number; newCount: number; fixedCount: number }[];
     };
-    expect(exported.checkResults).toHaveLength(15);
+    expect(exported.checkResults).toHaveLength(16);
     for (const result of exported.checkResults) {
       expect(result).toMatchObject({ delta: 0, newCount: 0, fixedCount: 0 });
     }

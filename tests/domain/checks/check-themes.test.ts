@@ -18,6 +18,7 @@ const EXPECTED_THEME_BY_CHECK_ID: Readonly<Record<number, string>> = {
   117: 'on-page',
   8: 'linking',
   213: 'linking',
+  1000: 'crawlability',
 };
 
 describe('check themes', () => {

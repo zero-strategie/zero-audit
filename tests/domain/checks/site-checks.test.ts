@@ -13,6 +13,8 @@ import {
   u,
 } from '../../support/check-fixtures.js';
 
+const CUSTOM_ID_MIN = 1000;
+
 const run = (checkId: number, pages: Page[], links: Link[] = []): CheckResult =>
   runCheck(siteChecks, checkId, crawlOf(pages, links));
 
@@ -218,14 +220,21 @@ describe('check 213 (single incoming internal link)', () => {
 
 describe('registry metadata', () => {
   it('uses the id and severity of the catalogue', () => {
-    expectCatalogueMetadata(siteChecks, {
-      6: 'error',
-      8: 'error',
-      15: 'error',
-      125: 'warning',
-      203: 'notice',
-      213: 'notice',
-    });
+    expectCatalogueMetadata(
+      siteChecks.filter((check) => check.id < CUSTOM_ID_MIN),
+      {
+        6: 'error',
+        8: 'error',
+        15: 'error',
+        125: 'warning',
+        203: 'notice',
+        213: 'notice',
+      },
+    );
+  });
+
+  it('registers the custom check 1000 in the reserved id range', () => {
+    expect(siteChecks.map((check) => check.id)).toContain(1000);
   });
 
   it('never copies a catalogue title', () => {
