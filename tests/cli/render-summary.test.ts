@@ -4,6 +4,7 @@ import type { CheckResult, Severity } from '../../src/domain/check.js';
 import { Snapshot } from '../../src/domain/snapshot.js';
 import type { SnapshotReport } from '../../src/application/get-snapshot-report.js';
 import { buildScoreCard } from '../../src/domain/scoring.js';
+import { classifyPages, groupVariation } from '../../src/domain/page-groups.js';
 import { diffChecks } from '../../src/domain/snapshot-diff.js';
 import { renderSummary } from '../../src/cli/render-summary.js';
 import { makePage } from '../support/check-fixtures.js';
@@ -71,6 +72,13 @@ const report: SnapshotReport = {
   details,
   checkDiffs: diffChecks(previousResults, details.checkResults),
   scores: buildScoreCard(previousResults, details.checkResults),
+  pageGroups: {
+    counts: classifyPages(details.pages, details.checkResults).counts,
+    variation: groupVariation(
+      { healthy: 3, 'have-issues': 0, broken: 3, redirect: 1, blocked: 0 },
+      classifyPages(details.pages, details.checkResults).counts,
+    ),
+  },
 };
 
 describe('renderSummary', () => {
@@ -126,5 +134,37 @@ describe('renderSummary', () => {
       'Δ +2 – nouvelles 2 – corrigées 0',
       'Δ 0 – nouvelles 0 – corrigées 0',
     ]);
+  });
+
+  it('shows the page count per group with its variation', () => {
+    const text = lines.join('\n');
+    expect(text).toContain('Saines : 2 (-1)');
+    expect(text).toContain('Cassées : 3 (0)');
+    expect(text).toContain('Redirigées : 1 (0)');
+    expect(text).toContain('Bloquées : 0 (0)');
+  });
+
+  it('omits the group variation without a previous snapshot', () => {
+    const first = {
+      ...report,
+      pageGroups: {
+        ...report.pageGroups,
+        variation: groupVariation(null, report.pageGroups.counts),
+      },
+    };
+    expect(renderSummary(first, labels)).toContain('Saines : 2\n');
+  });
+
+  it('keeps blocked pages out of the status classes', () => {
+    const blocked = makePage('https://e.com/p', {
+      blockedByRobots: true,
+      status: null,
+      isHtml: false,
+    });
+    const withBlocked = {
+      ...report,
+      details: { ...details, pages: [...details.pages, blocked] },
+    };
+    expect(renderSummary(withBlocked, labels)).toMatch(/réseau\D+1\b/);
   });
 });

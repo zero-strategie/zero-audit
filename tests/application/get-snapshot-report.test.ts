@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { GetSnapshotReport } from '../../src/application/get-snapshot-report.js';
 import type { CheckResult } from '../../src/domain/check.js';
+import type { Page } from '../../src/domain/crawl.js';
 import { SnapshotNotFound } from '../../src/domain/errors.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
+import { makePage } from '../support/check-fixtures.js';
 
 const PROJECT = 'project-1';
 const minutes = (n: number): Date => new Date(Date.UTC(2026, 0, 1, 10, n));
@@ -26,12 +28,14 @@ const build = () => {
     startMinute: number,
     outcome: 'finished' | 'failed',
     results: CheckResult[],
+    pages: Page[] = [],
   ): Promise<string> => {
     const snapshot = await repository.create({
       projectId: PROJECT,
       pagesLimit: 10,
       startedAt: minutes(startMinute),
     });
+    await repository.addPages(snapshot.id, pages);
     await repository.addCheckResults(snapshot.id, results);
     if (outcome === 'finished') {
       await repository.finish(snapshot.id, {
@@ -47,6 +51,28 @@ const build = () => {
 };
 
 describe('GetSnapshotReport', () => {
+  it('counts pages per group with the variation against the previous snapshot', async () => {
+    const { record, useCase } = build();
+    const healthy = (name: string) => makePage(`https://e.com/${name}`);
+    await record(0, 'finished', [], [healthy('a'), healthy('b')]);
+    const blocked = makePage('https://e.com/p', { blockedByRobots: true, status: null });
+    const current = await record(10, 'finished', [], [healthy('a'), blocked]);
+
+    const { pageGroups } = await useCase.execute(current);
+
+    expect(pageGroups.counts).toMatchObject({ healthy: 1, blocked: 1 });
+    expect(pageGroups.variation).toMatchObject({ healthy: -1, blocked: 1 });
+  });
+
+  it('has no group variation without a previous finished snapshot', async () => {
+    const { record, useCase } = build();
+    const current = await record(0, 'finished', [], [makePage('https://e.com/a')]);
+
+    const { pageGroups } = await useCase.execute(current);
+
+    expect(pageGroups.variation.healthy).toBeNull();
+  });
+
   it('compares the snapshot with the previous finished one', async () => {
     const { record, useCase } = build();
     await record(0, 'finished', [check15('o1', 'o2')]);

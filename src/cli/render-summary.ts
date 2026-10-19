@@ -1,6 +1,7 @@
 import type { SnapshotReport } from '../application/get-snapshot-report.js';
 import type { CheckResult, Severity } from '../domain/check.js';
 import type { Page } from '../domain/crawl.js';
+import { PAGE_GROUPS, type PageGroup } from '../domain/page-groups.js';
 import type { CheckDiff } from '../domain/snapshot-diff.js';
 import { summaryScoreLines } from './render-scores.js';
 
@@ -10,24 +11,41 @@ const SEVERITY_TITLES: Readonly<Record<Severity, string>> = {
   warning: 'Avertissements',
   notice: 'Notices',
 };
+const GROUP_TITLES: Readonly<Record<PageGroup, string>> = {
+  healthy: 'Saines',
+  'have-issues': 'Avec problèmes',
+  broken: 'Cassées',
+  redirect: 'Redirigées',
+  blocked: 'Bloquées',
+};
 const STATUS_CLASS_SIZE = 100;
 const STATUS_CLASSES = [2, 3, 4, 5] as const;
 
 const countPages = (pages: readonly Page[], matches: (page: Page) => boolean): number =>
   pages.filter(matches).length;
 
-const statusClassLines = (pages: readonly Page[]): string[] => [
-  ...STATUS_CLASSES.map(
-    (digit) =>
-      `  ${String(digit)}xx : ${String(
-        countPages(
-          pages,
-          ({ status }) => status !== null && Math.floor(status / STATUS_CLASS_SIZE) === digit,
-        ),
-      )}`,
-  ),
-  `  Erreur réseau : ${String(countPages(pages, ({ status }) => status === null))}`,
-];
+const groupLines = ({ pageGroups }: SnapshotReport): string[] =>
+  PAGE_GROUPS.map((group) => {
+    const variation = pageGroups.variation[group];
+    const suffix = variation === null ? '' : ` (${signedDelta(variation)})`;
+    return `  ${GROUP_TITLES[group]} : ${String(pageGroups.counts[group])}${suffix}`;
+  });
+
+const statusClassLines = (allPages: readonly Page[]): string[] => {
+  const pages = allPages.filter((page) => !page.blockedByRobots);
+  return [
+    ...STATUS_CLASSES.map(
+      (digit) =>
+        `  ${String(digit)}xx : ${String(
+          countPages(
+            pages,
+            ({ status }) => status !== null && Math.floor(status / STATUS_CLASS_SIZE) === digit,
+          ),
+        )}`,
+    ),
+    `  Erreur réseau : ${String(countPages(pages, ({ status }) => status === null))}`,
+  ];
+};
 
 const occurrencesBySeverity = (results: readonly CheckResult[], severity: Severity): number =>
   results
@@ -57,9 +75,10 @@ const triggeredLines = (
     );
 
 export const renderSummary = (
-  { details, checkDiffs, scores }: SnapshotReport,
+  report: SnapshotReport,
   labels: ReadonlyMap<number, string>,
 ): string => {
+  const { details, checkDiffs, scores } = report;
   const { snapshot, pages, checkResults } = details;
   return [
     `Audit ${snapshot.id} (${snapshot.status})`,
@@ -67,6 +86,9 @@ export const renderSummary = (
     '',
     'Scores',
     ...summaryScoreLines(scores),
+    '',
+    'Pages par groupe',
+    ...groupLines(report),
     '',
     'Pages par statut',
     ...statusClassLines(pages),

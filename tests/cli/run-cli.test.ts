@@ -87,11 +87,15 @@ describe('runCli', () => {
       pages: unknown[];
       links: unknown[];
       checkResults: { count: number }[];
+      pageGroups: { counts: Record<string, number>; variation: Record<string, number | null> };
       scores: {
         health: { score: number | null };
         themes: Record<string, { score: number | null }>;
       };
     };
+    expect(exported.pageGroups.counts.healthy).toEqual(expect.any(Number));
+    expect(exported.pageGroups.variation.healthy).toBeNull();
+    expect(run.out).toContain('Pages par groupe');
     expect(exported.scores.health.score).toEqual(expect.any(Number));
     expect(exported.scores.themes.https).toEqual({ score: null, variation: null });
     expect(run.out).toMatch(/Santé du site : \d+ \/ 100/);
