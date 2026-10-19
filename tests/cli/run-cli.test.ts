@@ -85,6 +85,7 @@ describe('runCli', () => {
     const exported = JSON.parse(readFileSync(jsonPath, 'utf8')) as {
       snapshot: { id: string; status: string; pagesCrawled: number; pagesLimit: number };
       pages: unknown[];
+      siteFiles: { kind: string; status: number | null }[];
       links: unknown[];
       checkResults: { count: number }[];
       pageGroups: { counts: Record<string, number>; variation: Record<string, number | null> };
@@ -106,6 +107,8 @@ describe('runCli', () => {
       pagesLimit: 10,
     });
     expect(exported.pages).toHaveLength(5);
+    expect(exported.siteFiles.map(({ kind }) => kind)).toEqual(['llms', 'robots', 'sitemap']);
+    expect(run.out).toContain('llms.txt :');
     expect(exported.links.length).toBeGreaterThan(0);
     expect(exported.checkResults).toHaveLength(15);
     expect(exported.checkResults.some((result) => result.count === 0)).toBe(true);

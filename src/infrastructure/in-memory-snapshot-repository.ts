@@ -16,15 +16,24 @@ interface Stored {
   siteFiles: SiteFile[];
 }
 
+const compare = (a: string, b: string): number => Number(a > b) - Number(a < b);
+
+/** Same order as the SQL adapter (`ORDER BY kind, url`). */
 const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
-  a.kind === b.kind ? Number(a.url > b.url) - Number(a.url < b.url) : Number(a.kind > b.kind) - Number(a.kind < b.kind);
+  compare(a.kind, b.kind) || compare(a.url, b.url);
 
 export class InMemorySnapshotRepository implements SnapshotRepository {
   private readonly stored = new Map<string, Stored>();
 
   create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
     const snapshot = Snapshot.start({ id: randomUUID(), ...input });
-    this.stored.set(snapshot.id, { snapshot, pages: [], links: [], checkResults: [], siteFiles: [] });
+    this.stored.set(snapshot.id, {
+      snapshot,
+      pages: [],
+      links: [],
+      checkResults: [],
+      siteFiles: [],
+    });
     return Promise.resolve(snapshot);
   }
 

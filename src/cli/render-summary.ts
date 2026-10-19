@@ -1,6 +1,6 @@
 import type { SnapshotReport } from '../application/get-snapshot-report.js';
 import type { CheckResult, Severity } from '../domain/check.js';
-import type { Page } from '../domain/crawl.js';
+import type { Page, SiteFile, SiteFileKind } from '../domain/crawl.js';
 import { PAGE_GROUPS, type PageGroup } from '../domain/page-groups.js';
 import type { CheckDiff } from '../domain/snapshot-diff.js';
 import { summaryScoreLines } from './render-scores.js';
@@ -18,6 +18,12 @@ const GROUP_TITLES: Readonly<Record<PageGroup, string>> = {
   redirect: 'Redirigées',
   blocked: 'Bloquées',
 };
+const SITE_FILE_NAMES: Readonly<Record<SiteFileKind, string>> = {
+  robots: 'robots.txt',
+  sitemap: 'sitemap',
+  llms: 'llms.txt',
+};
+const NO_SITE_FILE_LINE = '  Aucun';
 const STATUS_CLASS_SIZE = 100;
 const STATUS_CLASSES = [2, 3, 4, 5] as const;
 
@@ -46,6 +52,14 @@ const statusClassLines = (allPages: readonly Page[]): string[] => {
     `  Erreur réseau : ${String(countPages(pages, ({ status }) => status === null))}`,
   ];
 };
+
+const siteFileLines = (files: readonly SiteFile[]): string[] =>
+  files.length === 0
+    ? [NO_SITE_FILE_LINE]
+    : files.map(({ kind, url, status, error }) => {
+        const outcome = status === null ? `erreur réseau (${error ?? 'inconnue'})` : String(status);
+        return `  ${SITE_FILE_NAMES[kind]} : ${outcome} (${url})`;
+      });
 
 const occurrencesBySeverity = (results: readonly CheckResult[], severity: Severity): number =>
   results
@@ -92,6 +106,9 @@ export const renderSummary = (
     '',
     'Pages par statut',
     ...statusClassLines(pages),
+    '',
+    'Fichiers techniques',
+    ...siteFileLines(details.siteFiles),
     '',
     'Problèmes',
     ...SEVERITY_ORDER.map(

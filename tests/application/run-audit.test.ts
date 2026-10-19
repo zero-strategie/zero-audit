@@ -61,6 +61,7 @@ describe('RunAudit', () => {
 
     const stored = await repository.getById(details.snapshot.id);
     expect(stored?.siteFiles).toEqual(crawlResult.siteFiles.toReversed());
+    expect(stored?.snapshot.status).toBe('finished');
     expect(stored?.snapshot.pagesCrawled).toBe(2);
     expect(stored?.pages.map(({ url }) => url)).toEqual([ROOT, 'https://exemple.com/a']);
   });

@@ -44,6 +44,11 @@ const details: SnapshotDetails = {
     makePage('https://e.com/6', { status: null, error: 'connection' }),
   ],
   links: [],
+  siteFiles: [
+    { kind: 'llms', url: 'https://e.com/llms.txt', status: null, error: 'connection' },
+    { kind: 'robots', url: 'https://e.com/robots.txt', status: 200, error: null },
+    { kind: 'sitemap', url: 'https://e.com/sitemap.xml', status: 404, error: null },
+  ],
   checkResults: [
     result(103, 'warning', 2, 5),
     result(213, 'notice', 1, 4),
@@ -92,6 +97,19 @@ describe('renderSummary', () => {
     expect(text).toContain('https : non calculable');
     expect(text).toContain('linking : non calculable');
     expect(text).toContain('other : non calculable');
+  });
+
+  it('shows one line per technical file with its status or its network error', () => {
+    const text = lines.join('\n');
+    expect(text).toContain('Fichiers techniques');
+    expect(text).toContain('  robots.txt : 200 (https://e.com/robots.txt)');
+    expect(text).toContain('  sitemap : 404 (https://e.com/sitemap.xml)');
+    expect(text).toContain('  llms.txt : erreur réseau (connection) (https://e.com/llms.txt)');
+  });
+
+  it('shows no technical file line for a snapshot without any', () => {
+    const none = { ...report, details: { ...details, siteFiles: [] } };
+    expect(renderSummary(none, labels)).toContain('Fichiers techniques\n  Aucun\n');
   });
 
   it('omits the variation when there is no previous snapshot', () => {
