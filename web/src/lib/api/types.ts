@@ -45,3 +45,22 @@ export interface SnapshotReport {
     delta: number;
   }[];
 }
+
+export interface IssueRow {
+  checkId: number;
+  label: string;
+  severity: Severity;
+  theme: Theme;
+  count: number;
+  examined: number;
+  delta: number;
+  newCount: number;
+  fixedCount: number;
+}
+
+export interface OccurrencePage {
+  items: { pageUrl: string | null; info: Record<string, unknown> }[];
+  total: number;
+  page: number;
+  limit: number;
+}
