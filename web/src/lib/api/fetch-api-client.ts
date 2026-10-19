@@ -22,5 +22,15 @@ export const fetchApiClient = (baseUrl: string, fetchImpl: typeof fetch): ApiCli
     listProjects: () => get('/projects', 'Projects'),
     getSnapshotReport: (snapshotId) =>
       get(`/snapshots/${encodeURIComponent(snapshotId)}`, 'Snapshot'),
+    listIssues: (snapshotId, severity) =>
+      get(
+        `/snapshots/${encodeURIComponent(snapshotId)}/issues${severity ? `?severity=${severity}` : ''}`,
+        'Snapshot',
+      ),
+    getOccurrences: (snapshotId, checkId, page) =>
+      get(
+        `/snapshots/${encodeURIComponent(snapshotId)}/issues/${String(checkId)}?page=${String(page)}`,
+        'Issue',
+      ),
   };
 };

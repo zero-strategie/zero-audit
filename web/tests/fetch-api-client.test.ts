@@ -80,4 +80,33 @@ describe('fetchApiClient', () => {
 
     expect(await client.listProjects()).toEqual(projects);
   });
+
+  it('calls /snapshots/:id/issues with the severity filter', async () => {
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = (input) => {
+      calls.push(typeof input === 'string' ? input : '');
+      return Promise.resolve(json([]));
+    };
+    const client = fetchApiClient(BASE_URL, fetchImpl);
+
+    await client.listIssues('abc');
+    await client.listIssues('abc', 'error');
+
+    expect(calls).toEqual([
+      `${BASE_URL}/snapshots/abc/issues`,
+      `${BASE_URL}/snapshots/abc/issues?severity=error`,
+    ]);
+  });
+
+  it('calls /snapshots/:id/issues/:checkId with the page number', async () => {
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = (input) => {
+      calls.push(typeof input === 'string' ? input : '');
+      return Promise.resolve(json({ items: [], total: 0, page: 2, limit: 50 }));
+    };
+
+    await fetchApiClient(BASE_URL, fetchImpl).getOccurrences('abc', 15, 2);
+
+    expect(calls).toEqual([`${BASE_URL}/snapshots/abc/issues/15?page=2`]);
+  });
 });

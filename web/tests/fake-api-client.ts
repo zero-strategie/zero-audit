@@ -8,6 +8,8 @@ const unexpected = (): never => {
 export const fakeApiClient = (overrides: Partial<ApiClient>): ApiClient => ({
   listProjects: unexpected,
   getSnapshotReport: unexpected,
+  listIssues: unexpected,
+  getOccurrences: unexpected,
   ...overrides,
 });
 
