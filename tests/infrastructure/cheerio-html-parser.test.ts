@@ -75,6 +75,16 @@ describe('CheerioHtmlParser metadata', () => {
     expect(parse(html).wordCount).toBe(5);
   });
 
+  it('separates words of adjacent block elements in minified html', () => {
+    const html = '<body><p>un</p><p>deux</p><ul><li>trois</li><li>quatre</li></ul></body>';
+
+    expect(parse(html).wordCount).toBe(4);
+  });
+
+  it('ignores a title that is not in the head', () => {
+    expect(parse('<body><svg><title>Icon</title></svg></body>').title).toBeNull();
+  });
+
   it('hashes identical content identically and does not expose raw html', () => {
     const html = '<body>same</body>';
 
@@ -88,6 +98,8 @@ describe('CheerioHtmlParser metadata', () => {
     const parsed = parse('<html><head><title>T</title><body><div><h1>H<p>un <a href="/a">x');
 
     expect(parsed.links).toHaveLength(1);
+    expect(parsed.title).toBe('T');
+    expect(parsed.h1).toHaveLength(1);
     expect(parsed.wordCount).toBeGreaterThan(0);
   });
 });

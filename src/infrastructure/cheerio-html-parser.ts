@@ -56,16 +56,20 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   private extractTitle($: CheerioAPI): string | null {
-    const title = $('title').first();
+    const title = $('head > title').first();
     return title.length === 0 ? null : normalizeSpaces(title.text());
   }
 
   private countWords($: CheerioAPI): number {
     const body = $('body').clone();
     body.find(NON_VISIBLE_SELECTOR).remove();
-    return body
-      .text()
-      .split(/\s+/u)
-      .filter((word) => word !== '').length;
+    const text = body
+      .find('*')
+      .addBack()
+      .contents()
+      .toArray()
+      .flatMap((node) => (node.type === 'text' ? [node.data] : []))
+      .join(' ');
+    return text.split(/\s+/u).filter((word) => word !== '').length;
   }
 }
