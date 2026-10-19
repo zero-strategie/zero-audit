@@ -1,0 +1,41 @@
+{
+  "name": "zero-audit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.24.0",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format": "prettier --write .",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cheerio": "^1.2.0",
+    "fast-xml-parser": "^5.11.2",
+    "robots-parser": "^3.0.1",
+    "undici": "^8.12.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5"
+  }
+}

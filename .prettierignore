@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+pnpm-lock.yaml
+docs
+.zero-audit
+.claude
+README.md
