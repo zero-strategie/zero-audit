@@ -4,3 +4,10 @@ export class DomainError extends Error {
     this.name = 'DomainError';
   }
 }
+
+export class RootUnreachable extends DomainError {
+  constructor(rootUrl: string, reason: string) {
+    super(`Root URL ${rootUrl} is unreachable: ${reason}`);
+    this.name = 'RootUnreachable';
+  }
+}
