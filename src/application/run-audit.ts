@@ -1,13 +1,16 @@
 import type { CheckRegistry } from '../domain/check.js';
 import { SnapshotNotFound } from '../domain/errors.js';
+import { normalizeUrl } from '../domain/url.js';
 import type { Clock } from './ports/clock.js';
 import type { Crawler } from './ports/crawler.js';
+import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotDetails, SnapshotRepository } from './ports/snapshot-repository.js';
 import { runChecks } from './run-checks.js';
 
 export interface RunAuditDependencies {
   crawler: Crawler;
   repository: SnapshotRepository;
+  projects: ProjectRepository;
   registry: CheckRegistry;
   clock: Clock;
 }
@@ -24,10 +27,16 @@ export class RunAudit {
   constructor(private readonly dependencies: RunAuditDependencies) {}
 
   async execute(request: AuditRequest): Promise<SnapshotDetails> {
-    const { repository, clock } = this.dependencies;
+    const { repository, projects, clock } = this.dependencies;
+    const startedAt = new Date(clock.now());
+    const project = await projects.findOrCreateByRootUrl({
+      rootUrl: normalizeUrl(request.rootUrl),
+      createdAt: startedAt,
+    });
     const snapshot = await repository.create({
+      projectId: project.id,
       pagesLimit: request.limit,
-      startedAt: new Date(clock.now()),
+      startedAt,
     });
     request.onSnapshotCreated?.(snapshot.id);
     try {

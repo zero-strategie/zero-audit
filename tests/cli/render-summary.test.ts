@@ -21,6 +21,7 @@ const result = (
 
 const snapshot = Snapshot.restore({
   id: 'snap-1',
+  projectId: 'proj-1',
   startedAt: new Date(0),
   finishedAt: new Date(1000),
   pagesCrawled: 6,

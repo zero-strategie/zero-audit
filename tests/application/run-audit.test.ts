@@ -4,6 +4,7 @@ import { RunAudit } from '../../src/application/run-audit.js';
 import { CheckRegistry } from '../../src/domain/check.js';
 import type { CrawlResult } from '../../src/domain/crawl.js';
 import { allChecks } from '../../src/domain/checks/index.js';
+import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 import { makeLink, makePage } from '../support/check-fixtures.js';
 
@@ -30,13 +31,15 @@ class FakeCrawler implements Crawler {
 
 const build = (crawler: Crawler) => {
   const repository = new InMemorySnapshotRepository();
+  const projects = new InMemoryProjectRepository();
   const useCase = new RunAudit({
     crawler,
     repository,
+    projects,
     registry: new CheckRegistry(allChecks),
     clock,
   });
-  return { repository, useCase };
+  return { repository, projects, useCase };
 };
 
 describe('RunAudit', () => {
@@ -84,5 +87,43 @@ describe('RunAudit', () => {
     ).rejects.toBe(boom);
 
     expect((await repository.getById(createdId))?.snapshot.status).toBe('failed');
+  });
+
+  describe('project resolution', () => {
+    const audit = (useCase: RunAudit, rootUrl: string) =>
+      useCase.execute({ rootUrl, limit: 10, delayMs: 0 });
+
+    it('creates a project with the normalized root URL and attaches the snapshot to it', async () => {
+      const { useCase, projects } = build(new FakeCrawler());
+
+      const details = await audit(useCase, 'https://x.test');
+
+      const [project] = await projects.list();
+      expect(project).toMatchObject({ rootUrl: 'https://x.test/', createdAt: new Date(FIXED_NOW) });
+      expect(details.snapshot.projectId).toBe(project?.id);
+    });
+
+    it('reuses the project of the same site', async () => {
+      const { useCase, projects } = build(new FakeCrawler());
+
+      const first = await audit(useCase, 'https://x.test');
+      const second = await audit(useCase, 'https://x.test/');
+
+      expect(second.snapshot.projectId).toBe(first.snapshot.projectId);
+      expect(await projects.list()).toHaveLength(1);
+    });
+
+    it.each(['http://x.test/', 'https://www.x.test/'])(
+      'creates a distinct project for %s',
+      async (variant) => {
+        const { useCase, projects } = build(new FakeCrawler());
+
+        const base = await audit(useCase, 'https://x.test');
+        const other = await audit(useCase, variant);
+
+        expect(other.snapshot.projectId).not.toBe(base.snapshot.projectId);
+        expect(await projects.list()).toHaveLength(2);
+      },
+    );
   });
 });

@@ -10,12 +10,14 @@ import type { CheckResult, IssueOccurrence, Severity } from '../../domain/check.
 import type { Link, LinkType, Page } from '../../domain/crawl.js';
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
+import { SqliteProjectRepository } from './sqlite-project-repository.js';
 import { migrate } from './migrate.js';
 
 const IN_MEMORY_PATH = ':memory:';
 
 interface SnapshotRow {
   id: string;
+  project_id: string;
   status: SnapshotStatus;
   started_at: string;
   finished_at: string | null;
@@ -66,6 +68,7 @@ interface OccurrenceRow {
 const toSnapshot = (row: SnapshotRow): Snapshot =>
   Snapshot.restore({
     id: row.id,
+    projectId: row.project_id,
     status: row.status,
     startedAt: new Date(row.started_at),
     finishedAt: row.finished_at === null ? null : new Date(row.finished_at),
@@ -100,7 +103,11 @@ const toLink = (row: LinkRow): Link => ({
 });
 
 export class SqliteSnapshotRepository implements SnapshotRepository {
-  private constructor(private readonly db: SqliteDatabase) {}
+  readonly projects: SqliteProjectRepository;
+
+  private constructor(private readonly db: SqliteDatabase) {
+    this.projects = new SqliteProjectRepository(db);
+  }
 
   static open(path: string): SqliteSnapshotRepository {
     if (path !== IN_MEMORY_PATH) mkdirSync(dirname(path), { recursive: true });
@@ -115,15 +122,16 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     this.db.close();
   }
 
-  create(input: { pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
+  create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
     return this.run(() => {
       const snapshot = Snapshot.start({ id: randomUUID(), ...input });
       this.db
         .prepare(
-          'INSERT INTO snapshots (id, status, started_at, pages_crawled, pages_limit) VALUES (?, ?, ?, ?, ?)',
+          'INSERT INTO snapshots (id, project_id, status, started_at, pages_crawled, pages_limit) VALUES (?, ?, ?, ?, ?, ?)',
         )
         .run(
           snapshot.id,
+          snapshot.projectId,
           snapshot.status,
           snapshot.startedAt.toISOString(),
           0,
@@ -240,6 +248,29 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
         ).map(toLink),
         checkResults: this.readCheckResults(id),
       };
+    });
+  }
+
+  listByProject(projectId: string): Promise<readonly Snapshot[]> {
+    return this.run(() =>
+      (
+        this.db
+          .prepare('SELECT * FROM snapshots WHERE project_id = ? ORDER BY started_at DESC, id')
+          .all(projectId) as SnapshotRow[]
+      ).map(toSnapshot),
+    );
+  }
+
+  findPreviousFinished(projectId: string, beforeStartedAt: Date): Promise<Snapshot | null> {
+    return this.run(() => {
+      const row = this.db
+        .prepare(
+          `SELECT * FROM snapshots
+           WHERE project_id = ? AND status = 'finished' AND started_at < ?
+           ORDER BY started_at DESC, id LIMIT 1`,
+        )
+        .get(projectId, beforeStartedAt.toISOString()) as SnapshotRow | undefined;
+      return row ? toSnapshot(row) : null;
     });
   }
 

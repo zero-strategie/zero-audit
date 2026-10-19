@@ -18,7 +18,7 @@ interface Stored {
 export class InMemorySnapshotRepository implements SnapshotRepository {
   private readonly stored = new Map<string, Stored>();
 
-  create(input: { pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
+  create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
     const snapshot = Snapshot.start({ id: randomUUID(), ...input });
     this.stored.set(snapshot.id, { snapshot, pages: [], links: [], checkResults: [] });
     return Promise.resolve(snapshot);
@@ -57,6 +57,25 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
       links: [...entry.links],
       checkResults: [...entry.checkResults],
     });
+  }
+
+  listByProject(projectId: string): Promise<readonly Snapshot[]> {
+    const snapshots = [...this.stored.values()]
+      .map(({ snapshot }) => snapshot)
+      .filter((snapshot) => snapshot.projectId === projectId)
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+    return Promise.resolve(snapshots);
+  }
+
+  async findPreviousFinished(projectId: string, beforeStartedAt: Date): Promise<Snapshot | null> {
+    const snapshots = await this.listByProject(projectId);
+    return (
+      snapshots.find(
+        (snapshot) =>
+          snapshot.status === 'finished' &&
+          snapshot.startedAt.getTime() < beforeStartedAt.getTime(),
+      ) ?? null
+    );
   }
 
   private write(id: string, mutate: (entry: Stored) => void): Promise<void> {

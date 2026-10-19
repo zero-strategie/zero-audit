@@ -36,7 +36,7 @@ export interface CliHooks {
 const labelsById = (): ReadonlyMap<number, string> =>
   new Map(allChecks.map((check) => [check.id, check.label]));
 
-const buildRunAudit = (repository: SnapshotRepository): RunAudit => {
+const buildRunAudit = (repository: SqliteSnapshotRepository): RunAudit => {
   const clock = new SystemClock();
   const http = new UndiciHttpClient({ clock, userAgent: buildUserAgent() });
   const crawler = new BfsCrawler({
@@ -47,7 +47,13 @@ const buildRunAudit = (repository: SnapshotRepository): RunAudit => {
     clock,
     sleeper: new RealSleeper(),
   });
-  return new RunAudit({ crawler, repository, registry: new CheckRegistry(allChecks), clock });
+  return new RunAudit({
+    crawler,
+    repository,
+    projects: repository.projects,
+    registry: new CheckRegistry(allChecks),
+    clock,
+  });
 };
 
 const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<number> => {

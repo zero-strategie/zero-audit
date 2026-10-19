@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ProjectRepository } from '../../src/application/ports/project-repository.js';
 import type { SnapshotRepository } from '../../src/application/ports/snapshot-repository.js';
 import type { CheckResult } from '../../src/domain/check.js';
 import type { Link, Page } from '../../src/domain/crawl.js';
@@ -44,21 +45,35 @@ const checkResult = (overrides: Partial<CheckResult> = {}): CheckResult => ({
   ...overrides,
 });
 
+export interface RepositoryPair {
+  readonly snapshots: SnapshotRepository;
+  readonly projects: ProjectRepository;
+}
+
 export const describeSnapshotRepositoryContract = (
-  factory: () => Promise<SnapshotRepository> | SnapshotRepository,
+  factory: () => Promise<RepositoryPair> | RepositoryPair,
 ): void => {
   describe('SnapshotRepository contract', () => {
-    const createRunning = async (): Promise<{ repo: SnapshotRepository; id: string }> => {
-      const repo = await factory();
-      const snapshot = await repo.create({ pagesLimit: 100, startedAt });
-      return { repo, id: snapshot.id };
+    const createRunning = async (): Promise<{
+      repo: SnapshotRepository;
+      projectId: string;
+      id: string;
+    }> => {
+      const { snapshots: repo, projects } = await factory();
+      const project = await projects.findOrCreateByRootUrl({
+        rootUrl: 'https://example.test/',
+        createdAt: startedAt,
+      });
+      const snapshot = await repo.create({ projectId: project.id, pagesLimit: 100, startedAt });
+      return { repo, projectId: project.id, id: snapshot.id };
     };
 
     it('creates a running snapshot with its limit', async () => {
-      const { repo, id } = await createRunning();
+      const { repo, id, projectId } = await createRunning();
       const details = await repo.getById(id);
       expect(details?.snapshot).toMatchObject({
         id,
+        projectId,
         status: 'running',
         startedAt,
         finishedAt: null,
@@ -67,7 +82,7 @@ export const describeSnapshotRepositoryContract = (
     });
 
     it('returns null for an unknown id', async () => {
-      const repo = await factory();
+      const { snapshots: repo } = await factory();
       expect(await repo.getById('missing')).toBeNull();
     });
 
@@ -166,9 +181,79 @@ export const describeSnapshotRepositoryContract = (
     });
 
     it('does not expose any delete method', async () => {
-      const repo = await factory();
+      const { snapshots: repo } = await factory();
       const names = Object.getOwnPropertyNames(Object.getPrototypeOf(repo));
       expect(names.filter((name) => /delete|remove|drop/i.test(name))).toEqual([]);
+    });
+  });
+
+  describe('SnapshotRepository project history', () => {
+    const at = (offsetMs: number): Date => new Date(startedAt.getTime() + offsetMs);
+
+    const setup = async () => {
+      const { snapshots, projects } = await factory();
+      const project = await projects.findOrCreateByRootUrl({
+        rootUrl: 'https://example.test/',
+        createdAt: startedAt,
+      });
+      const start = async (projectId: string, offsetMs: number) =>
+        (await snapshots.create({ projectId, pagesLimit: 10, startedAt: at(offsetMs) })).id;
+      return { snapshots, projects, project, start };
+    };
+
+    it('lists the snapshots of a project by descending start date, to the millisecond', async () => {
+      const { snapshots, project, start } = await setup();
+      const first = await start(project.id, 1);
+      const third = await start(project.id, 3);
+      const second = await start(project.id, 2);
+
+      const listed = await snapshots.listByProject(project.id);
+
+      expect(listed.map((snapshot) => snapshot.id)).toEqual([third, second, first]);
+    });
+
+    it('does not list the snapshots of another project', async () => {
+      const { snapshots, projects, project, start } = await setup();
+      const other = await projects.findOrCreateByRootUrl({
+        rootUrl: 'https://other.test/',
+        createdAt: startedAt,
+      });
+      const mine = await start(project.id, 1);
+      await start(other.id, 2);
+
+      expect((await snapshots.listByProject(project.id)).map(({ id }) => id)).toEqual([mine]);
+    });
+
+    it('finds the latest finished snapshot started before the given date, ignoring failed and running ones', async () => {
+      const { snapshots, project, start } = await setup();
+      const s1 = await start(project.id, 1);
+      await snapshots.finish(s1, { finishedAt: at(100), pagesCrawled: 1 });
+      const s2 = await start(project.id, 2);
+      await snapshots.fail(s2, at(100));
+      await start(project.id, 3);
+      await start(project.id, 4);
+
+      const previous = await snapshots.findPreviousFinished(project.id, at(4));
+
+      expect(previous?.id).toBe(s1);
+    });
+
+    it('prefers the most recent finished snapshot and excludes one starting at the same instant', async () => {
+      const { snapshots, project, start } = await setup();
+      const s1 = await start(project.id, 1);
+      await snapshots.finish(s1, { finishedAt: at(100), pagesCrawled: 1 });
+      const s2 = await start(project.id, 2);
+      await snapshots.finish(s2, { finishedAt: at(100), pagesCrawled: 1 });
+
+      expect((await snapshots.findPreviousFinished(project.id, at(3)))?.id).toBe(s2);
+      expect((await snapshots.findPreviousFinished(project.id, at(2)))?.id).toBe(s1);
+    });
+
+    it('returns null when the project has no earlier finished snapshot', async () => {
+      const { snapshots, project, start } = await setup();
+      const only = await start(project.id, 1);
+      expect(await snapshots.findPreviousFinished(project.id, at(1))).toBeNull();
+      expect(only).toBeDefined();
     });
   });
 };
