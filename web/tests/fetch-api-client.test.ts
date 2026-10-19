@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { afterEach, describe, expect, it } from 'vitest';
 import { ApiUnreachable, InvalidRequest, NotFound } from '../src/lib/api/errors';
 import { resolveApiBaseUrl } from '../src/lib/api/config';
 import { fetchApiClient } from '../src/lib/api/fetch-api-client';
@@ -154,5 +156,52 @@ describe('fetchApiClient', () => {
     await client.listProjectSnapshots('p1');
 
     expect(calls).toEqual([`${BASE_URL}/projects/p1/snapshots`]);
+  });
+});
+
+describe('fetchApiClient.checkHealth', () => {
+  it('calls <base>/health and is true when the API answers 200', async () => {
+    const calls: string[] = [];
+    const fetchImpl: typeof fetch = (input) => {
+      calls.push(typeof input === 'string' ? input : '');
+      return Promise.resolve(json({ status: 'ok' }));
+    };
+
+    expect(await fetchApiClient(BASE_URL, fetchImpl).checkHealth()).toBe(true);
+    expect(calls).toEqual([`${BASE_URL}/health`]);
+  });
+
+  it('is false when the API answers 503', async () => {
+    const client = fetchApiClient(BASE_URL, () =>
+      Promise.resolve(json({ status: 'unavailable' }, 503)),
+    );
+
+    expect(await client.checkHealth()).toBe(false);
+  });
+
+  it('is false when the API is unreachable', async () => {
+    const client = fetchApiClient(BASE_URL, () => Promise.reject(new TypeError('fetch failed')));
+
+    expect(await client.checkHealth()).toBe(false);
+  });
+
+  describe('against a silent API', () => {
+    let silentApi: Server;
+
+    afterEach(async () => {
+      silentApi.closeAllConnections();
+      await new Promise((resolve) => silentApi.close(resolve));
+    });
+
+    it('is false once the health timeout has elapsed', async () => {
+      silentApi = createServer(() => undefined);
+      await new Promise<void>((resolve) => silentApi.listen(0, '127.0.0.1', resolve));
+      const { port } = silentApi.address() as AddressInfo;
+      const client = fetchApiClient(`http://127.0.0.1:${String(port)}`, fetch, {
+        healthTimeoutMs: 50,
+      });
+
+      expect(await client.checkHealth()).toBe(false);
+    });
   });
 });

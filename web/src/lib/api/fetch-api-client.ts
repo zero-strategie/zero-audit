@@ -3,6 +3,12 @@ import { ApiUnreachable, InvalidRequest, NotFound } from './errors';
 
 const HTTP_BAD_REQUEST = 400;
 const HTTP_NOT_FOUND = 404;
+const HTTP_OK = 200;
+const DEFAULT_HEALTH_TIMEOUT_MS = 2000;
+
+export interface FetchApiClientOptions {
+  readonly healthTimeoutMs?: number;
+}
 
 const readErrorMessage = async (response: Response): Promise<string> => {
   const body = await response.text();
@@ -14,7 +20,11 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 };
 
-export const fetchApiClient = (baseUrl: string, fetchImpl: typeof fetch): ApiClient => {
+export const fetchApiClient = (
+  baseUrl: string,
+  fetchImpl: typeof fetch,
+  { healthTimeoutMs = DEFAULT_HEALTH_TIMEOUT_MS }: FetchApiClientOptions = {},
+): ApiClient => {
   const get = async <T>(path: string, resource: string): Promise<T> => {
     let response: Response;
     try {
@@ -29,7 +39,19 @@ export const fetchApiClient = (baseUrl: string, fetchImpl: typeof fetch): ApiCli
     return (await response.json()) as T;
   };
 
+  const checkHealth = async (): Promise<boolean> => {
+    try {
+      const response = await fetchImpl(`${baseUrl}/health`, {
+        signal: AbortSignal.timeout(healthTimeoutMs),
+      });
+      return response.status === HTTP_OK;
+    } catch {
+      return false;
+    }
+  };
+
   return {
+    checkHealth,
     listProjects: () => get('/projects', 'Projects'),
     getSnapshotReport: (snapshotId) =>
       get(`/snapshots/${encodeURIComponent(snapshotId)}`, 'Snapshot'),
