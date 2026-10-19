@@ -80,3 +80,9 @@ it('renders a 502 error page when the API is unreachable', async () => {
   expect(response.status).toBe(502);
   expect(await response.text()).toContain('ZERO_AUDIT_API_URL');
 });
+
+it('links to the issues screen', async () => {
+  const html = await renderReport(aReport());
+
+  expect(html).toMatch(/href="\/snapshots\/s1\/issues"/);
+});

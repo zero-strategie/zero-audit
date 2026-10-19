@@ -54,6 +54,7 @@ const siteFileStatus = (status: number | null, error: string | null) =>
 
       <section>
         <h2>Problèmes</h2>
+        <p><a href={`/snapshots/${report.snapshot.id}/issues`}>Voir tous les problèmes</a></p>
         <ul>
           {(counters ?? []).map(({ key, label, value }) => (
             <li>{label} : <span data-testid={`count-${key}`}>{value}</span></li>
