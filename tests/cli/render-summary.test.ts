@@ -49,6 +49,7 @@ const details: SnapshotDetails = {
     { kind: 'robots', url: 'https://e.com/robots.txt', status: 200, error: null },
     { kind: 'sitemap', url: 'https://e.com/sitemap.xml', status: 404, error: null },
   ],
+  hostProbe: null,
   checkResults: [
     result(103, 'warning', 2, 5),
     result(213, 'notice', 1, 4),

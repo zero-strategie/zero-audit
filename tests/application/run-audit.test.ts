@@ -22,7 +22,13 @@ const crawlResult: CrawlResult = {
     { kind: 'robots', url: `${ROOT}robots.txt`, status: 200, error: null },
     { kind: 'llms', url: `${ROOT}llms.txt`, status: null, error: 'connection' },
   ],
-  hostProbe: null,
+  hostProbe: {
+    url: 'https://www.exemple.com/',
+    status: 200,
+    error: null,
+    isHtml: true,
+    canonical: null,
+  },
   site: { robotsFound: true, sitemapFound: true },
 };
 
@@ -65,6 +71,16 @@ describe('RunAudit', () => {
     expect(stored?.snapshot.status).toBe('finished');
     expect(stored?.snapshot.pagesCrawled).toBe(2);
     expect(stored?.pages.map(({ url }) => url)).toEqual([ROOT, 'https://exemple.com/a']);
+  });
+
+  it('stores the alternate host probe so that check 1000 can be recomputed', async () => {
+    const { useCase, repository } = build(new FakeCrawler());
+
+    const details = await useCase.execute({ rootUrl: ROOT, limit: 10, delayMs: 0 });
+
+    expect((await repository.getById(details.snapshot.id))?.hostProbe).toEqual(
+      crawlResult.hostProbe,
+    );
   });
 
   it('stores blocked pages without counting them as crawled or examining them', async () => {

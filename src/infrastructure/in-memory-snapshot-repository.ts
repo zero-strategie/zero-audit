@@ -4,7 +4,7 @@ import type {
   SnapshotRepository,
 } from '../application/ports/snapshot-repository.js';
 import type { CheckResult } from '../domain/check.js';
-import type { Link, Page, SiteFile } from '../domain/crawl.js';
+import type { HostProbe, Link, Page, SiteFile } from '../domain/crawl.js';
 import { SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
 
@@ -14,6 +14,7 @@ interface Stored {
   links: Link[];
   checkResults: CheckResult[];
   siteFiles: SiteFile[];
+  hostProbe: HostProbe | null;
 }
 
 const compare = (a: string, b: string): number => Number(a > b) - Number(a < b);
@@ -33,6 +34,7 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
       links: [],
       checkResults: [],
       siteFiles: [],
+      hostProbe: null,
     });
     return Promise.resolve(snapshot);
   }
@@ -47,6 +49,12 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
 
   addSiteFiles(id: string, files: readonly SiteFile[]): Promise<void> {
     return this.write(id, (entry) => entry.siteFiles.push(...files));
+  }
+
+  addHostProbe(id: string, probe: HostProbe): Promise<void> {
+    return this.write(id, (entry) => {
+      entry.hostProbe = probe;
+    });
   }
 
   addCheckResults(id: string, results: readonly CheckResult[]): Promise<void> {
@@ -74,6 +82,7 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
       links: [...entry.links],
       checkResults: [...entry.checkResults],
       siteFiles: [...entry.siteFiles].sort(bySiteFileOrder),
+      hostProbe: entry.hostProbe,
     });
   }
 

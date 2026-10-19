@@ -1,5 +1,5 @@
 import type { CheckResult } from '../../domain/check.js';
-import type { Link, Page, SiteFile } from '../../domain/crawl.js';
+import type { HostProbe, Link, Page, SiteFile } from '../../domain/crawl.js';
 import type { Snapshot } from '../../domain/snapshot.js';
 
 export interface SnapshotDetails {
@@ -9,6 +9,8 @@ export interface SnapshotDetails {
   readonly checkResults: readonly CheckResult[];
   /** Ordered by kind then URL; empty for snapshots recorded before site files existed. */
   readonly siteFiles: readonly SiteFile[];
+  /** Null for snapshots without a probe (IP or localhost root, or recorded before it existed). */
+  readonly hostProbe: HostProbe | null;
 }
 
 /** Deliberately has no delete method: audit history is append-only. */
@@ -17,6 +19,7 @@ export interface SnapshotRepository {
   addPages(id: string, pages: readonly Page[]): Promise<void>;
   addLinks(id: string, links: readonly Link[]): Promise<void>;
   addSiteFiles(id: string, files: readonly SiteFile[]): Promise<void>;
+  addHostProbe(id: string, probe: HostProbe): Promise<void>;
   addCheckResults(id: string, results: readonly CheckResult[]): Promise<void>;
   finish(id: string, input: { finishedAt: Date; pagesCrawled: number }): Promise<void>;
   fail(id: string, finishedAt: Date): Promise<void>;

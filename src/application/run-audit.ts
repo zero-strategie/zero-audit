@@ -61,6 +61,7 @@ export class RunAudit {
     await repository.addPages(snapshotId, [...crawl.pages, ...crawl.blockedPages]);
     await repository.addLinks(snapshotId, crawl.links);
     await repository.addSiteFiles(snapshotId, crawl.siteFiles);
+    if (crawl.hostProbe) await repository.addHostProbe(snapshotId, crawl.hostProbe);
     await repository.addCheckResults(snapshotId, runChecks(crawl, registry));
     await repository.finish(snapshotId, {
       finishedAt: new Date(clock.now()),

@@ -7,7 +7,14 @@ import type {
   SnapshotRepository,
 } from '../../application/ports/snapshot-repository.js';
 import type { CheckResult, IssueOccurrence, Severity } from '../../domain/check.js';
-import type { Link, LinkType, Page, SiteFile, SiteFileKind } from '../../domain/crawl.js';
+import type {
+  HostProbe,
+  Link,
+  LinkType,
+  Page,
+  SiteFile,
+  SiteFileKind,
+} from '../../domain/crawl.js';
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
@@ -59,6 +66,14 @@ interface SiteFileRow {
   url: string;
   status: number | null;
   error: string | null;
+}
+
+interface HostProbeRow {
+  url: string;
+  status: number | null;
+  error: string | null;
+  is_html: number;
+  canonical: string | null;
 }
 
 interface CheckResultRow {
@@ -119,6 +134,14 @@ const toSiteFile = (row: SiteFileRow): SiteFile => ({
   url: row.url,
   status: row.status,
   error: row.error,
+});
+
+const toHostProbe = (row: HostProbeRow): HostProbe => ({
+  url: row.url,
+  status: row.status,
+  error: row.error,
+  isHtml: row.is_html === 1,
+  canonical: row.canonical,
 });
 
 export class SqliteSnapshotRepository implements SnapshotRepository {
@@ -213,6 +236,16 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     });
   }
 
+  addHostProbe(id: string, probe: HostProbe): Promise<void> {
+    return this.writeToRunning(id, () => {
+      this.db
+        .prepare(
+          'INSERT INTO host_probes (snapshot_id, url, status, error, is_html, canonical) VALUES (?, ?, ?, ?, ?, ?)',
+        )
+        .run(id, probe.url, probe.status, probe.error, probe.isHtml ? 1 : 0, probe.canonical);
+    });
+  }
+
   addCheckResults(id: string, results: readonly CheckResult[]): Promise<void> {
     return this.writeToRunning(id, () => {
       const insertResult = this.db.prepare(
@@ -283,6 +316,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
             .prepare('SELECT * FROM site_files WHERE snapshot_id = ? ORDER BY kind, url, id')
             .all(id) as SiteFileRow[]
         ).map(toSiteFile),
+        hostProbe: this.readHostProbe(id),
       };
     });
   }
@@ -308,6 +342,12 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
         .get(projectId, beforeStartedAt.toISOString()) as SnapshotRow | undefined;
       return row ? toSnapshot(row) : null;
     });
+  }
+
+  private readHostProbe(id: string): HostProbe | null {
+    const row = this.db.prepare('SELECT * FROM host_probes WHERE snapshot_id = ?').get(id) as
+      HostProbeRow | undefined;
+    return row ? toHostProbe(row) : null;
   }
 
   private readCheckResults(id: string): CheckResult[] {
