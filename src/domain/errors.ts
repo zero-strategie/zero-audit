@@ -46,3 +46,10 @@ export class ProjectNotFound extends DomainError {
     this.name = 'ProjectNotFound';
   }
 }
+
+export class UnknownCheck extends DomainError {
+  constructor(checkId: number) {
+    super(`Check ${String(checkId)} does not exist`);
+    this.name = 'UnknownCheck';
+  }
+}
