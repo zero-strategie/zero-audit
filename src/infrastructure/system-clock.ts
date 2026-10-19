@@ -2,6 +2,6 @@ import type { Clock } from '../application/ports/clock.js';
 
 export class SystemClock implements Clock {
   now(): number {
-    return performance.now();
+    return Date.now();
   }
 }
