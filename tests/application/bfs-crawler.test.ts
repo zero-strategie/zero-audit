@@ -300,6 +300,12 @@ describe('BfsCrawler responses', () => {
     ).rejects.toBeInstanceOf(RootUnreachable);
   });
 
+  it('throws RootUnreachable when the root redirects to an unreachable URL', async () => {
+    await expect(
+      crawl({ [`${SITE}/`]: redirect('https://down.test/'), 'https://down.test/': 'timeout' }),
+    ).rejects.toBeInstanceOf(RootUnreachable);
+  });
+
   it('flags non-HTML responses and does not parse their body', async () => {
     const { site, result } = await crawl({
       [`${SITE}/`]: page('/logo.png'),

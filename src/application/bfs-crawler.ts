@@ -123,7 +123,7 @@ class CrawlRun {
 
     while (next !== null && chain.length < maxRequests) {
       const fetched = await this.fetch(next);
-      if (chain.length === 0 && isNetworkFailure(fetched.response)) {
+      if (isNetworkFailure(fetched.response)) {
         throw new RootUnreachable(rootUrl, fetched.response.kind);
       }
       chain.push(fetched);
