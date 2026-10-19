@@ -61,6 +61,7 @@ describe('runCli serve', () => {
     return {
       projects: real.projects,
       snapshots: real.snapshots,
+      health: real.health,
       close: () => {
         storageCloses += 1;
         const result = real.close();

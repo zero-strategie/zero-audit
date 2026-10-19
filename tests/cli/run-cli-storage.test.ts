@@ -51,6 +51,7 @@ const spyOnFactory = (): SpiedFactory => {
     return {
       projects: real.projects,
       snapshots: real.snapshots,
+      health: real.health,
       close: async () => {
         closes += 1;
         if (closes === 1) effective += 1;

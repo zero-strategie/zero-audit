@@ -67,7 +67,7 @@ describe('read-only HTTP API: issues, pages, compare and checks', () => {
   beforeEach(() => {
     projects = new InMemoryProjectRepository();
     snapshots = new InMemorySnapshotRepository();
-    app = buildServer({ projects, snapshots });
+    app = buildServer({ projects, snapshots, health: snapshots });
   });
 
   afterEach(async () => {

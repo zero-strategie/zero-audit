@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { CheckHealth } from '../application/check-health.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetSnapshotReport } from '../application/get-snapshot-report.js';
 import { ListIssues } from '../application/list-issues.js';
@@ -6,12 +7,14 @@ import { ListOccurrences } from '../application/list-occurrences.js';
 import { ListPages } from '../application/list-pages.js';
 import { ListProjectSnapshots } from '../application/list-project-snapshots.js';
 import { ListProjects } from '../application/list-projects.js';
+import type { StorageHealth } from '../application/ports/storage-health.js';
 import type { ProjectRepository } from '../application/ports/project-repository.js';
 import type { SnapshotRepository } from '../application/ports/snapshot-repository.js';
 import { allChecks } from '../domain/checks/index.js';
 import { registerErrorHandlers } from './errors.js';
 import { registerCheckRoutes } from './routes/checks.js';
 import { registerCompareRoutes } from './routes/compare.js';
+import { registerHealthRoutes } from './routes/health.js';
 import { registerIssueRoutes } from './routes/issues.js';
 import { registerPageRoutes } from './routes/pages.js';
 import { registerProjectRoutes } from './routes/projects.js';
@@ -20,6 +23,7 @@ import { registerSnapshotRoutes } from './routes/snapshots.js';
 export interface ServerDependencies {
   readonly projects: ProjectRepository;
   readonly snapshots: SnapshotRepository;
+  readonly health: StorageHealth;
 }
 
 /** What the process entry point needs from the server: start it and stop it. */
@@ -29,7 +33,11 @@ export interface HttpServer {
 }
 
 /** Builds the read-only API without listening, so that tests can use `inject()`. */
-export const buildServer = ({ projects, snapshots }: ServerDependencies): FastifyInstance => {
+export const buildServer = ({
+  projects,
+  snapshots,
+  health,
+}: ServerDependencies): FastifyInstance => {
   const app = Fastify();
   registerErrorHandlers(app);
   registerProjectRoutes(app, {
@@ -44,5 +52,6 @@ export const buildServer = ({ projects, snapshots }: ServerDependencies): Fastif
   registerPageRoutes(app, { listPages: new ListPages(snapshots) });
   registerCompareRoutes(app, { compareSnapshots: new CompareSnapshots(snapshots) });
   registerCheckRoutes(app, allChecks);
+  registerHealthRoutes(app, { checkHealth: new CheckHealth(health) });
   return app;
 };

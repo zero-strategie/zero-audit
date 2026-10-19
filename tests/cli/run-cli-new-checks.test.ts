@@ -64,7 +64,11 @@ describe('checks 105, 137 and 205 end to end', () => {
 
       expect(code).toBe(0);
       const storage = await createStorage(configs[0] as StorageConfig);
-      const app = buildServer({ projects: storage.projects, snapshots: storage.snapshots });
+      const app = buildServer({
+        projects: storage.projects,
+        snapshots: storage.snapshots,
+        health: storage.health,
+      });
       try {
         const response = await app.inject(`/snapshots/${snapshotId}/issues`);
         const counts = Object.fromEntries(

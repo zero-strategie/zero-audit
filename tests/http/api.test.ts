@@ -59,7 +59,7 @@ describe('read-only HTTP API', () => {
   beforeEach(() => {
     projects = new InMemoryProjectRepository();
     snapshots = new InMemorySnapshotRepository();
-    app = buildServer({ projects, snapshots });
+    app = buildServer({ projects, snapshots, health: snapshots });
   });
 
   afterEach(async () => {

@@ -4,6 +4,7 @@ import type { Storage } from '../../src/cli/storage-factory.js';
 
 const fakeStorage = (calls: string[]): Storage => ({
   projects: {} as Storage['projects'],
+  health: {} as Storage['health'],
   snapshots: {
     fail: (id: string) => {
       calls.push(`fail:${id}`);

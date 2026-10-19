@@ -1,4 +1,5 @@
 import type { ProjectRepository } from '../application/ports/project-repository.js';
+import type { StorageHealth } from '../application/ports/storage-health.js';
 import type { SnapshotRepository } from '../application/ports/snapshot-repository.js';
 import { migrate } from '../infrastructure/postgres/migrate.js';
 import { createPool } from '../infrastructure/postgres/pool.js';
@@ -9,6 +10,7 @@ import type { StoreSelection } from './config.js';
 export interface Storage {
   readonly projects: ProjectRepository;
   readonly snapshots: SnapshotRepository;
+  readonly health: StorageHealth;
   /** Idempotent: releasing the connection twice (end of command and SIGINT) is harmless. */
   close(): Promise<void>;
 }
@@ -45,6 +47,7 @@ const openSqlite = (dbPath: string): Storage => {
   return {
     projects: repository.projects,
     snapshots: repository,
+    health: repository,
     close: once(() => {
       repository.close();
       return Promise.resolve();
@@ -68,6 +71,7 @@ const openPostgres = async (databaseUrl: string): Promise<Storage> => {
   return {
     projects: repository.projects,
     snapshots: repository,
+    health: repository,
     close: once(() => pool.end()),
   };
 };

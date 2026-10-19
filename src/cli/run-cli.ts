@@ -119,6 +119,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
     server = (hooks.createServer ?? buildServer)({
       projects: storage.projects,
       snapshots: storage.snapshots,
+      health: storage.health,
     });
     hooks.onServerStarted?.(server);
     await server.listen({ host: config.host, port: config.port });
