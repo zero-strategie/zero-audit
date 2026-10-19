@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "format": "prettier --write .",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json && cp -R src/infrastructure/sqlite/migrations dist/infrastructure/sqlite/"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
