@@ -1,0 +1,68 @@
+import { describe, expect, it } from 'vitest';
+import { parseCommand, type AuditConfig } from '../../src/cli/config.js';
+
+const URL_ARG = 'https://exemple.com/';
+
+const auditConfig = (argv: string[], env: Record<string, string> = {}): AuditConfig => {
+  const parsed = parseCommand(argv, env);
+  if (parsed.kind !== 'audit') throw new Error(`expected audit, got ${parsed.kind}`);
+  return parsed.config;
+};
+
+describe('parseCommand defaults', () => {
+  it('uses limit 100, delay 1000 ms, default db and no json export', () => {
+    expect(auditConfig([URL_ARG])).toEqual({
+      rootUrl: URL_ARG,
+      limit: 100,
+      delayMs: 1000,
+      dbPath: './.zero-audit/audit.db',
+      jsonPath: null,
+    });
+  });
+});
+
+describe('parseCommand precedence option > environment > default', () => {
+  it('reads the delay from ZERO_AUDIT_DELAY_MS, overridden by --delay', () => {
+    const env = { ZERO_AUDIT_DELAY_MS: '500' };
+    expect(auditConfig([URL_ARG], env).delayMs).toBe(500);
+    expect(auditConfig([URL_ARG, '--delay', '0'], env).delayMs).toBe(0);
+  });
+
+  it('reads the database from ZERO_AUDIT_DB_PATH, overridden by --db', () => {
+    const env = { ZERO_AUDIT_DB_PATH: '/tmp/env.db' };
+    expect(auditConfig([URL_ARG], env).dbPath).toBe('/tmp/env.db');
+    expect(auditConfig([URL_ARG, '--db', '/tmp/opt.db'], env).dbPath).toBe('/tmp/opt.db');
+  });
+
+  it('reads --limit and --json', () => {
+    const config = auditConfig([URL_ARG, '--limit', '10', '--json', 'out.json']);
+    expect(config.limit).toBe(10);
+    expect(config.jsonPath).toBe('out.json');
+  });
+});
+
+describe('parseCommand help', () => {
+  it('returns help for --help', () => {
+    expect(parseCommand(['--help'], {})).toEqual({ kind: 'help' });
+  });
+});
+
+describe('parseCommand usage errors', () => {
+  it.each([
+    ['missing url', []],
+    ['invalid url', ['not a url']],
+    ['non-http url', ['ftp://exemple.com/']],
+    ['limit 0', [URL_ARG, '--limit', '0']],
+    ['limit abc', [URL_ARG, '--limit', 'abc']],
+    ['limit 1.5', [URL_ARG, '--limit', '1.5']],
+    ['negative delay', [URL_ARG, '--delay', '-1']],
+    ['unknown option', [URL_ARG, '--bogus']],
+    ['two urls', [URL_ARG, URL_ARG]],
+  ])('rejects %s', (_name, argv) => {
+    expect(parseCommand(argv, {}).kind).toBe('usage-error');
+  });
+
+  it('rejects an invalid ZERO_AUDIT_DELAY_MS', () => {
+    expect(parseCommand([URL_ARG], { ZERO_AUDIT_DELAY_MS: 'x' }).kind).toBe('usage-error');
+  });
+});
