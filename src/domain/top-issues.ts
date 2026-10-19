@@ -10,3 +10,12 @@ export const topIssues = (results: readonly CheckResult[], limit: number): Check
     .filter(({ count }) => count > 0)
     .sort((a, b) => severityRank(a) - severityRank(b) || b.count - a.count || a.checkId - b.checkId)
     .slice(0, limit);
+
+export type SeverityCounts = Readonly<Record<Severity, number>>;
+
+/** Total occurrences per severity. */
+export const countBySeverity = (results: readonly CheckResult[]): SeverityCounts => {
+  const totals: Record<Severity, number> = { error: 0, warning: 0, notice: 0 };
+  for (const { severity, count } of results) totals[severity] += count;
+  return totals;
+};

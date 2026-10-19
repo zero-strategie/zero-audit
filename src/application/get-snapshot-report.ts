@@ -1,3 +1,4 @@
+import type { CheckResult } from '../domain/check.js';
 import { SnapshotNotFound } from '../domain/errors.js';
 import {
   classifyPages,
@@ -7,12 +8,17 @@ import {
 } from '../domain/page-groups.js';
 import { buildScoreCard, type ScoreCard } from '../domain/scoring.js';
 import { diffChecks, type CheckDiff } from '../domain/snapshot-diff.js';
+import { countBySeverity, topIssues, type SeverityCounts } from '../domain/top-issues.js';
 import type { SnapshotDetails, SnapshotRepository } from './ports/snapshot-repository.js';
+
+const TOP_ISSUES_LIMIT = 5;
 
 export interface SnapshotReport {
   readonly details: SnapshotDetails;
   readonly checkDiffs: readonly CheckDiff[];
   readonly scores: ScoreCard;
+  readonly severityCounts: SeverityCounts;
+  readonly topIssues: readonly CheckResult[];
   readonly pageGroups: {
     readonly counts: GroupCounts;
     readonly variation: GroupVariation;
@@ -39,6 +45,8 @@ export class GetSnapshotReport {
       details,
       checkDiffs: diffChecks(previousDetails?.checkResults ?? null, details.checkResults),
       scores: buildScoreCard(previousDetails?.checkResults ?? null, details.checkResults),
+      severityCounts: countBySeverity(details.checkResults),
+      topIssues: topIssues(details.checkResults, TOP_ISSUES_LIMIT),
       pageGroups: { counts, variation: groupVariation(previousCounts, counts) },
     };
   }

@@ -142,4 +142,28 @@ describe('GetSnapshotReport', () => {
 
     expect(report.scores.health).toEqual({ score: 80, variation: null });
   });
+
+  it('totals the occurrences per severity', async () => {
+    const { record, useCase } = build();
+    const error: CheckResult = { ...check15('o1'), checkId: 2, severity: 'error', count: 4 };
+    const id = await record(0, 'finished', [check15('o1', 'o2'), error]);
+
+    const report = await useCase.execute(id);
+
+    expect(report.severityCounts).toEqual({ error: 4, warning: 2, notice: 0 });
+  });
+
+  it('lists the five most pressing checks', async () => {
+    const { record, useCase } = build();
+    const results = [1, 2, 3, 4, 5, 6].map((checkId): CheckResult => ({
+      ...check15('o1'),
+      checkId,
+      count: checkId,
+    }));
+    const id = await record(0, 'finished', results);
+
+    const report = await useCase.execute(id);
+
+    expect(report.topIssues.map(({ checkId }) => checkId)).toEqual([6, 5, 4, 3, 2]);
+  });
 });

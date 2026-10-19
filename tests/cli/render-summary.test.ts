@@ -5,6 +5,7 @@ import { Snapshot } from '../../src/domain/snapshot.js';
 import type { SnapshotReport } from '../../src/application/get-snapshot-report.js';
 import { buildScoreCard } from '../../src/domain/scoring.js';
 import { classifyPages, groupVariation } from '../../src/domain/page-groups.js';
+import { countBySeverity, topIssues } from '../../src/domain/top-issues.js';
 import { diffChecks } from '../../src/domain/snapshot-diff.js';
 import { renderSummary } from '../../src/cli/render-summary.js';
 import { makePage } from '../support/check-fixtures.js';
@@ -78,6 +79,8 @@ const report: SnapshotReport = {
   details,
   checkDiffs: diffChecks(previousResults, details.checkResults),
   scores: buildScoreCard(previousResults, details.checkResults),
+  severityCounts: countBySeverity(details.checkResults),
+  topIssues: topIssues(details.checkResults, 5),
   pageGroups: {
     counts: classifyPages(details.pages, details.checkResults).counts,
     variation: groupVariation(
