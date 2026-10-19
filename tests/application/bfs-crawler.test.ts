@@ -183,6 +183,42 @@ describe('BfsCrawler traversal', () => {
     ]);
   });
 
+  it('records resources as links without requesting them or counting them in the limit', async () => {
+    const { site, result } = await crawl(
+      {
+        [`${SITE}/`]: {
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+          body: '<img src="/i.png"><script src="/j.js"></script><link rel="stylesheet" href="/s.css"><a href="/a">a</a>',
+        },
+        [`${SITE}/a`]: page(),
+      },
+      { limit: 2 },
+    );
+
+    expect(site.pagesRequested).toEqual([`${SITE}/`, `${SITE}/a`]);
+    expect(result.links.filter((l) => l.type === 'resource')).toHaveLength(3);
+  });
+
+  it('stores extracted metadata on successful html pages only', async () => {
+    const { result } = await crawl({
+      [`${SITE}/`]: {
+        status: 200,
+        headers: { 'content-type': 'text/html' },
+        body: '<title>T</title><h1>H</h1><body> un deux <a href="/gone">x</a></body>',
+      },
+      [`${SITE}/gone`]: {
+        status: 404,
+        headers: { 'content-type': 'text/html' },
+        body: '<title>Missing</title>',
+      },
+    });
+
+    expect(pageAt(result, '/')).toMatchObject({ title: 'T', h1: ['H'], wordCount: 4 });
+    expect(pageAt(result, '/')?.contentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(pageAt(result, '/gone')).toMatchObject({ title: null, wordCount: null });
+  });
+
   it('requests sitemap URLs after the root with depth 1', async () => {
     const { site, result } = await crawl({
       [`${SITE}/`]: page(),

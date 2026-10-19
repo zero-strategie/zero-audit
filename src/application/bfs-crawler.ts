@@ -5,7 +5,7 @@ import { isInternal, normalizeUrl, resolveUrl } from '../domain/url.js';
 import { DiscoverSite } from './discover-site.js';
 import { PoliteHttpClient } from './polite-http-client.js';
 import type { Clock } from './ports/clock.js';
-import type { HtmlParser } from './ports/html-parser.js';
+import type { HtmlParser, ParsedHtml } from './ports/html-parser.js';
 import {
   isNetworkFailure,
   type HttpClient,
@@ -55,6 +55,8 @@ const RETAINED_HEADERS: ReadonlySet<string> = new Set([
   'content-encoding',
 ]);
 const HTML_CONTENT_TYPE = 'text/html';
+const isHtmlContentType = (contentType: string | undefined): boolean =>
+  contentType?.toLowerCase().startsWith(HTML_CONTENT_TYPE) ?? false;
 const HTTP_OK_MIN = 200;
 const HTTP_OK_MAX = 299;
 const HTTP_REDIRECT_MIN = 300;
@@ -155,26 +157,36 @@ class CrawlRun {
   }
 
   private record(fetched: Fetched): void {
-    const page = this.toPage(fetched);
+    const parsed = this.parseSuccessfulHtml(fetched);
+    const page = this.toPage(fetched, parsed);
     this.pages.push(page);
     this.request.onProgress?.(this.pages.length, this.request.limit);
 
     const target = this.redirectTargetOf(fetched);
     if (target !== null) this.enqueue(target, fetched.depth + 1);
-    if (page.isHtml && page.status !== null && isSuccess(page.status)) this.collectLinks(fetched);
+    if (parsed !== null) this.collectLinks(fetched, parsed);
   }
 
-  private toPage({ url, depth, response, responseTimeMs }: Fetched): Page {
+  private parseSuccessfulHtml({ url, response }: Fetched): ParsedHtml | null {
+    if (isNetworkFailure(response) || !isSuccess(response.status)) return null;
+    if (!isHtmlContentType(response.headers['content-type'])) return null;
+    return this.dependencies.htmlParser.parse(response.body, url);
+  }
+
+  private toPage(
+    { url, depth, response, responseTimeMs }: Fetched,
+    parsed: ParsedHtml | null,
+  ): Page {
     const common = {
       url,
       depth,
       redirectChain: [],
       responseTimeMs,
-      title: null,
-      metaDescription: null,
-      h1: [],
-      wordCount: null,
-      contentHash: null,
+      title: parsed?.title ?? null,
+      metaDescription: parsed?.metaDescription ?? null,
+      h1: parsed?.h1 ?? [],
+      wordCount: parsed?.wordCount ?? null,
+      contentHash: parsed?.contentHash ?? null,
     };
     if (isNetworkFailure(response)) {
       return {
@@ -195,7 +207,7 @@ class CrawlRun {
       redirectTarget: this.redirectTargetOf({ url, response }),
       headers: retainedHeaders(response.headers),
       contentType,
-      isHtml: contentType?.toLowerCase().startsWith(HTML_CONTENT_TYPE) ?? false,
+      isHtml: isHtmlContentType(contentType ?? undefined),
     };
   }
 
@@ -206,20 +218,18 @@ class CrawlRun {
     return isRedirect && location !== undefined ? resolveUrl(location, url) : null;
   }
 
-  private collectLinks({ url, depth, response }: Fetched): void {
-    if (isNetworkFailure(response)) return;
-    for (const extracted of this.dependencies.htmlParser.extractLinks(response.body)) {
-      const targetUrl = resolveUrl(extracted.href, url);
-      if (targetUrl === null) continue;
-      const internal = isInternal(targetUrl, this.internalHost);
+  private collectLinks({ url, depth }: Fetched, parsed: ParsedHtml): void {
+    for (const raw of parsed.links) {
+      const internal = isInternal(raw.targetUrl, this.internalHost);
+      const isResource = raw.kind === 'resource';
       this.links.push({
         sourceUrl: url,
-        targetUrl,
-        type: internal ? 'internal' : 'external',
-        rel: extracted.rel,
-        anchor: extracted.anchor,
+        targetUrl: raw.targetUrl,
+        type: isResource ? 'resource' : internal ? 'internal' : 'external',
+        rel: raw.rel,
+        anchor: raw.anchor,
       });
-      if (internal) this.enqueue(targetUrl, depth + 1);
+      if (internal && !isResource) this.enqueue(raw.targetUrl, depth + 1);
     }
   }
 

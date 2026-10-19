@@ -1,20 +1,71 @@
-import { load } from 'cheerio';
-import type { ExtractedLink, HtmlParser } from '../application/ports/html-parser.js';
+import { createHash } from 'node:crypto';
+import { load, type CheerioAPI } from 'cheerio';
+import type { HtmlParser, ParsedHtml, RawLink } from '../application/ports/html-parser.js';
+import { resolveUrl } from '../domain/url.js';
+
+const NON_VISIBLE_SELECTOR = 'script, style, noscript, template';
 
 const normalizeSpaces = (text: string): string => text.replace(/\s+/g, ' ').trim();
+const orNull = (text: string): string | null => (text === '' ? null : text);
 
 export class CheerioHtmlParser implements HtmlParser {
-  extractLinks(html: string): ExtractedLink[] {
+  parse(html: string, pageUrl: string): ParsedHtml {
     const $ = load(html);
-    return $('a[href]')
+    return {
+      links: this.extractLinks($, this.baseUrlOf($, pageUrl)),
+      title: this.extractTitle($),
+      metaDescription: $('meta[name="description" i]').first().attr('content')?.trim() ?? null,
+      h1: $('h1')
+        .toArray()
+        .map((element) => normalizeSpaces($(element).text())),
+      wordCount: this.countWords($),
+      contentHash: createHash('sha256').update(html).digest('hex'),
+    };
+  }
+
+  private baseUrlOf($: CheerioAPI, pageUrl: string): string {
+    const baseHref = $('base[href]').first().attr('href');
+    return (baseHref === undefined ? null : resolveUrl(baseHref, pageUrl)) ?? pageUrl;
+  }
+
+  private extractLinks($: CheerioAPI, baseUrl: string): RawLink[] {
+    const anchors = $('a[href]')
       .toArray()
-      .map((element) => {
-        const anchor = normalizeSpaces($(element).text());
-        return {
-          href: $(element).attr('href') ?? '',
-          rel: $(element).attr('rel') ?? null,
-          anchor: anchor === '' ? null : anchor,
-        };
-      });
+      .map((element) => ({
+        href: $(element).attr('href'),
+        kind: 'anchor' as const,
+        rel: $(element).attr('rel') ?? null,
+        anchor: orNull(normalizeSpaces($(element).text())),
+      }));
+    const resources = [
+      ...$('link[rel~="stylesheet"][href]')
+        .toArray()
+        .map((e) => $(e).attr('href')),
+      ...$('script[src]')
+        .toArray()
+        .map((e) => $(e).attr('src')),
+      ...$('img[src]')
+        .toArray()
+        .map((e) => $(e).attr('src')),
+    ].map((href) => ({ href, kind: 'resource' as const, rel: null, anchor: null }));
+
+    return [...anchors, ...resources].flatMap(({ href, ...rest }) => {
+      const targetUrl = resolveUrl(href ?? '', baseUrl);
+      return targetUrl === null ? [] : [{ targetUrl, ...rest }];
+    });
+  }
+
+  private extractTitle($: CheerioAPI): string | null {
+    const title = $('title').first();
+    return title.length === 0 ? null : normalizeSpaces(title.text());
+  }
+
+  private countWords($: CheerioAPI): number {
+    const body = $('body').clone();
+    body.find(NON_VISIBLE_SELECTOR).remove();
+    return body
+      .text()
+      .split(/\s+/u)
+      .filter((word) => word !== '').length;
   }
 }
