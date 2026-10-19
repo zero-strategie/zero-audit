@@ -1,0 +1,5 @@
+---
+// Target of the snapshot selector form, which works without client-side JavaScript.
+const snapshotId = Astro.url.searchParams.get('id');
+return Astro.redirect(snapshotId ? `/snapshots/${encodeURIComponent(snapshotId)}` : '/');
+---

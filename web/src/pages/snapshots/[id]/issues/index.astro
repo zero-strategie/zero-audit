@@ -1,0 +1,68 @@
+---
+import ErrorView from '../../../../components/ErrorView.astro';
+import Layout from '../../../../layouts/Layout.astro';
+import type { IssueRow } from '../../../../lib/api/types';
+import { toFailure } from '../../../../lib/failure';
+import { groupBySeverity, parseSeverityParam } from '../../../../lib/issues';
+import { SEVERITY_GROUP_LABELS } from '../../../../lib/labels';
+import { formatVariation } from '../../../../lib/presentation';
+
+const snapshotId = Astro.params.id ?? '';
+const filter = parseSeverityParam(Astro.url.searchParams.get('severity'));
+let rows: IssueRow[] = [];
+let failure = null;
+try {
+  rows = await Astro.locals.apiClient.listIssues(
+    snapshotId,
+    filter.kind === 'valid' ? filter.severity : undefined,
+  );
+} catch (error) {
+  failure = toFailure(error);
+  Astro.response.status = failure.status;
+}
+const groups = groupBySeverity(rows);
+---
+
+{
+  failure ? (
+    <ErrorView failure={failure} />
+  ) : (
+    <Layout title="Problèmes – zero-audit">
+      <h1>Problèmes</h1>
+      <p><a href={`/snapshots/${snapshotId}`}>Retour à la vue d'ensemble</a></p>
+      <p><a href={`/snapshots/${snapshotId}/pages`}>Pages explorées</a></p>
+
+      {filter.kind === 'invalid' && (
+        <p data-testid="invalid-filter">
+          Le filtre de sévérité « {filter.raw} » est invalide : tous les problèmes sont affichés.
+        </p>
+      )}
+
+      {groups.map(({ severity, rows: groupRows }) => (
+        <section data-testid={`group-${severity}`}>
+          <h2>{SEVERITY_GROUP_LABELS[severity]}</h2>
+          <ul>
+            {groupRows.map((row) => (
+              <li data-testid={`issue-${String(row.checkId)}`}>
+                {row.count > 0 ? (
+                  <a href={`/snapshots/${snapshotId}/issues/${String(row.checkId)}`}>{row.label}</a>
+                ) : (
+                  <>
+                    {row.label} <span>Réussi</span>
+                  </>
+                )}
+                {row.count > 0 && (
+                  <>
+                    : <span data-testid="count">{row.count}</span> occurrence(s), évolution{' '}
+                    <span data-testid="delta">{formatVariation(row.delta)}</span>, nouvelles{' '}
+                    <span data-testid="new">{row.newCount}</span>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
+    </Layout>
+  )
+}

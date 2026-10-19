@@ -1,0 +1,132 @@
+---
+import ErrorView from '../../../components/ErrorView.astro';
+import Layout from '../../../layouts/Layout.astro';
+import { InvalidRequest } from '../../../lib/api/errors';
+import type { Comparison, SnapshotListing } from '../../../lib/api/types';
+import { changedChecks, defaultComparisonPair } from '../../../lib/compare';
+import { toFailure } from '../../../lib/failure';
+import { SNAPSHOT_STATUS_LABELS, THEME_LABELS } from '../../../lib/labels';
+import { formatDateFr, formatThemeScore, formatVariation } from '../../../lib/presentation';
+
+const HTTP_BAD_REQUEST = 400;
+
+const projectId = Astro.params.id ?? '';
+const requestedA = Astro.url.searchParams.get('a');
+const requestedB = Astro.url.searchParams.get('b');
+
+let snapshots: SnapshotListing[] = [];
+let pair: { a: string; b: string } | null = null;
+let comparison: Comparison | null = null;
+let compareError: string | null = null;
+let failure = null;
+try {
+  snapshots = await Astro.locals.apiClient.listProjectSnapshots(projectId);
+  pair = requestedA && requestedB ? { a: requestedA, b: requestedB } : defaultComparisonPair(snapshots);
+  if (pair) comparison = await Astro.locals.apiClient.compare(pair.a, pair.b);
+} catch (error) {
+  if (error instanceof InvalidRequest) {
+    compareError = error.message;
+    Astro.response.status = HTTP_BAD_REQUEST;
+  } else {
+    failure = toFailure(error);
+    Astro.response.status = failure.status;
+  }
+}
+const rows = comparison ? changedChecks(comparison.checks) : [];
+---
+
+{
+  failure ? (
+    <ErrorView failure={failure} />
+  ) : (
+    <Layout title="Comparaison – zero-audit">
+      <h1>Comparaison</h1>
+      <nav>
+        <a href="/">Projets</a>
+        {pair && (
+          <>
+            {' '}· <a href={`/snapshots/${pair.b}`}>Vue d'ensemble</a> ·
+            <a href={`/snapshots/${pair.b}/issues`}>Problèmes</a> ·
+            <a href={`/snapshots/${pair.b}/pages`}>Pages explorées</a>
+          </>
+        )}
+      </nav>
+
+      <form method="get">
+        {(['a', 'b'] as const).map((name) => (
+          <label>
+            {name === 'a' ? 'Audit A (base)' : 'Audit B (cible)'}
+            <select name={name}>
+              {snapshots.map(({ id, status, startedAt }) => (
+                <option value={id} selected={id === pair?.[name]} disabled={status === 'failed'}>
+                  {formatDateFr(startedAt)} – {SNAPSHOT_STATUS_LABELS[status]}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+        <button type="submit">Comparer</button>
+      </form>
+
+      {compareError !== null && <p data-testid="compare-error">{compareError}</p>}
+
+      {!pair && (
+        <p data-testid="not-enough-snapshots">
+          Il faut au moins deux audits terminés pour comparer.
+        </p>
+      )}
+
+      {comparison && (
+        <>
+          <section>
+            <h2>Santé du site</h2>
+            <p>
+              <strong data-testid="health-score">{comparison.health.score ?? 'Non calculable'}</strong>
+              <span data-testid="health-variation">{formatVariation(comparison.health.variation)}</span>
+            </p>
+            <ul>
+              {Object.entries(comparison.themes).map(([theme, { score, variation }]) => (
+                <li data-testid={`theme-${theme}`}>
+                  {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatThemeScore(score)}
+                  {score !== null && <> ({formatVariation(variation)})</>}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section>
+            <h2>Problèmes</h2>
+            {rows.length === 0 ? (
+              <p data-testid="no-difference">Aucune différence n'a été trouvée entre ces deux audits.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Check</th>
+                    <th>A</th>
+                    <th>B</th>
+                    <th>Évolution</th>
+                    <th>Nouvelles</th>
+                    <th>Corrigées</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((row) => (
+                    <tr data-testid={`check-${String(row.checkId)}`}>
+                      <td>{row.label}</td>
+                      <td data-testid="count-a">{row.countA}</td>
+                      <td data-testid="count-b">{row.countB}</td>
+                      <td data-testid="delta">{formatVariation(row.delta)}</td>
+                      <td data-testid="new">{row.newCount}</td>
+                      <td data-testid="fixed">{row.fixedCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </>
+      )}
+    </Layout>
+  )
+}

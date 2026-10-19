@@ -1,0 +1,51 @@
+{
+  "name": "zero-audit",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@10.24.0",
+  "bin": {
+    "zero-audit": "dist/cli/main.js"
+  },
+  "scripts": {
+    "audit": "tsx src/cli/main.ts",
+    "zero-audit": "tsx src/cli/main.ts",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit && pnpm --filter web typecheck",
+    "test": "vitest run && pnpm --filter web test",
+    "format": "prettier --write .",
+    "build": "tsc -p tsconfig.build.json && cp -R src/infrastructure/sqlite/migrations dist/infrastructure/sqlite/ && cp -R src/infrastructure/postgres/migrations dist/infrastructure/postgres/"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "cheerio": "^1.2.0",
+    "fast-xml-parser": "^5.11.2",
+    "fast-xml-validator": "^1.4.2",
+    "fastify": "^5.12.7",
+    "pg": "^8.23.1",
+    "robots-parser": "^3.0.1",
+    "undici": "^8.12.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "eslint": "^10.13.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vitest": "^5.0.5",
+    "eslint-plugin-astro": "3.2.1"
+  }
+}

@@ -11,3 +11,5 @@ coverage/
 docs/missions/*/S[0-9]*-rapport.md
 docs/missions/*/S[0-9]*-verdict.json
 docs/missions/*/S[0-9]*-pr.md
+.zero-audit/
+.astro/

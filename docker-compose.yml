@@ -1,0 +1,21 @@
+# Local Postgres for manual use. The password is never versioned:
+#   POSTGRES_PASSWORD=<your password> docker compose up -d
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: zero_audit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD to start the local database}
+      POSTGRES_DB: zero_audit
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'zero_audit', '-d', 'zero_audit']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
