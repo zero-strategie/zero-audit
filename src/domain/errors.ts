@@ -39,3 +39,10 @@ export class SnapshotNotFinished extends DomainError {
     this.name = 'SnapshotNotFinished';
   }
 }
+
+export class ProjectNotFound extends DomainError {
+  constructor(projectId: string) {
+    super(`Project ${projectId} does not exist`);
+    this.name = 'ProjectNotFound';
+  }
+}
