@@ -32,13 +32,8 @@ const siteFileStatus = (status: number | null, error: string | null) =>
   failure || !report ? (
     <ErrorView failure={failure ?? { kind: 'not-found', status: 404 }} />
   ) : (
-    <Layout title="Vue d'ensemble – zero-audit">
+    <Layout title="Vue d'ensemble – zero-audit" projectId={report.snapshot.projectId} snapshotId={report.snapshot.id}>
       <h1>Vue d'ensemble</h1>
-      <nav>
-        <a href={`/snapshots/${report.snapshot.id}/issues`}>Problèmes</a> ·
-        <a href={`/snapshots/${report.snapshot.id}/pages`}>Pages explorées</a> ·
-        <a href={`/projects/${report.snapshot.projectId}/compare`}>Comparaison</a>
-      </nav>
       <SnapshotSelector snapshots={snapshots} currentId={report.snapshot.id} />
 
       <section>

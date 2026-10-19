@@ -32,7 +32,7 @@ const links = occurrences && buildPaginationLinks(occurrences.page, occurrences.
   failure || !occurrences || !links ? (
     <ErrorView failure={failure ?? { kind: 'not-found', status: 404 }} />
   ) : (
-    <Layout title={`Détail du problème ${rawCheckId} – zero-audit`}>
+    <Layout title={`Détail du problème ${rawCheckId} – zero-audit`} snapshotId={snapshotId}>
       <h1>Pages concernées</h1>
       <p><a href={`/snapshots/${snapshotId}/issues`}>Retour aux problèmes</a></p>
       <p>{occurrences.total} occurrence(s), page {occurrences.page}.</p>
@@ -46,7 +46,7 @@ const links = occurrences && buildPaginationLinks(occurrences.page, occurrences.
         ))}
       </ul>
 
-      <nav>
+      <nav class="pagination">
         {links.previous !== null && (
           <a data-testid="previous-page" href={`?page=${String(links.previous)}`}>Page précédente</a>
         )}

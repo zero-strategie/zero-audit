@@ -38,20 +38,17 @@ const pageHref = (page: number) => `?page=${String(page)}&sort=${sort}`;
   failure || !listing ? (
     <ErrorView failure={failure ?? { kind: 'not-found', status: 404 }} />
   ) : (
-    <Layout title="Pages explorées – zero-audit">
+    <Layout title="Pages explorées – zero-audit" snapshotId={snapshotId}>
       <h1>Pages explorées</h1>
-      <nav>
-        <a href={`/snapshots/${snapshotId}`}>Vue d'ensemble</a> ·
-        <a href={`/snapshots/${snapshotId}/issues`}>Problèmes</a>
-      </nav>
 
       {sortParam.kind === 'invalid' && (
-        <p data-testid="invalid-sort">
+        <p class="alert" data-testid="invalid-sort">
           Le tri « {sortParam.raw} » est invalide : les pages sont triées par URL.
         </p>
       )}
 
       <p>{listing.total} page(s)</p>
+      <div class="table-scroll">
       <table>
         <thead>
           <tr>
@@ -75,8 +72,9 @@ const pageHref = (page: number) => `?page=${String(page)}&sort=${sort}`;
           ))}
         </tbody>
       </table>
+      </div>
 
-      <p>
+      <p class="pagination">
         {links?.previous != null && (
           <a data-testid="previous" href={pageHref(links.previous)}>Page précédente</a>
         )}

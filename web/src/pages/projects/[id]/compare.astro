@@ -39,18 +39,8 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
   failure ? (
     <ErrorView failure={failure} />
   ) : (
-    <Layout title="Comparaison – zero-audit">
+    <Layout title="Comparaison – zero-audit" projectId={projectId} snapshotId={pair?.b}>
       <h1>Comparaison</h1>
-      <nav>
-        <a href="/">Projets</a>
-        {pair && (
-          <>
-            {' '}· <a href={`/snapshots/${pair.b}`}>Vue d'ensemble</a> ·
-            <a href={`/snapshots/${pair.b}/issues`}>Problèmes</a> ·
-            <a href={`/snapshots/${pair.b}/pages`}>Pages explorées</a>
-          </>
-        )}
-      </nav>
 
       <form method="get">
         {(['a', 'b'] as const).map((name) => (
@@ -68,10 +58,10 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
         <button type="submit">Comparer</button>
       </form>
 
-      {compareError !== null && <p data-testid="compare-error">{compareError}</p>}
+      {compareError !== null && <p class="alert alert-error" data-testid="compare-error">{compareError}</p>}
 
       {!pair && (
-        <p data-testid="not-enough-snapshots">
+        <p class="alert" data-testid="not-enough-snapshots">
           Il faut au moins deux audits terminés pour comparer.
         </p>
       )}
@@ -97,6 +87,7 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
             {rows.length === 0 ? (
               <p data-testid="no-difference">Aucune différence n'a été trouvée entre ces deux audits.</p>
             ) : (
+              <div class="table-scroll">
               <table>
                 <thead>
                   <tr>
@@ -121,6 +112,7 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </section>
         </>

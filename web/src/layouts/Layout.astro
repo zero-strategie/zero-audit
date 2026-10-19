@@ -1,18 +1,26 @@
 ---
+import MainNav from '../components/MainNav.astro';
+import globalStylesheet from '../styles/global.css?url';
+
 interface Props {
   title: string;
+  projectId?: string | undefined;
+  snapshotId?: string | undefined;
 }
-const { title } = Astro.props;
+const { title, projectId, snapshotId } = Astro.props;
 ---
 
 <!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="stylesheet" href={globalStylesheet} />
     <title>{title}</title>
   </head>
   <body>
-    <header><a href="/">zero-audit</a></header>
+    <header class="site-header"><MainNav projectId={projectId} snapshotId={snapshotId} /></header>
     <main><slot /></main>
   </body>
 </html>
