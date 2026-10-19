@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CheckResult } from '../../../src/domain/check.js';
-import type { Link, Page } from '../../../src/domain/crawl.js';
+import type { CrawlResult, Link, Page, SiteFile } from '../../../src/domain/crawl.js';
 import { siteChecks } from '../../../src/domain/checks/site/index.js';
 import {
   expectCatalogueMetadata,
@@ -218,6 +218,71 @@ describe('check 213 (single incoming internal link)', () => {
   });
 });
 
+const llmsCrawl = (siteFiles: SiteFile[]): CrawlResult => ({
+  ...crawlOf([makePage(u(''))]),
+  siteFiles,
+});
+
+const llmsFile = (status: number | null, error: string | null = null): SiteFile => ({
+  kind: 'llms',
+  url: u('llms.txt'),
+  status,
+  error,
+});
+
+describe('check 137 (llms.txt missing)', () => {
+  it.each([
+    ['404', llmsFile(404)],
+    ['301', llmsFile(301)],
+    ['500', llmsFile(500)],
+    ['network error', llmsFile(null, 'ECONNREFUSED')],
+  ])('flags a llms file answered with %s', (_label, file) => {
+    const result = runCheck(siteChecks, 137, llmsCrawl([file]));
+    expect(result.occurrences).toEqual([{ checkId: 137, pageUrl: null, info: {} }]);
+  });
+
+  it('does not flag a llms file answered with 200', () => {
+    expect(runCheck(siteChecks, 137, llmsCrawl([llmsFile(200)])).count).toBe(0);
+  });
+
+  it('does not flag a snapshot recorded without any llms row', () => {
+    const robots: SiteFile = { kind: 'robots', url: u('robots.txt'), status: 404, error: null };
+    expect(runCheck(siteChecks, 137, llmsCrawl([robots])).count).toBe(0);
+  });
+});
+
+describe('check 205 (HSTS missing)', () => {
+  const HSTS = { 'strict-transport-security': 'max-age=31536000' };
+  const home = (url: string, overrides: Partial<Page> = {}): Page =>
+    makePage(url, { depth: 0, ...overrides });
+  const run205 = (pages: Page[]): CheckResult => runCheck(siteChecks, 205, crawlOf(pages));
+
+  it('flags an https home page answered with 200 and no HSTS header', () => {
+    const result = run205([home('https://exemple.com/')]);
+    expect(result.occurrences).toEqual([{ checkId: 205, pageUrl: 'https://exemple.com/', info: {} }]);
+  });
+
+  it('does not flag an https home page sending HSTS', () => {
+    expect(run205([home('https://exemple.com/', { headers: HSTS })]).count).toBe(0);
+  });
+
+  it('does not apply to an http home page', () => {
+    expect(run205([home('http://exemple.com/')]).count).toBe(0);
+  });
+
+  it('does not apply to an https home page with a non 2xx status', () => {
+    expect(run205([home('https://exemple.com/', { status: 301 })]).count).toBe(0);
+  });
+
+  it('ignores deeper pages', () => {
+    const result = run205([
+      home('https://exemple.com/', { headers: HSTS }),
+      makePage(u('inner'), { depth: 1 }),
+    ]);
+    expect(result.count).toBe(0);
+  });
+});
+
 describe('registry metadata', () => {
   it('uses the id and severity of the catalogue', () => {
     expectCatalogueMetadata(
@@ -227,6 +292,8 @@ describe('registry metadata', () => {
         8: 'error',
         15: 'error',
         125: 'warning',
+        137: 'notice',
+        205: 'notice',
         203: 'notice',
         213: 'notice',
       },
