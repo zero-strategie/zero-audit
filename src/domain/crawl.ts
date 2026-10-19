@@ -52,6 +52,19 @@ export interface HostProbe {
   readonly canonical: string | null;
 }
 
+/** Single request to the other trailing-slash form of an explored page; never a crawled page. */
+export interface SlashVariantProbe {
+  readonly url: string;
+  /** Explored page whose variant was probed. */
+  readonly sourcePageUrl: string;
+  readonly status: number | null;
+  /** Network failure kind when no response was received. */
+  readonly error: string | null;
+  readonly isHtml: boolean;
+  /** Absolute canonical URL declared by the probed page, null when absent. */
+  readonly canonical: string | null;
+}
+
 export interface CrawlResult {
   readonly rootUrl: string;
   readonly internalHost: string;
@@ -62,6 +75,7 @@ export interface CrawlResult {
   readonly siteFiles: readonly SiteFile[];
   /** Null when the root host is an IP or localhost: no alternate host exists. */
   readonly hostProbe: HostProbe | null;
+  readonly slashProbes: readonly SlashVariantProbe[];
   /** Whether the file was usable (a sitemap must also parse), which a status alone cannot tell. */
   readonly site: { readonly robotsFound: boolean; readonly sitemapFound: boolean };
 }

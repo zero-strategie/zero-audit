@@ -5,6 +5,7 @@ import type {
   HttpResponse,
   NetworkFailure,
 } from '../../src/application/ports/http-client.js';
+import { toggleTrailingSlash } from '../../src/domain/url.js';
 import { RootUnreachable } from '../../src/domain/errors.js';
 import { CheerioHtmlParser } from '../../src/infrastructure/cheerio-html-parser.js';
 import { FastXmlSitemapReader } from '../../src/infrastructure/fast-xml-sitemap-reader.js';
@@ -69,11 +70,20 @@ class FakeSite implements HttpClient {
     });
   }
 
-  /** Crawled pages only: technical files and the alternate host probe are left out. */
+  /** A slash probe targets an unknown URL whose other slash form was requested earlier. */
+  private isSlashProbe(url: string, index: number): boolean {
+    const variant = toggleTrailingSlash(url);
+    return (
+      !(url in this.replies) && variant !== null && this.requested.slice(0, index).includes(variant)
+    );
+  }
+
+  /** Crawled pages only: technical files and the host and slash probes are left out. */
   get pagesRequested(): string[] {
     return this.requested.filter(
-      (url) =>
+      (url, index) =>
         url !== ALTERNATE_HOME &&
+        !this.isSlashProbe(url, index) &&
         !['/robots.txt', '/sitemap.xml', '/llms.txt'].some((path) => url.endsWith(path)),
     );
   }

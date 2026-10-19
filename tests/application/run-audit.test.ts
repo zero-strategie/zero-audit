@@ -29,6 +29,7 @@ const crawlResult: CrawlResult = {
     isHtml: true,
     canonical: null,
   },
+  slashProbes: [],
   site: { robotsFound: true, sitemapFound: true },
 };
 

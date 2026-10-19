@@ -3,7 +3,13 @@ import { expect } from 'vitest';
 import { runChecks } from '../../src/application/run-checks.js';
 import { CheckRegistry } from '../../src/domain/check.js';
 import type { Check, CheckResult } from '../../src/domain/check.js';
-import type { CrawlResult, HostProbe, Link, Page } from '../../src/domain/crawl.js';
+import type {
+  CrawlResult,
+  HostProbe,
+  Link,
+  Page,
+  SlashVariantProbe,
+} from '../../src/domain/crawl.js';
 
 export const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   url,
@@ -46,6 +52,7 @@ export const crawlOf = (
   links: Link[] = [],
   site: CrawlResult['site'] = { robotsFound: false, sitemapFound: false },
   hostProbe: HostProbe | null = null,
+  slashProbes: SlashVariantProbe[] = [],
 ): CrawlResult => ({
   rootUrl: 'https://exemple.com/',
   internalHost: 'exemple.com',
@@ -54,6 +61,7 @@ export const crawlOf = (
   links,
   siteFiles: [],
   hostProbe,
+  slashProbes,
   site,
 });
 
