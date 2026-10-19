@@ -159,6 +159,10 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
     this.projects = new PostgresProjectRepository(pool);
   }
 
+  async ping(): Promise<void> {
+    await this.pool.query('SELECT 1');
+  }
+
   async create(input: {
     projectId: string;
     pagesLimit: number;

@@ -17,6 +17,19 @@ describeSnapshotRepositoryContract(() => {
 });
 describeProjectRepositoryContract(() => openInMemory().projects);
 
+describe('SqliteSnapshotRepository ping', () => {
+  it('resolves while the database is open', async () => {
+    await expect(openInMemory().ping()).resolves.toBeUndefined();
+  });
+
+  it('rejects once the database is closed', async () => {
+    const repository = openInMemory();
+    repository.close();
+
+    await expect(repository.ping()).rejects.toThrow();
+  });
+});
+
 const startedAt = new Date('2026-01-01T10:00:00.000Z');
 
 const schemaVersion = (path: string): number => {

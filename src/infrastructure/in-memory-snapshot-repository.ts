@@ -3,6 +3,7 @@ import type {
   SnapshotDetails,
   SnapshotRepository,
 } from '../application/ports/snapshot-repository.js';
+import type { StorageHealth } from '../application/ports/storage-health.js';
 import type { CheckResult } from '../domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../domain/crawl.js';
 import { SnapshotNotFound } from '../domain/errors.js';
@@ -28,8 +29,12 @@ const bySlashProbeOrder = (a: SlashVariantProbe, b: SlashVariantProbe): number =
 const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
   compare(a.kind, b.kind) || compare(a.url, b.url);
 
-export class InMemorySnapshotRepository implements SnapshotRepository {
+export class InMemorySnapshotRepository implements SnapshotRepository, StorageHealth {
   private readonly stored = new Map<string, Stored>();
+
+  ping(): Promise<void> {
+    return Promise.resolve();
+  }
 
   create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
     const snapshot = Snapshot.start({ id: randomUUID(), ...input });

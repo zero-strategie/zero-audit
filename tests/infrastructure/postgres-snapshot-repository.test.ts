@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Link } from '../../src/domain/crawl.js';
 import { SnapshotImmutable } from '../../src/domain/errors.js';
+import { createPool } from '../../src/infrastructure/postgres/pool.js';
 import { migrate } from '../../src/infrastructure/postgres/migrate.js';
 import { PostgresSnapshotRepository } from '../../src/infrastructure/postgres/postgres-snapshot-repository.js';
 import { describeProjectRepositoryContract } from '../support/project-repository-contract.js';
@@ -55,6 +56,19 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     projects: repository.projects,
   }));
   describeProjectRepositoryContract(() => repository.projects);
+
+  describe('ping', () => {
+    it('resolves when the database answers', async () => {
+      await expect(repository.ping()).resolves.toBeUndefined();
+    });
+
+    it('rejects when the pool is closed', async () => {
+      const closedPool = createPool(TEST_DATABASE_URL ?? '');
+      await closedPool.end();
+
+      await expect(new PostgresSnapshotRepository(closedPool).ping()).rejects.toThrow();
+    });
+  });
 
   const createRunning = async (): Promise<string> => {
     const project = await repository.projects.findOrCreateByRootUrl({

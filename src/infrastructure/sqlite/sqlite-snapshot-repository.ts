@@ -176,6 +176,12 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     this.db.close();
   }
 
+  ping(): Promise<void> {
+    return this.run(() => {
+      this.db.prepare('SELECT 1').get();
+    });
+  }
+
   create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
     return this.run(() => {
       const snapshot = Snapshot.start({ id: randomUUID(), ...input });
