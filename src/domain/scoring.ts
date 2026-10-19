@@ -31,7 +31,10 @@ export const computeHealth = (results: readonly CheckResult[]): number | null =>
 
 export const computeThemeScores = (results: readonly CheckResult[]): ThemeScores =>
   Object.fromEntries(
-    THEMES.map((theme) => [theme, weightedScore(results.filter((result) => result.theme === theme))]),
+    THEMES.map((theme) => [
+      theme,
+      weightedScore(results.filter((result) => result.theme === theme)),
+    ]),
   ) as ThemeScores;
 
 export const roundScore = (score: number | null): number | null =>
@@ -59,7 +62,10 @@ export interface ScoreCard {
   readonly themes: Readonly<Record<Theme, ScoreWithVariation>>;
 }
 
-const exposed = (previous: number | null | undefined, current: number | null): ScoreWithVariation => ({
+const exposed = (
+  previous: number | null | undefined,
+  current: number | null,
+): ScoreWithVariation => ({
   score: roundScore(current),
   variation: scoreVariation(previous, current),
 });
@@ -71,7 +77,10 @@ export const buildScoreCard = (
   const previousThemes = previousResults ? computeThemeScores(previousResults) : null;
   const currentThemes = computeThemeScores(currentResults);
   return {
-    health: exposed(previousResults ? computeHealth(previousResults) : null, computeHealth(currentResults)),
+    health: exposed(
+      previousResults ? computeHealth(previousResults) : null,
+      computeHealth(currentResults),
+    ),
     themes: Object.fromEntries(
       THEMES.map((theme) => [theme, exposed(previousThemes?.[theme], currentThemes[theme])]),
     ) as ScoreCard['themes'],

@@ -39,7 +39,9 @@ describe('computeHealth', () => {
   });
 
   it('is null when every check examined nothing', () => {
-    expect(computeHealth([result('error', 0, 0), result('warning', 0, 0, 'on-page', 2)])).toBeNull();
+    expect(
+      computeHealth([result('error', 0, 0), result('warning', 0, 0, 'on-page', 2)]),
+    ).toBeNull();
   });
 
   it('is null when only notices were examined (zero total weight)', () => {

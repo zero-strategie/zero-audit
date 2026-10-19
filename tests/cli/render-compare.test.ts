@@ -43,10 +43,7 @@ const comparison = (...checkDiffs: CheckDiff[]): SnapshotComparison => ({
   base: snapshot('snap-a'),
   target: snapshot('snap-b'),
   checkDiffs,
-  scores: buildScoreCard(
-    [{ ...CHECK_15, count: 2 }],
-    [{ ...CHECK_15, count: 1 }],
-  ),
+  scores: buildScoreCard([{ ...CHECK_15, count: 2 }], [{ ...CHECK_15, count: 1 }]),
 });
 
 const labels = new Map([[15, 'Meta descriptions en double']]);

@@ -87,7 +87,15 @@ describe('runCli', () => {
       pages: unknown[];
       links: unknown[];
       checkResults: { count: number }[];
+      scores: {
+        health: { score: number | null };
+        themes: Record<string, { score: number | null }>;
+      };
     };
+    expect(exported.scores.health.score).toEqual(expect.any(Number));
+    expect(exported.scores.themes.https).toEqual({ score: null, variation: null });
+    expect(run.out).toMatch(/Santé du site : \d+ \/ 100/);
+    expect(run.out).toContain('https : non calculable');
     expect(exported.snapshot).toMatchObject({
       status: 'finished',
       pagesCrawled: 5,
@@ -204,6 +212,8 @@ describe('runCli', () => {
       expect(code).toBe(0);
       expect(run.out).toContain('Aucune différence');
       expect(run.out).toMatch(/Δ 0 – nouvelles 0 – corrigées 0/);
+      expect(run.out).toMatch(/Santé du site : A (\d+) → B \1 \(Δ 0\)/);
+      expect(run.out).toMatch(/on-page : A \d+ → B \d+ \(Δ 0\)/);
     });
 
     it('lists occurrences added between two audits', async () => {

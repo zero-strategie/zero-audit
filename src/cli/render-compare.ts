@@ -23,7 +23,8 @@ export const renderComparison = (
   { base, target, checkDiffs, scores }: SnapshotComparison,
   labels: ReadonlyMap<number, string>,
 ): string => {
-  const lines = [`Comparaison : A ${base.id} → B ${target.id}`,
+  const lines = [
+    `Comparaison : A ${base.id} → B ${target.id}`,
     '',
     'Scores',
     ...comparisonScoreLines(scores),

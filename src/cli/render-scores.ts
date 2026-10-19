@@ -18,10 +18,7 @@ const comparisonValue = ({ score, variation }: ScoreWithVariation): string => {
   return `A ${String(score - variation)} → B ${String(score)} (Δ ${signed(variation)})`;
 };
 
-const lines = (
-  card: ScoreCard,
-  format: (score: ScoreWithVariation) => string,
-): string[] => [
+const lines = (card: ScoreCard, format: (score: ScoreWithVariation) => string): string[] => [
   `  Santé du site : ${format(card.health)}`,
   ...THEMES.map((theme) => `  ${theme} : ${format(card.themes[theme])}`),
 ];

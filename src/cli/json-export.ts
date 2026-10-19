@@ -4,8 +4,9 @@ import type { SnapshotReport } from '../application/get-snapshot-report.js';
 
 const JSON_INDENT = 2;
 
-const withDeltas = ({ details, checkDiffs }: SnapshotReport) => ({
+const withDeltas = ({ details, checkDiffs, scores }: SnapshotReport) => ({
   ...details,
+  scores,
   checkResults: details.checkResults.map((result) => {
     const diff = checkDiffs.find(({ checkId }) => checkId === result.checkId);
     return {
