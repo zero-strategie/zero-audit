@@ -16,6 +16,8 @@ Options
                     variable ZERO_AUDIT_DELAY_MS)
   --db <chemin>     fichier de la base SQLite (défaut : ./.zero-audit/audit.db,
                     variable ZERO_AUDIT_DB_PATH)
+  --store <type>    stockage : sqlite (défaut) ou postgres (variable ZERO_AUDIT_STORE ;
+                    postgres exige la variable DATABASE_URL)
   --json <fichier>  écrit le snapshot complet au format JSON
   --help            affiche cette aide
 `;

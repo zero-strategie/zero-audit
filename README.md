@@ -38,8 +38,22 @@ Options (an option wins over its environment variable, which wins over the defau
 | `--limit <n>` | | 100 | maximum number of pages crawled |
 | `--delay <ms>` | `ZERO_AUDIT_DELAY_MS` | 1000 | delay between two requests |
 | `--db <path>` | `ZERO_AUDIT_DB_PATH` | `./.zero-audit/audit.db` | SQLite database file |
+| `--store <sqlite\|postgres>` | `ZERO_AUDIT_STORE` | `sqlite` | storage backend (audit and compare) |
+| | `DATABASE_URL` | | Postgres connection URL, required with `--store postgres` |
 | `--json <file>` | | none | writes the full snapshot (pages, links, all check results) as JSON |
 | `--help` | | | prints the usage |
+
+### Choosing the storage
+
+SQLite stays the default. To use Postgres, start the local database and point `DATABASE_URL` at it (see `.env.example`; the schema is migrated automatically on first use):
+
+```
+POSTGRES_PASSWORD=<your password> docker compose up -d
+DATABASE_URL=postgresql://zero_audit:<your password>@127.0.0.1:5432/zero_audit \
+  pnpm zero-audit https://exemple.com --store postgres
+```
+
+The connection is closed at the end of the command and on Ctrl+C. Passwords are masked in error messages. `--db` only applies to SQLite.
 
 The summary goes to stdout; the progress line (`crawled/limit`) goes to stderr, so stdout stays clean.
 
