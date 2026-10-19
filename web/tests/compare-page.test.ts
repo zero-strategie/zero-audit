@@ -47,8 +47,9 @@ const changed = aComparison({
 it('shows the variation of the health and of the themes', async () => {
   const html = await (await render(changed)).text();
 
-  expect(html).toMatch(/data-testid="health-variation"[^>]*>\s*-3\s*</);
-  expect(html).toMatch(/data-testid="theme-linking"[^]*?\+5/);
+  expect(html).toMatch(/data-testid="health-score"[^>]*>\s*80 \(\u22123\)\s*</);
+  expect(html).toMatch(/data-testid="theme-linking"[^]*?70 \(\+5\)/);
+  expect(html).not.toMatch(/\b800\b|\b705\b/);
 });
 
 it('shows countA, countB, delta, new and fixed occurrences per changed check', async () => {

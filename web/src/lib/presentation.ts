@@ -6,8 +6,22 @@ export const formatVariation = (variation: number | null): string => {
   return variation > 0 ? `+${String(variation)}` : String(variation);
 };
 
-export const formatThemeScore = (score: number | null): string =>
-  score === null ? NOT_COMPUTABLE : String(score);
+const MINUS_SIGN = '\u2212';
+
+const formatSignedScoreVariation = (variation: number): string => {
+  if (variation > 0) return `+${String(variation)}`;
+  if (variation < 0) return `${MINUS_SIGN}${String(-variation)}`;
+  return '0';
+};
+
+export const formatScoreWithVariation = (
+  score: number | null,
+  variation: number | null,
+): string => {
+  if (score === null) return NOT_COMPUTABLE;
+  if (variation === null) return String(score);
+  return `${String(score)} (${formatSignedScoreVariation(variation)})`;
+};
 
 const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
   day: '2-digit',

@@ -5,7 +5,7 @@ import Layout from '../../../layouts/Layout.astro';
 import type { Severity, SnapshotListing, SnapshotReport } from '../../../lib/api/types';
 import { toFailure } from '../../../lib/failure';
 import { PAGE_GROUP_LABELS, SEVERITY_LABELS, SITE_FILE_LABELS, THEME_LABELS } from '../../../lib/labels';
-import { formatThemeScore, formatVariation } from '../../../lib/presentation';
+import { formatScoreWithVariation, formatVariation } from '../../../lib/presentation';
 
 const snapshotId = Astro.params.id ?? '';
 let report: SnapshotReport | null = null;
@@ -44,8 +44,7 @@ const siteFileStatus = (status: number | null, error: string | null) =>
       <section>
         <h2>Santé du site</h2>
         <p>
-          <strong data-testid="health-score">{report.health.score ?? 'Non calculable'}</strong>
-          <span data-testid="health-variation">{formatVariation(report.health.variation)}</span>
+          <strong data-testid="health-score">{formatScoreWithVariation(report.health.score, report.health.variation)}</strong>
         </p>
       </section>
 
@@ -54,8 +53,7 @@ const siteFileStatus = (status: number | null, error: string | null) =>
         <ul>
           {Object.entries(report.themes).map(([theme, { score, variation }]) => (
             <li data-testid={`theme-${theme}`}>
-              {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatThemeScore(score)}
-              {score !== null && <> ({formatVariation(variation)})</>}
+              {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatScoreWithVariation(score, variation)}
             </li>
           ))}
         </ul>

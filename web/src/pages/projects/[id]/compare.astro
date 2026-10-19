@@ -6,7 +6,7 @@ import type { Comparison, SnapshotListing } from '../../../lib/api/types';
 import { changedChecks, defaultComparisonPair } from '../../../lib/compare';
 import { toFailure } from '../../../lib/failure';
 import { SNAPSHOT_STATUS_LABELS, THEME_LABELS } from '../../../lib/labels';
-import { formatDateFr, formatThemeScore, formatVariation } from '../../../lib/presentation';
+import { formatDateFr, formatScoreWithVariation, formatVariation } from '../../../lib/presentation';
 
 const HTTP_BAD_REQUEST = 400;
 
@@ -81,14 +81,12 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
           <section>
             <h2>Santé du site</h2>
             <p>
-              <strong data-testid="health-score">{comparison.health.score ?? 'Non calculable'}</strong>
-              <span data-testid="health-variation">{formatVariation(comparison.health.variation)}</span>
+              <strong data-testid="health-score">{formatScoreWithVariation(comparison.health.score, comparison.health.variation)}</strong>
             </p>
             <ul>
               {Object.entries(comparison.themes).map(([theme, { score, variation }]) => (
                 <li data-testid={`theme-${theme}`}>
-                  {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatThemeScore(score)}
-                  {score !== null && <> ({formatVariation(variation)})</>}
+                  {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatScoreWithVariation(score, variation)}
                 </li>
               ))}
             </ul>

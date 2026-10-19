@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  formatDateFr,
-  formatStatus,
-  formatThemeScore,
-  formatVariation,
-} from '../src/lib/presentation';
+import { formatDateFr, formatStatus, formatVariation } from '../src/lib/presentation';
 
 describe('formatVariation', () => {
   it('prefixes a positive variation with +', () => {
@@ -18,15 +13,6 @@ describe('formatVariation', () => {
   });
   it('shows a dash when there is no variation', () => {
     expect(formatVariation(null)).toBe('—');
-  });
-});
-
-describe('formatThemeScore', () => {
-  it('shows the score', () => {
-    expect(formatThemeScore(82)).toBe('82');
-  });
-  it('shows "Non calculable" for a null score', () => {
-    expect(formatThemeScore(null)).toBe('Non calculable');
   });
 });
 
