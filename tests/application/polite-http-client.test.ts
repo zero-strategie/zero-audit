@@ -23,7 +23,7 @@ describe('PoliteHttpClient', () => {
 
     await client.get('a');
     await client.get('b');
-    client.delayMs = 3000;
+    client.raiseDelayTo(3000);
     await client.get('c');
 
     expect(events).toEqual(['get a', 'sleep 1000', 'get b', 'sleep 3000', 'get c']);

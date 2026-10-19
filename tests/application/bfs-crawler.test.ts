@@ -92,6 +92,7 @@ const crawl = async (
     sleeper: {
       sleep: (ms) => {
         sleeps.push(ms);
+        clock.advance(ms);
         return Promise.resolve();
       },
     },
@@ -337,6 +338,16 @@ describe('BfsCrawler responses', () => {
     const { result } = await crawl({ [`${SITE}/`]: page() }, {}, 120);
 
     expect(result.pages[0]?.responseTimeMs).toBe(120);
+  });
+
+  it('excludes the politeness delay from the response time', async () => {
+    const { result } = await crawl(
+      { [`${SITE}/`]: page('/a'), [`${SITE}/a`]: page() },
+      { delayMs: 1000 },
+      120,
+    );
+
+    expect(result.pages.map((candidate) => candidate.responseTimeMs)).toEqual([120, 120]);
   });
 
   it('reports progress after each page', async () => {

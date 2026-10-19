@@ -98,7 +98,7 @@ class CrawlRun {
       robotsFactory: this.dependencies.robotsFactory,
       sitemapReader: this.dependencies.sitemapReader,
     }).execute(finalRoot.url, this.internalHost);
-    this.http.delayMs = Math.max(this.request.delayMs, discovery.robotsPolicy.crawlDelayMs ?? 0);
+    this.http.raiseDelayTo(discovery.robotsPolicy.crawlDelayMs ?? 0);
 
     for (const url of discovery.sitemapUrls) this.enqueue(url, 1);
     for (const fetched of rootChain) this.record(fetched);
@@ -148,8 +148,9 @@ class CrawlRun {
   }
 
   private async fetch({ url, depth }: QueueItem): Promise<Fetched> {
+    await this.http.waitTurn();
     const startedAt = this.dependencies.clock.now();
-    const response = await this.http.get(url);
+    const response = await this.http.send(url);
     return { url, depth, response, responseTimeMs: this.dependencies.clock.now() - startedAt };
   }
 
