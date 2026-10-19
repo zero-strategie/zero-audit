@@ -24,6 +24,7 @@ export interface CompareConfig extends StoreSelection {
 }
 
 export interface ServeConfig extends StoreSelection {
+  host: string;
   port: number;
   dbPath: string;
 }
@@ -39,12 +40,15 @@ type Environment = Readonly<Record<string, string | undefined>>;
 
 export const DEFAULT_LIMIT = 100;
 export const DEFAULT_DELAY_MS = 1000;
+export const DEFAULT_HOST = '127.0.0.1';
 export const DEFAULT_PORT = 3000;
 export const DEFAULT_DB_PATH = './.zero-audit/audit.db';
 
 const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
 const DB_ENV = 'ZERO_AUDIT_DB_PATH';
 const STORE_ENV = 'ZERO_AUDIT_STORE';
+const HOST_ENV = 'HOST';
+const PORT_ENV = 'PORT';
 const DATABASE_URL_ENV = 'DATABASE_URL';
 const MAX_PORT = 65_535;
 const DIGITS = /^\d+$/;
@@ -57,6 +61,14 @@ const parseInteger = (raw: string, name: string, minimum: number): number => {
     throw new UsageError(`${name} must be an integer >= ${String(minimum)} (received "${raw}")`);
   }
   return value;
+};
+
+const parsePort = (raw: string, name: string): number => {
+  const port = parseInteger(raw, name, 1);
+  if (port > MAX_PORT) {
+    throw new UsageError(`${name} must be an integer <= ${String(MAX_PORT)} (received "${raw}")`);
+  }
+  return port;
 };
 
 const isStoreKind = (value: string): value is StoreKind =>
@@ -130,13 +142,12 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
     args: [...argv],
     options: { port: { type: 'string' }, db: { type: 'string' }, store: { type: 'string' } },
   });
-  const port = values.port === undefined ? DEFAULT_PORT : parseInteger(values.port, '--port', 1);
-  if (port > MAX_PORT) {
-    throw new UsageError(
-      `--port must be an integer <= ${String(MAX_PORT)} (received "${String(port)}")`,
-    );
-  }
+  const port =
+    values.port !== undefined
+      ? parsePort(values.port, '--port')
+      : parsePort(env[PORT_ENV] ?? String(DEFAULT_PORT), PORT_ENV);
   return {
+    host: env[HOST_ENV] ?? DEFAULT_HOST,
     port,
     dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
     ...parseStore(values.store, env),

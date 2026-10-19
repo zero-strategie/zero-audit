@@ -75,8 +75,9 @@ describe('runCli serve', () => {
     server: HttpServer,
     hooks: Partial<CliHooks> = {},
     io: CliIo = capture().io,
+    env: Record<string, string> = {},
   ) =>
-    runCli(['serve', '--db', dbPath, ...args], {}, io, {
+    runCli(['serve', '--db', dbPath, ...args], env, io, {
       storageFactory,
       createServer: () => server,
       untilStopped: Promise.resolve(),
@@ -103,6 +104,14 @@ describe('runCli serve', () => {
     expect(server.calls).toEqual([{ host: '127.0.0.1', port: 3000 }]);
   });
 
+  it('listens on the host and port given by HOST and PORT', async () => {
+    const server = fakeServer(events);
+
+    await serve([], server, {}, capture().io, { HOST: '0.0.0.0', PORT: '8080' });
+
+    expect(server.calls).toEqual([{ host: '0.0.0.0', port: 8080 }]);
+  });
+
   it('listens on the port given by --port', async () => {
     const server = fakeServer(events);
 
@@ -121,6 +130,16 @@ describe('runCli serve', () => {
     expect(run.err()).toContain('--port');
     expect(events).toEqual([]);
     expect(storageCloses).toBe(0);
+  });
+
+  it('fails with a message naming PORT when PORT is invalid', async () => {
+    const run = capture();
+
+    const code = await serve([], fakeServer(events), {}, run.io, { PORT: '70000' });
+
+    expect(code).not.toBe(0);
+    expect(run.err()).toContain('PORT');
+    expect(events).toEqual([]);
   });
 
   it('closes the server then the storage when it stops', async () => {

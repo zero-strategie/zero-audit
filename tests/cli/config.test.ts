@@ -112,11 +112,32 @@ describe('parseCommand subcommands', () => {
   it('parses `serve` as a serve command, never as a URL', () => {
     expect(parseCommand(['serve'], {})).toEqual({
       kind: 'serve',
+      host: '127.0.0.1',
       port: 3000,
       dbPath: './.zero-audit/audit.db',
       store: 'sqlite',
       databaseUrl: null,
     });
+  });
+
+  it('reads the serve host and port from HOST and PORT', () => {
+    expect(parseCommand(['serve'], { HOST: '0.0.0.0', PORT: '8080' })).toMatchObject({
+      host: '0.0.0.0',
+      port: 8080,
+    });
+  });
+
+  it('lets --port win over PORT', () => {
+    expect(parseCommand(['serve', '--port', '9000'], { PORT: '8080' })).toMatchObject({
+      port: 9000,
+    });
+  });
+
+  it.each(['abc', '70000'])('rejects PORT="%s" with an explicit message', (port) => {
+    const command = parseCommand(['serve'], { PORT: port });
+
+    expect(command.kind).toBe('usage-error');
+    expect(command).toMatchObject({ message: expect.stringContaining('PORT') as string });
   });
 
   it('reads the serve port from --port', () => {

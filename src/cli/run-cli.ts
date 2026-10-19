@@ -29,9 +29,6 @@ export const EXIT_SUCCESS = 0;
 export const EXIT_CRAWL_FAILED = 1;
 export const EXIT_USAGE = 2;
 
-/** Local only until the API gets authentication. */
-export const SERVE_HOST = '127.0.0.1';
-
 export interface CliIo {
   stdout(text: string): void;
   stderr(text: string): void;
@@ -124,8 +121,8 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
       snapshots: storage.snapshots,
     });
     hooks.onServerStarted?.(server);
-    await server.listen({ host: SERVE_HOST, port: config.port });
-    io.stdout(`API à l'écoute sur http://${SERVE_HOST}:${String(config.port)}\n`);
+    await server.listen({ host: config.host, port: config.port });
+    io.stdout(`API à l'écoute sur http://${config.host}:${String(config.port)}\n`);
     await (hooks.untilStopped ?? new Promise<never>(() => undefined));
     return EXIT_SUCCESS;
   } catch (error) {
