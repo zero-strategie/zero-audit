@@ -14,6 +14,7 @@ import type {
   Page,
   SiteFile,
   SiteFileKind,
+  SlashVariantProbe,
 } from '../../domain/crawl.js';
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
@@ -74,6 +75,10 @@ interface HostProbeRow {
   error: string | null;
   is_html: number;
   canonical: string | null;
+}
+
+interface SlashProbeRow extends HostProbeRow {
+  source_page_url: string;
 }
 
 interface CheckResultRow {
@@ -142,6 +147,11 @@ const toHostProbe = (row: HostProbeRow): HostProbe => ({
   error: row.error,
   isHtml: row.is_html === 1,
   canonical: row.canonical,
+});
+
+const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
+  ...toHostProbe(row),
+  sourcePageUrl: row.source_page_url,
 });
 
 export class SqliteSnapshotRepository implements SnapshotRepository {
@@ -246,6 +256,25 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     });
   }
 
+  addSlashProbes(id: string, probes: readonly SlashVariantProbe[]): Promise<void> {
+    return this.writeToRunning(id, () => {
+      const insert = this.db.prepare(
+        'INSERT INTO slash_probes (snapshot_id, url, source_page_url, status, error, is_html, canonical) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      );
+      for (const probe of probes) {
+        insert.run(
+          id,
+          probe.url,
+          probe.sourcePageUrl,
+          probe.status,
+          probe.error,
+          probe.isHtml ? 1 : 0,
+          probe.canonical,
+        );
+      }
+    });
+  }
+
   addCheckResults(id: string, results: readonly CheckResult[]): Promise<void> {
     return this.writeToRunning(id, () => {
       const insertResult = this.db.prepare(
@@ -317,6 +346,13 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
             .all(id) as SiteFileRow[]
         ).map(toSiteFile),
         hostProbe: this.readHostProbe(id),
+        slashProbes: (
+          this.db
+            .prepare(
+              'SELECT * FROM slash_probes WHERE snapshot_id = ? ORDER BY source_page_url, url, id',
+            )
+            .all(id) as SlashProbeRow[]
+        ).map(toSlashProbe),
       };
     });
   }

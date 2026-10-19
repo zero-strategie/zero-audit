@@ -51,6 +51,7 @@ const details: SnapshotDetails = {
     { kind: 'sitemap', url: 'https://e.com/sitemap.xml', status: 404, error: null },
   ],
   hostProbe: null,
+  slashProbes: [],
   checkResults: [
     result(103, 'warning', 2, 5),
     result(213, 'notice', 1, 4),

@@ -29,7 +29,16 @@ const crawlResult: CrawlResult = {
     isHtml: true,
     canonical: null,
   },
-  slashProbes: [],
+  slashProbes: [
+    {
+      url: 'https://exemple.com/a/',
+      sourcePageUrl: 'https://exemple.com/a',
+      status: 200,
+      error: null,
+      isHtml: true,
+      canonical: null,
+    },
+  ],
   site: { robotsFound: true, sitemapFound: true },
 };
 
@@ -81,6 +90,16 @@ describe('RunAudit', () => {
 
     expect((await repository.getById(details.snapshot.id))?.hostProbe).toEqual(
       crawlResult.hostProbe,
+    );
+  });
+
+  it('stores the slash probes so that check 1000 can be recomputed', async () => {
+    const { useCase, repository } = build(new FakeCrawler());
+
+    const details = await useCase.execute({ rootUrl: ROOT, limit: 10, delayMs: 0 });
+
+    expect((await repository.getById(details.snapshot.id))?.slashProbes).toEqual(
+      crawlResult.slashProbes,
     );
   });
 

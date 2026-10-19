@@ -4,7 +4,7 @@ import type {
   SnapshotRepository,
 } from '../application/ports/snapshot-repository.js';
 import type { CheckResult } from '../domain/check.js';
-import type { HostProbe, Link, Page, SiteFile } from '../domain/crawl.js';
+import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../domain/crawl.js';
 import { SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
 
@@ -15,9 +15,14 @@ interface Stored {
   checkResults: CheckResult[];
   siteFiles: SiteFile[];
   hostProbe: HostProbe | null;
+  slashProbes: SlashVariantProbe[];
 }
 
 const compare = (a: string, b: string): number => Number(a > b) - Number(a < b);
+
+/** Same order as the SQL adapters (`ORDER BY source_page_url, url`). */
+const bySlashProbeOrder = (a: SlashVariantProbe, b: SlashVariantProbe): number =>
+  compare(a.sourcePageUrl, b.sourcePageUrl) || compare(a.url, b.url);
 
 /** Same order as the SQL adapter (`ORDER BY kind, url`). */
 const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
@@ -35,6 +40,7 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
       checkResults: [],
       siteFiles: [],
       hostProbe: null,
+      slashProbes: [],
     });
     return Promise.resolve(snapshot);
   }
@@ -55,6 +61,10 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
     return this.write(id, (entry) => {
       entry.hostProbe = probe;
     });
+  }
+
+  addSlashProbes(id: string, probes: readonly SlashVariantProbe[]): Promise<void> {
+    return this.write(id, (entry) => entry.slashProbes.push(...probes));
   }
 
   addCheckResults(id: string, results: readonly CheckResult[]): Promise<void> {
@@ -83,6 +93,7 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
       checkResults: [...entry.checkResults],
       siteFiles: [...entry.siteFiles].sort(bySiteFileOrder),
       hostProbe: entry.hostProbe,
+      slashProbes: [...entry.slashProbes].sort(bySlashProbeOrder),
     });
   }
 

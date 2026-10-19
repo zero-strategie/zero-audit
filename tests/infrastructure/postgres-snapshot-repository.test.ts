@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Link } from '../../src/domain/crawl.js';
 import { SnapshotImmutable } from '../../src/domain/errors.js';
@@ -13,7 +15,7 @@ import { describeSnapshotRepositoryContract } from '../support/snapshot-reposito
 
 const startedAt = new Date('2026-01-01T10:00:00.123Z');
 const CONTENT_TABLES =
-  'pages, links, site_files, host_probes, check_results, issue_occurrences, snapshots, projects';
+  'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects';
 
 const canonical = (value: unknown): string =>
   JSON.stringify(value, (_key, nested: unknown) =>
@@ -117,6 +119,39 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       expect(second.rows).toEqual(first.rows);
     } finally {
       await empty.dispose();
+    }
+  });
+
+  it('adds slash_probes to a database at migration 001 without touching existing tables', async () => {
+    const legacy = await createTestDatabase(TEST_DATABASE_URL ?? '');
+    try {
+      const init = readFileSync(
+        join(import.meta.dirname, '../../src/infrastructure/postgres/migrations/001_init.sql'),
+        'utf8',
+      );
+      await legacy.pool.query(init);
+      await legacy.pool.query(
+        'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+      );
+      await legacy.pool.query('INSERT INTO schema_migrations (version) VALUES (1)');
+      const columnsOf = async (): Promise<unknown[]> => {
+        const { rows } = await legacy.pool.query<Record<string, string>>(
+          `SELECT table_name, column_name, data_type FROM information_schema.columns
+           WHERE table_schema = current_schema() AND table_name <> 'slash_probes'
+           ORDER BY table_name, column_name`,
+        );
+        return rows;
+      };
+      const before = await columnsOf();
+
+      await migrate(legacy.pool);
+
+      expect(await columnsOf()).toEqual(before);
+      const versions = await legacy.pool.query('SELECT version FROM schema_migrations ORDER BY 1');
+      expect(versions.rows).toEqual([{ version: 1 }, { version: 2 }]);
+      await expect(legacy.pool.query('SELECT * FROM slash_probes')).resolves.toBeDefined();
+    } finally {
+      await legacy.dispose();
     }
   });
 });
