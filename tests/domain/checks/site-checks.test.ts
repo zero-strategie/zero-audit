@@ -259,7 +259,9 @@ describe('check 205 (HSTS missing)', () => {
 
   it('flags an https home page answered with 200 and no HSTS header', () => {
     const result = run205([home('https://exemple.com/')]);
-    expect(result.occurrences).toEqual([{ checkId: 205, pageUrl: 'https://exemple.com/', info: {} }]);
+    expect(result.occurrences).toEqual([
+      { checkId: 205, pageUrl: 'https://exemple.com/', info: {} },
+    ]);
   });
 
   it('does not flag an https home page sending HSTS', () => {

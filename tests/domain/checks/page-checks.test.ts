@@ -120,9 +120,7 @@ describe('check 105 (H1 equals title)', () => {
   });
 
   it('flags a page once even when several H1 equal the title', () => {
-    const result = run(105, [
-      makePage(u('a'), { title: 'Zero', h1: ['Autre', 'zero', ' ZERO '] }),
-    ]);
+    const result = run(105, [makePage(u('a'), { title: 'Zero', h1: ['Autre', 'zero', ' ZERO '] })]);
     expect(flaggedUrls(result)).toEqual([u('a')]);
   });
 
