@@ -17,7 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "format": "prettier --write .",
-    "build": "tsc -p tsconfig.build.json && cp -R src/infrastructure/sqlite/migrations dist/infrastructure/sqlite/"
+    "build": "tsc -p tsconfig.build.json && cp -R src/infrastructure/sqlite/migrations dist/infrastructure/sqlite/ && cp -R src/infrastructure/postgres/migrations dist/infrastructure/postgres/"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -30,6 +30,7 @@
     "cheerio": "^1.2.0",
     "fast-xml-parser": "^5.11.2",
     "fast-xml-validator": "^1.4.2",
+    "pg": "^8.23.1",
     "robots-parser": "^3.0.1",
     "undici": "^8.12.2"
   },
@@ -37,6 +38,7 @@
     "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
     "eslint": "^10.13.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
