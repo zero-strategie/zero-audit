@@ -1,6 +1,15 @@
 import { parseArgs } from 'node:util';
 
-export interface AuditConfig {
+export const STORE_KINDS = ['sqlite', 'postgres'] as const;
+export type StoreKind = (typeof STORE_KINDS)[number];
+
+export interface StoreSelection {
+  store: StoreKind;
+  /** Only read when `store` is `postgres`. */
+  databaseUrl: string | null;
+}
+
+export interface AuditConfig extends StoreSelection {
   rootUrl: string;
   limit: number;
   delayMs: number;
@@ -8,7 +17,7 @@ export interface AuditConfig {
   jsonPath: string | null;
 }
 
-export interface CompareConfig {
+export interface CompareConfig extends StoreSelection {
   baseId: string;
   targetId: string;
   dbPath: string;
@@ -29,6 +38,8 @@ export const DEFAULT_DB_PATH = './.zero-audit/audit.db';
 
 const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
 const DB_ENV = 'ZERO_AUDIT_DB_PATH';
+const STORE_ENV = 'ZERO_AUDIT_STORE';
+const DATABASE_URL_ENV = 'DATABASE_URL';
 const DIGITS = /^\d+$/;
 
 class UsageError extends Error {}
@@ -39,6 +50,20 @@ const parseInteger = (raw: string, name: string, minimum: number): number => {
     throw new UsageError(`${name} must be an integer >= ${String(minimum)} (received "${raw}")`);
   }
   return value;
+};
+
+const isStoreKind = (value: string): value is StoreKind =>
+  STORE_KINDS.some((kind) => kind === value);
+
+const parseStore = (option: string | undefined, env: Environment): StoreSelection => {
+  const raw = option ?? env[STORE_ENV] ?? 'sqlite';
+  if (!isStoreKind(raw)) {
+    throw new UsageError(`--store must be one of: ${STORE_KINDS.join(', ')} (received "${raw}")`);
+  }
+  if (raw === 'sqlite') return { store: raw, databaseUrl: null };
+  const databaseUrl = env[DATABASE_URL_ENV];
+  if (!databaseUrl) throw new UsageError(`--store postgres requires ${DATABASE_URL_ENV} to be set`);
+  return { store: raw, databaseUrl };
 };
 
 const parseRootUrl = (raw: string | undefined): string => {
@@ -59,6 +84,7 @@ const buildConfig = (argv: readonly string[], env: Environment): AuditConfig => 
       delay: { type: 'string' },
       db: { type: 'string' },
       json: { type: 'string' },
+      store: { type: 'string' },
     },
   });
   if (positionals.length > 1) throw new UsageError('only one <url> is accepted');
@@ -70,6 +96,7 @@ const buildConfig = (argv: readonly string[], env: Environment): AuditConfig => 
     delayMs: delay === undefined ? DEFAULT_DELAY_MS : parseInteger(delay, '--delay', 0),
     dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
     jsonPath: values.json ?? null,
+    ...parseStore(values.store, env),
   };
 };
 
@@ -77,13 +104,18 @@ const buildCompareConfig = (argv: readonly string[], env: Environment): CompareC
   const { values, positionals } = parseArgs({
     args: [...argv],
     allowPositionals: true,
-    options: { db: { type: 'string' } },
+    options: { db: { type: 'string' }, store: { type: 'string' } },
   });
   const [baseId, targetId, ...extra] = positionals;
   if (baseId === undefined || targetId === undefined || extra.length > 0) {
     throw new UsageError('compare expects exactly two snapshot ids: compare <A> <B>');
   }
-  return { baseId, targetId, dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH };
+  return {
+    baseId,
+    targetId,
+    dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
+    ...parseStore(values.store, env),
+  };
 };
 
 const buildCommand = (argv: readonly string[], env: Environment): ParsedCommand => {

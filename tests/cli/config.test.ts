@@ -17,7 +17,42 @@ describe('parseCommand defaults', () => {
       delayMs: 1000,
       dbPath: './.zero-audit/audit.db',
       jsonPath: null,
+      store: 'sqlite',
+      databaseUrl: null,
     });
+  });
+});
+
+describe('parseCommand storage selection', () => {
+  const POSTGRES_URL = 'postgresql://user:pw@localhost:5432/db';
+
+  it('lets --store win over ZERO_AUDIT_STORE', () => {
+    const env = { ZERO_AUDIT_STORE: 'postgres', DATABASE_URL: POSTGRES_URL };
+    expect(auditConfig([URL_ARG], env).store).toBe('postgres');
+    expect(auditConfig([URL_ARG, '--store', 'sqlite'], env).store).toBe('sqlite');
+  });
+
+  it('reads DATABASE_URL for postgres, for audit and compare', () => {
+    const env = { DATABASE_URL: POSTGRES_URL };
+    expect(auditConfig([URL_ARG, '--store', 'postgres'], env).databaseUrl).toBe(POSTGRES_URL);
+    expect(parseCommand(['compare', 'a', 'b', '--store', 'postgres'], env)).toMatchObject({
+      kind: 'compare',
+      store: 'postgres',
+      databaseUrl: POSTGRES_URL,
+    });
+  });
+
+  it('lists the accepted values when the store is unknown', () => {
+    expect(parseCommand([URL_ARG, '--store', 'mysql'], {})).toEqual({
+      kind: 'usage-error',
+      message: '--store must be one of: sqlite, postgres (received "mysql")',
+    });
+  });
+
+  it('asks for DATABASE_URL when postgres is chosen without it', () => {
+    const parsed = parseCommand([URL_ARG, '--store', 'postgres'], {});
+    expect(parsed).toMatchObject({ kind: 'usage-error' });
+    expect(parsed.kind === 'usage-error' && parsed.message).toContain('DATABASE_URL');
   });
 });
 
@@ -84,6 +119,8 @@ describe('parseCommand subcommands', () => {
       baseId: 'a1',
       targetId: 'b2',
       dbPath: '/tmp/x.db',
+      store: 'sqlite',
+      databaseUrl: null,
     });
     expect(
       parseCommand(['compare', 'a1', 'b2'], { ZERO_AUDIT_DB_PATH: '/tmp/e.db' }),
