@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -33,7 +33,7 @@ describe('SqliteSnapshotRepository file handling', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'nested', 'deeper', 'audit.db');
     SqliteSnapshotRepository.open(path).close();
     expect(existsSync(path)).toBe(true);
-    expect(schemaVersion(path)).toBe(7);
+    expect(schemaVersion(path)).toBe(8);
   });
 
   it('does not replay migrations and keeps existing snapshots readable', async () => {
@@ -51,7 +51,7 @@ describe('SqliteSnapshotRepository file handling', () => {
     second.close();
 
     expect(details?.snapshot.pagesLimit).toBe(5);
-    expect(schemaVersion(path)).toBe(7);
+    expect(schemaVersion(path)).toBe(8);
   });
 
   it('leaves the row count unchanged when a write on a finished snapshot is refused', async () => {
@@ -159,7 +159,7 @@ describe('migration 002 on a milestone 1 database', () => {
     SqliteSnapshotRepository.open(path).close();
     SqliteSnapshotRepository.open(path).close();
 
-    expect(schemaVersion(path)).toBe(7);
+    expect(schemaVersion(path)).toBe(8);
     expect(count(path, 'projects')).toBe(2);
   });
 
@@ -204,5 +204,51 @@ describe('migration 002 on a milestone 1 database', () => {
     repo.close();
 
     expect(details?.siteFiles).toEqual([]);
+  });
+});
+
+describe('migration 008 on a database at migration 007', () => {
+  const MIGRATIONS_DIR = join(import.meta.dirname, '../../src/infrastructure/sqlite/migrations');
+
+  const buildDatabaseAt007 = (): string => {
+    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
+    const db = new Database(path);
+    db.exec('CREATE TABLE schema_version (version INTEGER PRIMARY KEY)');
+    for (const [index, file] of readdirSync(MIGRATIONS_DIR).sort().entries()) {
+      if (index >= 7) break;
+      db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
+      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(index + 1);
+    }
+    db.exec(
+      `INSERT INTO snapshots (id, status, started_at, pages_limit) VALUES ('old', 'finished', '2025-12-01T10:00:00.000Z', 10);
+       INSERT INTO pages (snapshot_id, url, depth, redirect_chain, headers, response_time_ms, is_html, h1)
+       VALUES ('old', 'https://x.test/', 0, '[]', '{}', 5, 1, '[]')`,
+    );
+    db.close();
+    return path;
+  };
+
+  const pageColumns = (path: string): unknown[] => {
+    const db = new Database(path, { readonly: true });
+    const columns = db.prepare('PRAGMA table_info(pages)').all();
+    db.close();
+    return columns;
+  };
+
+  it('adds a nullable text_ratio column, keeps existing columns and is not replayed', async () => {
+    const path = buildDatabaseAt007();
+    const before = pageColumns(path);
+
+    SqliteSnapshotRepository.open(path).close();
+    const after = pageColumns(path);
+    const reopened = SqliteSnapshotRepository.open(path);
+    const details = await reopened.getById('old');
+    reopened.close();
+
+    expect(after.slice(0, before.length)).toEqual(before);
+    expect(after).toHaveLength(before.length + 1);
+    expect(after.at(-1)).toMatchObject({ name: 'text_ratio', type: 'REAL', notnull: 0 });
+    expect(schemaVersion(path)).toBe(8);
+    expect(details?.pages[0]?.textRatio).toBeNull();
   });
 });

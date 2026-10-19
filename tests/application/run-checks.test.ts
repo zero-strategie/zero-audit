@@ -20,6 +20,7 @@ const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   canonical: null,
   h1: [],
   wordCount: null,
+  textRatio: null,
   contentHash: null,
   blockedByRobots: false,
   ...overrides,

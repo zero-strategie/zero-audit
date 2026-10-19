@@ -48,6 +48,7 @@ type PageRow = {
   canonical: string | null;
   h1: string[];
   word_count: number | null;
+  text_ratio: number | null;
   content_hash: string | null;
   blocked_by_robots: boolean;
 };
@@ -118,6 +119,7 @@ const toPage = (row: PageRow): Page => ({
   canonical: row.canonical,
   h1: row.h1,
   wordCount: row.word_count,
+  textRatio: row.text_ratio,
   contentHash: row.content_hash,
   blockedByRobots: row.blocked_by_robots,
 });
@@ -177,8 +179,8 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
         await db.query(
           `INSERT INTO pages (snapshot_id, url, depth, status, error, redirect_target, redirect_chain,
              headers, response_time_ms, content_type, is_html, title, meta_description, canonical, h1,
-             word_count, content_hash, blocked_by_robots)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+             word_count, text_ratio, content_hash, blocked_by_robots)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
           [
             id,
             page.url,
@@ -196,6 +198,7 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
             page.canonical,
             JSON.stringify(page.h1),
             page.wordCount,
+            page.textRatio,
             page.contentHash,
             page.blockedByRobots,
           ],

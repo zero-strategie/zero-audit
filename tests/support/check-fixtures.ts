@@ -27,6 +27,7 @@ export const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   canonical: null,
   h1: ['Titre'],
   wordCount: 300,
+  textRatio: 0.3,
   contentHash: null,
   blockedByRobots: false,
   ...overrides,

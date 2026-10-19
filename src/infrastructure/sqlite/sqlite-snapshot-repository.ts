@@ -50,6 +50,7 @@ interface PageRow {
   canonical: string | null;
   h1: string;
   word_count: number | null;
+  text_ratio: number | null;
   content_hash: string | null;
   blocked_by_robots: number;
 }
@@ -122,6 +123,7 @@ const toPage = (row: PageRow): Page => ({
   canonical: row.canonical,
   h1: JSON.parse(row.h1) as string[],
   wordCount: row.word_count,
+  textRatio: row.text_ratio,
   contentHash: row.content_hash,
   blockedByRobots: row.blocked_by_robots === 1,
 });
@@ -198,8 +200,8 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
       const insert = this.db.prepare(
         `INSERT INTO pages (snapshot_id, url, depth, status, error, redirect_target, redirect_chain, headers,
            response_time_ms, content_type, is_html, title, meta_description, canonical, h1, word_count,
-           content_hash, blocked_by_robots)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           text_ratio, content_hash, blocked_by_robots)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const page of pages) {
         insert.run(
@@ -219,6 +221,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
           page.canonical,
           JSON.stringify(page.h1),
           page.wordCount,
+          page.textRatio,
           page.contentHash,
           page.blockedByRobots ? 1 : 0,
         );

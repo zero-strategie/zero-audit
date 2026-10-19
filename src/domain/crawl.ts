@@ -15,6 +15,8 @@ export interface Page {
   readonly canonical: string | null;
   readonly h1: readonly string[];
   readonly wordCount: number | null;
+  /** Visible text bytes over received html bytes, null for non-HTML pages and older snapshots. */
+  readonly textRatio: number | null;
   readonly contentHash: string | null;
   /** Internal URL forbidden by robots.txt: recorded without any request. */
   readonly blockedByRobots: boolean;

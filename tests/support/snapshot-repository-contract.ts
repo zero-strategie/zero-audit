@@ -26,6 +26,7 @@ const page = (overrides: Partial<Page> = {}): Page => ({
   canonical: 'https://example.test/home',
   h1: ['Home'],
   wordCount: 250,
+  textRatio: 0.0734,
   contentHash: 'abc123',
   blockedByRobots: false,
   ...overrides,
@@ -129,6 +130,7 @@ export const describeSnapshotRepositoryContract = (
           metaDescription: null,
           h1: [],
           wordCount: null,
+          textRatio: null,
           contentHash: null,
         }),
         page({

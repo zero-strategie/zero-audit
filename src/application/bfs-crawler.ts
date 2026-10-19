@@ -261,6 +261,7 @@ class CrawlRun {
       canonical: parsed?.canonical ?? null,
       h1: parsed?.h1 ?? [],
       wordCount: parsed?.wordCount ?? null,
+      textRatio: parsed?.textRatio ?? null,
       contentHash: parsed?.contentHash ?? null,
       blockedByRobots: false,
     };
@@ -304,6 +305,7 @@ class CrawlRun {
       canonical: null,
       h1: [],
       wordCount: null,
+      textRatio: null,
       contentHash: null,
       blockedByRobots: true,
     };
