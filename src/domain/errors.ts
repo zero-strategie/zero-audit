@@ -25,3 +25,17 @@ export class SnapshotNotFound extends DomainError {
     this.name = 'SnapshotNotFound';
   }
 }
+
+export class SnapshotsFromDifferentProjects extends DomainError {
+  constructor(baseId: string, targetId: string) {
+    super(`Snapshots ${baseId} and ${targetId} do not belong to the same project`);
+    this.name = 'SnapshotsFromDifferentProjects';
+  }
+}
+
+export class SnapshotNotFinished extends DomainError {
+  constructor(snapshotId: string, status: string) {
+    super(`Snapshot ${snapshotId} is ${status}, not finished`);
+    this.name = 'SnapshotNotFinished';
+  }
+}
