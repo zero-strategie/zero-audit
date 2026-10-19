@@ -177,7 +177,8 @@ class CrawlRun {
     await this.http.waitTurn();
     const startedAt = this.dependencies.clock.now();
     const response = await this.http.send(url);
-    return { url, depth, response, responseTimeMs: this.dependencies.clock.now() - startedAt };
+    const responseTimeMs = Math.round(this.dependencies.clock.now() - startedAt);
+    return { url, depth, response, responseTimeMs };
   }
 
   private record(fetched: Fetched): void {

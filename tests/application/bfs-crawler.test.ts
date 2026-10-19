@@ -454,6 +454,12 @@ describe('BfsCrawler responses', () => {
     expect(result.pages[0]?.responseTimeMs).toBe(120);
   });
 
+  it('rounds the response time to whole milliseconds', async () => {
+    const { result } = await crawl({ [`${SITE}/`]: page() }, {}, 2.6);
+
+    expect(result.pages[0]?.responseTimeMs).toBe(3);
+  });
+
   it('excludes the politeness delay from the response time', async () => {
     const { result } = await crawl(
       { [`${SITE}/`]: page('/a'), [`${SITE}/a`]: page() },
