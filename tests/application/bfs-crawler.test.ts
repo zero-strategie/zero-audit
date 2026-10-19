@@ -70,7 +70,7 @@ class FakeSite implements HttpClient {
 
   get pagesRequested(): string[] {
     return this.requested.filter(
-      (url) => !url.endsWith('/robots.txt') && !url.endsWith('/sitemap.xml'),
+      (url) => !['/robots.txt', '/sitemap.xml', '/llms.txt'].some((path) => url.endsWith(path)),
     );
   }
 }
@@ -264,6 +264,39 @@ describe('BfsCrawler traversal', () => {
     expect(site.pagesRequested).toEqual([`${SITE}/`, `${SITE}/hidden`]);
     expect(pageAt(result, '/hidden')?.depth).toBe(1);
     expect(result.site).toEqual({ robotsFound: false, sitemapFound: true });
+  });
+});
+
+describe('BfsCrawler technical files', () => {
+  it('returns the technical files apart from the crawled pages', async () => {
+    const { result } = await crawl({
+      [`${SITE}/`]: page(),
+      [`${SITE}/robots.txt`]: text('User-agent: *\nDisallow:'),
+      [`${SITE}/llms.txt`]: 'timeout',
+    });
+
+    expect(result.siteFiles).toEqual([
+      { kind: 'robots', url: `${SITE}/robots.txt`, status: 200, error: null },
+      { kind: 'sitemap', url: `${SITE}/sitemap.xml`, status: 404, error: null },
+      { kind: 'llms', url: `${SITE}/llms.txt`, status: null, error: 'timeout' },
+    ]);
+    expect(result.pages.map((p) => p.url)).toEqual([`${SITE}/`]);
+  });
+
+  it('requests robots.txt and llms.txt at the origin the root finally redirects to', async () => {
+    const { site, result } = await crawl({
+      [`${SITE}/`]: redirect('https://final.test/'),
+      'https://final.test/': page(),
+      'https://final.test/robots.txt': text('User-agent: *\nDisallow:'),
+    });
+
+    expect(site.requested).toContain('https://final.test/llms.txt');
+    expect(site.requested).not.toContain(`${SITE}/robots.txt`);
+    expect(result.siteFiles.map(({ url }) => url)).toEqual([
+      'https://final.test/robots.txt',
+      'https://final.test/sitemap.xml',
+      'https://final.test/llms.txt',
+    ]);
   });
 });
 

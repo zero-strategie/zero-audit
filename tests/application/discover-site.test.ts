@@ -179,3 +179,54 @@ describe('DiscoverSite sitemaps', () => {
     expect(http.requested).not.toContain('https://autre.com/sitemap.xml');
   });
 });
+
+describe('DiscoverSite technical files', () => {
+  it('records robots.txt, sitemap.xml and llms.txt with their absolute URL and status', async () => {
+    const { result } = await discover({
+      'https://exemple.com/robots.txt': { status: 200, body: 'User-agent: *\nDisallow:' },
+      'https://exemple.com/sitemap.xml': { status: 200, body: urlset('https://exemple.com/a') },
+    });
+
+    expect(result.siteFiles).toEqual([
+      { kind: 'robots', url: 'https://exemple.com/robots.txt', status: 200, error: null },
+      { kind: 'sitemap', url: 'https://exemple.com/sitemap.xml', status: 200, error: null },
+      { kind: 'llms', url: 'https://exemple.com/llms.txt', status: 404, error: null },
+    ]);
+  });
+
+  it('records each declared sitemap with its own status and does not add /sitemap.xml', async () => {
+    const { http, result } = await discover({
+      'https://exemple.com/robots.txt': {
+        status: 200,
+        body: 'User-agent: *\nSitemap: https://exemple.com/s1.xml\nSitemap: https://exemple.com/s2.xml',
+      },
+      'https://exemple.com/s1.xml': { status: 200, body: urlset('https://exemple.com/one') },
+    });
+
+    expect(result.siteFiles.filter(({ kind }) => kind === 'sitemap')).toEqual([
+      { kind: 'sitemap', url: 'https://exemple.com/s1.xml', status: 200, error: null },
+      { kind: 'sitemap', url: 'https://exemple.com/s2.xml', status: 404, error: null },
+    ]);
+    expect(http.requested).not.toContain('https://exemple.com/sitemap.xml');
+  });
+
+  it('records a network failure as a null status with its error kind', async () => {
+    const { result } = await discover({ 'https://exemple.com/llms.txt': 'network-error' });
+
+    expect(result.siteFiles).toContainEqual({
+      kind: 'llms',
+      url: 'https://exemple.com/llms.txt',
+      status: null,
+      error: 'connection',
+    });
+  });
+
+  it('does not record child sitemaps of an index', async () => {
+    const { result } = await discover({
+      'https://exemple.com/sitemap.xml': { status: 200, body: index('https://exemple.com/c.xml') },
+      'https://exemple.com/c.xml': { status: 200, body: urlset('https://exemple.com/a') },
+    });
+
+    expect(result.siteFiles.filter(({ kind }) => kind === 'sitemap')).toHaveLength(1);
+  });
+});

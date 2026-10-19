@@ -1,5 +1,11 @@
+import type { SiteFile, SiteFileKind } from '../domain/crawl.js';
 import { isInternal, resolveUrl } from '../domain/url.js';
-import { isNetworkFailure, type HttpClient } from './ports/http-client.js';
+import {
+  isNetworkFailure,
+  type HttpClient,
+  type HttpResponse,
+  type NetworkFailure,
+} from './ports/http-client.js';
 import type { RobotsPolicy, RobotsPolicyFactory } from './ports/robots-policy.js';
 import type { ParsedSitemap, SitemapReader } from './ports/sitemap-reader.js';
 
@@ -8,6 +14,7 @@ export interface SiteDiscovery {
   robotsFound: boolean;
   sitemapFound: boolean;
   sitemapUrls: readonly string[];
+  siteFiles: readonly SiteFile[];
 }
 
 export interface DiscoverSiteDependencies {
@@ -17,10 +24,20 @@ export interface DiscoverSiteDependencies {
 }
 
 const ROBOTS_PATH = '/robots.txt';
+const LLMS_PATH = '/llms.txt';
 const DEFAULT_SITEMAP_PATH = '/sitemap.xml';
 const GZIP_EXTENSION = '.gz';
 const HTTP_OK_MIN = 200;
 const HTTP_OK_MAX = 299;
+
+const toSiteFile = (
+  kind: SiteFileKind,
+  url: string,
+  response: HttpResponse | NetworkFailure,
+): SiteFile =>
+  isNetworkFailure(response)
+    ? { kind, url, status: null, error: response.kind }
+    : { kind, url, status: response.status, error: null };
 
 const isGzipped = (url: string): boolean => new URL(url).pathname.endsWith(GZIP_EXTENSION);
 
@@ -29,7 +46,11 @@ export class DiscoverSite {
 
   async execute(rootUrl: string, internalHost: string): Promise<SiteDiscovery> {
     const origin = new URL(rootUrl).origin;
-    const { policy, found: robotsFound } = await this.readRobots(`${origin}${ROBOTS_PATH}`);
+    const siteFiles: SiteFile[] = [];
+    const { policy, found: robotsFound } = await this.readRobots(
+      `${origin}${ROBOTS_PATH}`,
+      siteFiles,
+    );
 
     const declared = policy.sitemapUrls;
     const entryPoints = declared.length > 0 ? declared : [`${origin}${DEFAULT_SITEMAP_PATH}`];
@@ -37,7 +58,7 @@ export class DiscoverSite {
     const urls = new Set<string>();
     let sitemapFound = false;
     for (const sitemapUrl of this.fetchable(entryPoints, internalHost)) {
-      const sitemap = await this.readSitemap(sitemapUrl);
+      const sitemap = await this.readSitemap(sitemapUrl, siteFiles);
       if (sitemap === null) continue;
       sitemapFound = true;
       const leaves =
@@ -45,20 +66,29 @@ export class DiscoverSite {
       for (const leaf of leaves) this.collectPageUrls(leaf, sitemapUrl, internalHost, urls);
     }
 
-    return { robotsPolicy: policy, robotsFound, sitemapFound, sitemapUrls: [...urls] };
+    const llms = await this.dependencies.http.get(`${origin}${LLMS_PATH}`);
+    siteFiles.push(toSiteFile('llms', `${origin}${LLMS_PATH}`, llms));
+
+    return { robotsPolicy: policy, robotsFound, sitemapFound, sitemapUrls: [...urls], siteFiles };
   }
 
-  private async readRobots(robotsUrl: string): Promise<{ policy: RobotsPolicy; found: boolean }> {
+  private async readRobots(
+    robotsUrl: string,
+    siteFiles: SiteFile[],
+  ): Promise<{ policy: RobotsPolicy; found: boolean }> {
     const { http, robotsFactory } = this.dependencies;
     const response = await http.get(robotsUrl);
+    siteFiles.push(toSiteFile('robots', robotsUrl, response));
     if (isNetworkFailure(response) || !this.isSuccess(response.status)) {
       return { policy: robotsFactory.allowAll(), found: false };
     }
     return { policy: robotsFactory.fromRobotsTxt(robotsUrl, response.body), found: true };
   }
 
-  private async readSitemap(url: string): Promise<ParsedSitemap | null> {
+  /** Only first-level sitemaps are recorded as technical files; children are read silently. */
+  private async readSitemap(url: string, siteFiles?: SiteFile[]): Promise<ParsedSitemap | null> {
     const response = await this.dependencies.http.get(url);
+    siteFiles?.push(toSiteFile('sitemap', url, response));
     if (isNetworkFailure(response) || !this.isSuccess(response.status)) return null;
     return this.dependencies.sitemapReader.parse(response.body);
   }

@@ -34,6 +34,7 @@ const crawl: CrawlResult = {
   ],
   blockedPages: [],
   links: [],
+  siteFiles: [],
   site: { robotsFound: false, sitemapFound: false },
 };
 

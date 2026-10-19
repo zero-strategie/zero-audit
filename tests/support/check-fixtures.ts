@@ -41,6 +41,7 @@ export const crawlOf = (
   pages,
   blockedPages: [],
   links,
+  siteFiles: [],
   site,
 });
 

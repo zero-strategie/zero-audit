@@ -28,6 +28,17 @@ export interface Link {
   readonly anchor: string | null;
 }
 
+export type SiteFileKind = 'robots' | 'sitemap' | 'llms';
+
+/** Technical file requested outside the crawl: never counted as a crawled page. */
+export interface SiteFile {
+  readonly kind: SiteFileKind;
+  readonly url: string;
+  readonly status: number | null;
+  /** Network failure kind when no response was received. */
+  readonly error: string | null;
+}
+
 export interface CrawlResult {
   readonly rootUrl: string;
   readonly internalHost: string;
@@ -35,5 +46,7 @@ export interface CrawlResult {
   /** Pages blocked by robots.txt; kept apart so that checks and the page count never see them. */
   readonly blockedPages: readonly Page[];
   readonly links: readonly Link[];
+  readonly siteFiles: readonly SiteFile[];
+  /** Whether the file was usable (a sitemap must also parse), which a status alone cannot tell. */
   readonly site: { readonly robotsFound: boolean; readonly sitemapFound: boolean };
 }

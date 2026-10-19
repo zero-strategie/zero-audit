@@ -18,6 +18,7 @@ const crawlResult: CrawlResult = {
   pages: [makePage(ROOT), makePage('https://exemple.com/a')],
   blockedPages: [],
   links: [makeLink(ROOT, 'https://exemple.com/a')],
+  siteFiles: [],
   site: { robotsFound: true, sitemapFound: true },
 };
 

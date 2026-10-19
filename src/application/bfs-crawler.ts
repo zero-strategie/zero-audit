@@ -113,6 +113,7 @@ class CrawlRun {
       pages: this.withRedirectChains(),
       blockedPages: this.blockedPages,
       links: this.links,
+      siteFiles: discovery.siteFiles,
       site: { robotsFound: discovery.robotsFound, sitemapFound: discovery.sitemapFound },
     };
   }
