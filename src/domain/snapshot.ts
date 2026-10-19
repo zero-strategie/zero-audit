@@ -38,12 +38,23 @@ export class Snapshot implements SnapshotProps {
 
   finish(now: Date, pagesCrawled: number): Snapshot {
     this.assertRunning();
-    return new Snapshot({ ...this, finishedAt: now, pagesCrawled, status: 'finished' });
+    return new Snapshot({ ...this.props(), finishedAt: now, pagesCrawled, status: 'finished' });
   }
 
   fail(now: Date): Snapshot {
     this.assertRunning();
-    return new Snapshot({ ...this, finishedAt: now, status: 'failed' });
+    return new Snapshot({ ...this.props(), finishedAt: now, status: 'failed' });
+  }
+
+  private props(): SnapshotProps {
+    return {
+      id: this.id,
+      startedAt: this.startedAt,
+      finishedAt: this.finishedAt,
+      pagesCrawled: this.pagesCrawled,
+      pagesLimit: this.pagesLimit,
+      status: this.status,
+    };
   }
 
   private assertRunning(): void {
