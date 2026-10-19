@@ -14,9 +14,7 @@ export const groupBySeverity = (rows: IssueRow[]): SeverityGroup[] =>
   })).filter(({ rows: grouped }) => grouped.length > 0);
 
 export type SeverityParam =
-  | { kind: 'none' }
-  | { kind: 'valid'; severity: Severity }
-  | { kind: 'invalid'; raw: string };
+  { kind: 'none' } | { kind: 'valid'; severity: Severity } | { kind: 'invalid'; raw: string };
 
 export const parseSeverityParam = (raw: string | null): SeverityParam => {
   if (raw === null) return { kind: 'none' };
@@ -65,6 +63,9 @@ export const formatOccurrenceInfo = (info: Info): string => {
   );
   const unknown = Object.entries(info)
     .filter(([key, value]) => !known.has(key) && !CONSUMED_BY_OTHERS.has(key) && isPresent(value))
-    .map(([key, value]) => `${key} : ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`);
+    .map(
+      ([key, value]) =>
+        `${key} : ${typeof value === 'object' ? JSON.stringify(value) : (value as string)}`,
+    );
   return [...parts, ...unknown].join(SEPARATOR);
 };

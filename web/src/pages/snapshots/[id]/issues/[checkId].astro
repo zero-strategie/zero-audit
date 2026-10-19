@@ -1,0 +1,59 @@
+---
+import ErrorView from '../../../../components/ErrorView.astro';
+import Layout from '../../../../layouts/Layout.astro';
+import type { OccurrencePage } from '../../../../lib/api/types';
+import { toFailure, type Failure } from '../../../../lib/failure';
+import { formatOccurrenceInfo } from '../../../../lib/issues';
+import { buildPaginationLinks, parsePageParam } from '../../../../lib/pagination';
+
+const snapshotId = Astro.params.id ?? '';
+const rawCheckId = Astro.params.checkId ?? '';
+const requestedPage = parsePageParam(Astro.url.searchParams.get('page'));
+let occurrences: OccurrencePage | null = null;
+let failure: Failure | null = null;
+if (/^\d+$/.test(rawCheckId)) {
+  try {
+    occurrences = await Astro.locals.apiClient.getOccurrences(
+      snapshotId,
+      Number(rawCheckId),
+      requestedPage,
+    );
+  } catch (error) {
+    failure = toFailure(error);
+  }
+} else {
+  failure = { kind: 'not-found', status: 404 };
+}
+if (failure) Astro.response.status = failure.status;
+const links = occurrences && buildPaginationLinks(occurrences.page, occurrences.limit, occurrences.total);
+---
+
+{
+  failure || !occurrences || !links ? (
+    <ErrorView failure={failure ?? { kind: 'not-found', status: 404 }} />
+  ) : (
+    <Layout title={`Détail du problème ${rawCheckId} – zero-audit`}>
+      <h1>Pages concernées</h1>
+      <p><a href={`/snapshots/${snapshotId}/issues`}>Retour aux problèmes</a></p>
+      <p>{occurrences.total} occurrence(s), page {occurrences.page}.</p>
+
+      <ul>
+        {occurrences.items.map(({ pageUrl, info }) => (
+          <li data-testid="occurrence">
+            <span>{pageUrl ?? 'Ensemble du site'}</span>
+            {formatOccurrenceInfo(info) !== '' && <small> – {formatOccurrenceInfo(info)}</small>}
+          </li>
+        ))}
+      </ul>
+
+      <nav>
+        {links.previous !== null && (
+          <a data-testid="previous-page" href={`?page=${String(links.previous)}`}>Page précédente</a>
+        )}
+        {links.next !== null && (
+          <a data-testid="next-page" href={`?page=${String(links.next)}`}>Page suivante</a>
+        )}
+      </nav>
+    </Layout>
+  )
+}

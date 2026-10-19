@@ -26,16 +26,32 @@ const render = async (
 };
 
 const rows = [
-  anIssue({ checkId: 1, label: 'Pages en erreur', severity: 'error', count: 4, delta: -2, newCount: 1 }),
+  anIssue({
+    checkId: 1,
+    label: 'Pages en erreur',
+    severity: 'error',
+    count: 4,
+    delta: -2,
+    newCount: 1,
+  }),
   anIssue({ checkId: 15, severity: 'warning', count: 7, delta: 2, newCount: 3 }),
-  anIssue({ checkId: 101, label: 'Titres trop longs', severity: 'notice', count: 0, delta: 0, newCount: 0 }),
+  anIssue({
+    checkId: 101,
+    label: 'Titres trop longs',
+    severity: 'notice',
+    count: 0,
+    delta: 0,
+    newCount: 0,
+  }),
 ];
 
 it('groups checks under Erreurs, Avertissements and Notices', async () => {
   const html = await (await render(rows)).text();
 
   expect(html).toMatch(/data-testid="group-error"[^]*?Erreurs[^]*?Pages en erreur/);
-  expect(html).toMatch(/data-testid="group-warning"[^]*?Avertissements[^]*?Même meta description sur plusieurs pages/);
+  expect(html).toMatch(
+    /data-testid="group-warning"[^]*?Avertissements[^]*?Même meta description sur plusieurs pages/,
+  );
   expect(html).toMatch(/data-testid="group-notice"[^]*?Notices[^]*?Titres trop longs/);
 });
 

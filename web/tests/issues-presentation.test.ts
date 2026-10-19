@@ -16,7 +16,12 @@ const row = (checkId: number, severity: IssueRow['severity']): IssueRow => ({
 
 describe('groupBySeverity', () => {
   it('groups rows by severity, errors first, keeping the API order', () => {
-    const groups = groupBySeverity([row(3, 'notice'), row(1, 'error'), row(2, 'warning'), row(4, 'error')]);
+    const groups = groupBySeverity([
+      row(3, 'notice'),
+      row(1, 'error'),
+      row(2, 'warning'),
+      row(4, 'error'),
+    ]);
 
     expect(groups.map(({ severity, rows }) => [severity, rows.map((r) => r.checkId)])).toEqual([
       ['error', [1, 4]],
@@ -67,7 +72,9 @@ describe('formatOccurrenceInfo', () => {
     expect(formatOccurrenceInfo({ duplicates: ['https://a.test/1', 'https://a.test/2'] })).toBe(
       'Doublons : https://a.test/1, https://a.test/2',
     );
-    expect(formatOccurrenceInfo({ sourceUrl: 'https://a.test/s' })).toBe('Page source : https://a.test/s');
+    expect(formatOccurrenceInfo({ sourceUrl: 'https://a.test/s' })).toBe(
+      'Page source : https://a.test/s',
+    );
   });
   it('returns an empty text when there is no information', () => {
     expect(formatOccurrenceInfo({})).toBe('');

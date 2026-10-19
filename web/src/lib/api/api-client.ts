@@ -1,10 +1,4 @@
-import type {
-  IssueRow,
-  OccurrencePage,
-  ProjectOverview,
-  Severity,
-  SnapshotReport,
-} from './types';
+import type { IssueRow, OccurrencePage, ProjectOverview, Severity, SnapshotReport } from './types';
 
 export interface ApiClient {
   listProjects(): Promise<ProjectOverview[]>;
