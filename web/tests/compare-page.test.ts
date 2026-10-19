@@ -11,14 +11,19 @@ const snapshots = [
   aSnapshotListing({ id: 's3', status: 'failed', startedAt: '2026-03-05T09:00:00.000Z' }),
 ];
 
-const render = async (result: Comparison | Error, query = '?a=s1&b=s2', calls: string[][] = []) => {
+const render = async (
+  result: Comparison | Error,
+  query = '?a=s1&b=s2',
+  calls: string[][] = [],
+  listing = snapshots,
+) => {
   const container = await AstroContainer.create();
   return container.renderToResponse(ComparePage, {
     params: { id: 'p1' },
     request: new Request(`http://localhost/projects/p1/compare${query}`),
     locals: {
       apiClient: fakeApiClient({
-        listProjectSnapshots: () => Promise.resolve(snapshots),
+        listProjectSnapshots: () => Promise.resolve(listing),
         compare: (a, b) => {
           calls.push([a, b]);
           return result instanceof Error ? Promise.reject(result) : Promise.resolve(result);
@@ -129,6 +134,20 @@ it('draws the health gauge and theme cards with the variation format', async () 
 
   expect(html).toContain('class="health-gauge"');
   expect(html).toContain('class="theme-card"');
+  expect(html).toMatch(/data-testid="health-score"[^>]*>\s*77 \(\+3\)\s*</);
+  expect(html).not.toContain('770');
+});
+
+it.each([
+  [74, />\s*74\s*</],
+  [null, />\s*Non calculable\s*</],
+])('shows the health %s of audit A next to the health of audit B', async (healthA, expected) => {
+  const listing = [aSnapshotListing({ id: 's1', health: healthA }), aSnapshotListing({ id: 's2' })];
+  const html = await (
+    await render(aComparison({ health: { score: 77, variation: 3 } }), '?a=s1&b=s2', [], listing)
+  ).text();
+
+  expect(html).toMatch(new RegExp(`data-testid="health-score-a"[^>]*${expected.source}`));
   expect(html).toMatch(/data-testid="health-score"[^>]*>\s*77 \(\+3\)\s*</);
   expect(html).not.toContain('770');
 });
