@@ -22,7 +22,7 @@ const result = (checkId: number, urls: string[]): CheckResult => ({
 
 const minutes = (n: number): Date => new Date(Date.UTC(2026, 0, 1, 10, n));
 
-const setup = async () => {
+const setup = () => {
   const repository = new InMemorySnapshotRepository();
   const record = async (minute: number, results: CheckResult[]): Promise<string> => {
     const { id } = await repository.create({
@@ -43,7 +43,7 @@ const setup = async () => {
 
 describe('ListIssues', () => {
   it('lists every registry check, including those absent from the snapshot, sorted by id', async () => {
-    const { record, issues } = await setup();
+    const { record, issues } = setup();
     const id = await record(0, [result(15, ['a', 'b'])]);
 
     const rows = await issues.execute(id, {});
@@ -57,7 +57,7 @@ describe('ListIssues', () => {
   });
 
   it('adds delta, new and fixed counts against the previous finished snapshot', async () => {
-    const { record, issues } = await setup();
+    const { record, issues } = setup();
     await record(0, [result(15, ['a', 'b'])]);
     const id = await record(10, [result(15, ['b', 'c', 'd'])]);
 
@@ -67,7 +67,7 @@ describe('ListIssues', () => {
   });
 
   it('filters by severity', async () => {
-    const { record, issues } = await setup();
+    const { record, issues } = setup();
     const id = await record(0, []);
 
     const rows = await issues.execute(id, { severity: 'warning' });
@@ -76,7 +76,7 @@ describe('ListIssues', () => {
   });
 
   it('fails for an unknown snapshot', async () => {
-    const { issues } = await setup();
+    const { issues } = setup();
 
     await expect(issues.execute('nope', {})).rejects.toThrow(SnapshotNotFound);
   });
@@ -86,7 +86,7 @@ describe('ListOccurrences', () => {
   const urls = Array.from({ length: 25 }, (_, i) => `https://e.com/${String(i).padStart(2, '0')}`);
 
   it('paginates the occurrences in a stable order (page url, then info)', async () => {
-    const { record, occurrences } = await setup();
+    const { record, occurrences } = setup();
     const id = await record(0, [result(15, [...urls].reverse())]);
 
     const page = await occurrences.execute(id, 15, { page: 2, limit: 10 });
@@ -96,7 +96,7 @@ describe('ListOccurrences', () => {
   });
 
   it('returns an empty list for a registry check without occurrences', async () => {
-    const { record, occurrences } = await setup();
+    const { record, occurrences } = setup();
     const id = await record(0, []);
 
     expect(await occurrences.execute(id, 9, { page: 1, limit: 50 })).toMatchObject({
@@ -106,7 +106,7 @@ describe('ListOccurrences', () => {
   });
 
   it('fails for a check outside the registry', async () => {
-    const { record, occurrences } = await setup();
+    const { record, occurrences } = setup();
     const id = await record(0, []);
 
     await expect(occurrences.execute(id, 9999, { page: 1, limit: 50 })).rejects.toThrow(
