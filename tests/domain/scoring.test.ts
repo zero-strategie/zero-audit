@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CheckResult, Severity, Theme } from '../../src/domain/check.js';
 import {
   computeHealth,
+  buildScoreCard,
   computeThemeScores,
   passRate,
   roundScore,
@@ -78,5 +79,23 @@ describe('scoreVariation', () => {
     expect(scoreVariation(null, 80)).toBeNull();
     expect(scoreVariation(80, null)).toBeNull();
     expect(scoreVariation(undefined, 80)).toBeNull();
+  });
+});
+
+describe('buildScoreCard', () => {
+  it('exposes rounded scores with their variation against the previous results', () => {
+    const previous = [result('error', 1, 5)];
+    const current = [result('error', 1, 10)];
+    const card = buildScoreCard(previous, current);
+    expect(card.health).toEqual({ score: 90, variation: 10 });
+    expect(card.themes['on-page']).toEqual({ score: 90, variation: 10 });
+    expect(card.themes.https).toEqual({ score: null, variation: null });
+  });
+
+  it('has no variation without previous results', () => {
+    expect(buildScoreCard(null, [result('error', 0, 1)]).health).toEqual({
+      score: 100,
+      variation: null,
+    });
   });
 });

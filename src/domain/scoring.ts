@@ -47,3 +47,33 @@ export const scoreVariation = (
   if (previousRounded === null || currentRounded === null) return null;
   return currentRounded - previousRounded;
 };
+
+export interface ScoreWithVariation {
+  /** Rounded 0-100 score; null when not computable. */
+  readonly score: number | null;
+  readonly variation: number | null;
+}
+
+export interface ScoreCard {
+  readonly health: ScoreWithVariation;
+  readonly themes: Readonly<Record<Theme, ScoreWithVariation>>;
+}
+
+const exposed = (previous: number | null | undefined, current: number | null): ScoreWithVariation => ({
+  score: roundScore(current),
+  variation: scoreVariation(previous, current),
+});
+
+export const buildScoreCard = (
+  previousResults: readonly CheckResult[] | null,
+  currentResults: readonly CheckResult[],
+): ScoreCard => {
+  const previousThemes = previousResults ? computeThemeScores(previousResults) : null;
+  const currentThemes = computeThemeScores(currentResults);
+  return {
+    health: exposed(previousResults ? computeHealth(previousResults) : null, computeHealth(currentResults)),
+    themes: Object.fromEntries(
+      THEMES.map((theme) => [theme, exposed(previousThemes?.[theme], currentThemes[theme])]),
+    ) as ScoreCard['themes'],
+  };
+};
