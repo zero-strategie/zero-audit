@@ -91,4 +91,15 @@ The web server (`web/`, Astro standalone) reads `HOST`, `PORT` and `ZERO_AUDIT_A
 | `GET /projects/:id/snapshots` | snapshots of a project (UUID), most recent first, with `status` and `health` (`null` unless finished) |
 | `GET /snapshots/:id` | summary: health and themes with variation, counters, page groups, site files, top 5 checks |
 
+### Health checks
+
+Both servers expose `GET /health` for `deploy.sh` and the deployment job. The body is a short JSON object that never contains an internal URL or an error detail.
+
+| Server | Check | 200 | 503 |
+| --- | --- | --- | --- |
+| API | the storage (SQLite or Postgres) answers a trivial query | `{"status":"ok"}` | `{"status":"unavailable"}` |
+| Web | the API answers `GET /health` with 200 within 2 seconds | `{"status":"ok"}` | `{"status":"unavailable"}` (API down, slow or unhealthy) |
+
+Any other method on the API's `/health` answers 404. **Requirement for zero-infra:** Caddy protects the application with basic auth, so `/health` must be exempted from it on both hosts; otherwise the health check of `deploy.sh` and of the deployment job gets a 401.
+
 Errors share one format: `{ "error": { "code": "not_found" | "invalid_request", "message": "…" } }` (404 unknown id or route, 400 malformed id). Any non-GET method answers 404. An unexpected failure answers 500 with the code `internal_error` and a generic message.
