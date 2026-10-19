@@ -14,6 +14,8 @@ export interface Page {
   readonly h1: readonly string[];
   readonly wordCount: number | null;
   readonly contentHash: string | null;
+  /** Internal URL forbidden by robots.txt: recorded without any request. */
+  readonly blockedByRobots: boolean;
 }
 
 export type LinkType = 'internal' | 'external' | 'resource';
@@ -30,6 +32,8 @@ export interface CrawlResult {
   readonly rootUrl: string;
   readonly internalHost: string;
   readonly pages: readonly Page[];
+  /** Pages blocked by robots.txt; kept apart so that checks and the page count never see them. */
+  readonly blockedPages: readonly Page[];
   readonly links: readonly Link[];
   readonly site: { readonly robotsFound: boolean; readonly sitemapFound: boolean };
 }
