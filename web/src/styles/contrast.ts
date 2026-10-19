@@ -11,7 +11,10 @@ const luminance = (hex: string): number => {
   const match = HEX_COLOR.exec(hex);
   if (!match) throw new Error(`Invalid hex color: ${hex}`);
   const channels = [match[1], match[2], match[3]].map((part) => toLinear(parseInt(part ?? '', 16)));
-  return channels.reduce((sum, channel, index) => sum + channel * (LUMINANCE_WEIGHTS[index] ?? 0), 0);
+  return channels.reduce(
+    (sum, channel, index) => sum + channel * (LUMINANCE_WEIGHTS[index] ?? 0),
+    0,
+  );
 };
 
 /** WCAG 2.x contrast ratio between two #rrggbb colors. */
