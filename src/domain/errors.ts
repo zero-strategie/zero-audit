@@ -11,3 +11,17 @@ export class RootUnreachable extends DomainError {
     this.name = 'RootUnreachable';
   }
 }
+
+export class SnapshotImmutable extends DomainError {
+  constructor(snapshotId: string, status: string) {
+    super(`Snapshot ${snapshotId} is ${status} and can no longer be written`);
+    this.name = 'SnapshotImmutable';
+  }
+}
+
+export class SnapshotNotFound extends DomainError {
+  constructor(snapshotId: string) {
+    super(`Snapshot ${snapshotId} does not exist`);
+    this.name = 'SnapshotNotFound';
+  }
+}

@@ -1,4 +1,4 @@
-import { DomainError } from './errors.js';
+import { SnapshotImmutable } from './errors.js';
 
 export type SnapshotStatus = 'running' | 'finished' | 'failed';
 
@@ -37,12 +37,12 @@ export class Snapshot implements SnapshotProps {
   }
 
   finish(now: Date, pagesCrawled: number): Snapshot {
-    this.assertRunning();
+    this.assertWritable();
     return new Snapshot({ ...this.props(), finishedAt: now, pagesCrawled, status: 'finished' });
   }
 
   fail(now: Date): Snapshot {
-    this.assertRunning();
+    this.assertWritable();
     return new Snapshot({ ...this.props(), finishedAt: now, status: 'failed' });
   }
 
@@ -57,9 +57,9 @@ export class Snapshot implements SnapshotProps {
     };
   }
 
-  private assertRunning(): void {
+  assertWritable(): void {
     if (this.status !== 'running') {
-      throw new DomainError(`Snapshot ${this.id} is ${this.status} and can no longer change`);
+      throw new SnapshotImmutable(this.id, this.status);
     }
   }
 }
