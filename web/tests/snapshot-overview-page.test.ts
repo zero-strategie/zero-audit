@@ -145,3 +145,11 @@ it('formats the theme scores like the health score', async () => {
 
   expect(html).toMatch(/data-testid="theme-on-page"[^]*?70 \(−2\)/);
 });
+
+it('draws the health gauge, one card per theme and severity badges for top issues', async () => {
+  const html = await renderReport(aReport());
+
+  expect(html).toContain('class="health-gauge"');
+  expect(html.match(/class="theme-card"/g)).toHaveLength(5);
+  expect(html).toContain('severity-badge severity-warning');
+});

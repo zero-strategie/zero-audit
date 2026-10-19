@@ -1,7 +1,8 @@
 ---
 import ErrorView from '../../../../components/ErrorView.astro';
+import SeverityBadge from '../../../../components/SeverityBadge.astro';
 import Layout from '../../../../layouts/Layout.astro';
-import type { OccurrencePage } from '../../../../lib/api/types';
+import type { OccurrencePage, Severity } from '../../../../lib/api/types';
 import { toFailure, type Failure } from '../../../../lib/failure';
 import { formatOccurrenceInfo } from '../../../../lib/issues';
 import { buildPaginationLinks, parsePageParam } from '../../../../lib/pagination';
@@ -11,6 +12,7 @@ const rawCheckId = Astro.params.checkId ?? '';
 const requestedPage = parsePageParam(Astro.url.searchParams.get('page'));
 let occurrences: OccurrencePage | null = null;
 let failure: Failure | null = null;
+let severity: Severity | null = null;
 if (/^\d+$/.test(rawCheckId)) {
   try {
     occurrences = await Astro.locals.apiClient.getOccurrences(
@@ -24,6 +26,15 @@ if (/^\d+$/.test(rawCheckId)) {
 } else {
   failure = { kind: 'not-found', status: 404 };
 }
+if (occurrences) {
+  // The badge is decoration: a failing lookup must not hide the occurrences.
+  try {
+    const issues = await Astro.locals.apiClient.listIssues(snapshotId);
+    severity = issues.find(({ checkId }) => checkId === Number(rawCheckId))?.severity ?? null;
+  } catch {
+    severity = null;
+  }
+}
 if (failure) Astro.response.status = failure.status;
 const links = occurrences && buildPaginationLinks(occurrences.page, occurrences.limit, occurrences.total);
 ---
@@ -34,6 +45,7 @@ const links = occurrences && buildPaginationLinks(occurrences.page, occurrences.
   ) : (
     <Layout title={`Détail du problème ${rawCheckId} – zero-audit`} snapshotId={snapshotId}>
       <h1>Pages concernées</h1>
+      {severity && <p><SeverityBadge severity={severity} /></p>}
       <p><a href={`/snapshots/${snapshotId}/issues`}>Retour aux problèmes</a></p>
       <p>{occurrences.total} occurrence(s), page {occurrences.page}.</p>
 

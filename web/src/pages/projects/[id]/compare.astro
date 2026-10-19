@@ -1,12 +1,14 @@
 ---
 import ErrorView from '../../../components/ErrorView.astro';
+import HealthGauge from '../../../components/HealthGauge.astro';
+import ThemeCard from '../../../components/ThemeCard.astro';
 import Layout from '../../../layouts/Layout.astro';
 import { InvalidRequest } from '../../../lib/api/errors';
-import type { Comparison, SnapshotListing } from '../../../lib/api/types';
+import type { Comparison, SnapshotListing, Theme } from '../../../lib/api/types';
 import { changedChecks, defaultComparisonPair } from '../../../lib/compare';
 import { toFailure } from '../../../lib/failure';
-import { SNAPSHOT_STATUS_LABELS, THEME_LABELS } from '../../../lib/labels';
-import { formatDateFr, formatScoreWithVariation, formatVariation } from '../../../lib/presentation';
+import { SNAPSHOT_STATUS_LABELS } from '../../../lib/labels';
+import { formatDateFr, formatVariation } from '../../../lib/presentation';
 
 const HTTP_BAD_REQUEST = 400;
 
@@ -70,14 +72,10 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
         <>
           <section>
             <h2>Santé du site</h2>
-            <p>
-              <strong data-testid="health-score">{formatScoreWithVariation(comparison.health.score, comparison.health.variation)}</strong>
-            </p>
-            <ul>
+            <HealthGauge score={comparison.health.score} variation={comparison.health.variation} />
+            <ul class="theme-cards">
               {Object.entries(comparison.themes).map(([theme, { score, variation }]) => (
-                <li data-testid={`theme-${theme}`}>
-                  {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatScoreWithVariation(score, variation)}
-                </li>
+                <ThemeCard theme={theme as Theme} score={score} variation={variation} />
               ))}
             </ul>
           </section>

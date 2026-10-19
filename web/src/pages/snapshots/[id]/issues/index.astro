@@ -1,5 +1,6 @@
 ---
 import ErrorView from '../../../../components/ErrorView.astro';
+import SeverityBadge from '../../../../components/SeverityBadge.astro';
 import Layout from '../../../../layouts/Layout.astro';
 import type { IssueRow } from '../../../../lib/api/types';
 import { toFailure } from '../../../../lib/failure';
@@ -44,6 +45,7 @@ const groups = groupBySeverity(rows);
           <ul>
             {groupRows.map((row) => (
               <li data-testid={`issue-${String(row.checkId)}`}>
+                <SeverityBadge severity={row.severity} />{' '}
                 {row.count > 0 ? (
                   <a href={`/snapshots/${snapshotId}/issues/${String(row.checkId)}`}>{row.label}</a>
                 ) : (

@@ -123,3 +123,12 @@ it('renders the not-found page with status 404 for an unknown audit', async () =
   expect(response.status).toBe(404);
   expect(await response.text()).toContain('introuvable');
 });
+
+it('draws the health gauge and theme cards with the variation format', async () => {
+  const html = await (await render(aComparison({ health: { score: 77, variation: 3 } }))).text();
+
+  expect(html).toContain('class="health-gauge"');
+  expect(html).toContain('class="theme-card"');
+  expect(html).toMatch(/data-testid="health-score"[^>]*>\s*77 \(\+3\)\s*</);
+  expect(html).not.toContain('770');
+});

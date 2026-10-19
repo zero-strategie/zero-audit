@@ -99,3 +99,9 @@ it('links to the crawled pages screen', async () => {
 
   expect(html).toContain('href="/snapshots/s1/pages"');
 });
+
+it('shows the severity badge of each issue', async () => {
+  const html = await (await render(rows)).text();
+
+  expect(html).toMatch(/data-testid="issue-15"[^]*?severity-badge severity-warning/);
+});

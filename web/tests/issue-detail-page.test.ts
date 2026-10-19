@@ -3,7 +3,7 @@ import { expect, it } from 'vitest';
 import DetailPage from '../src/pages/snapshots/[id]/issues/[checkId].astro';
 import { NotFound } from '../src/lib/api/errors';
 import type { OccurrencePage } from '../src/lib/api/types';
-import { fakeApiClient } from './fake-api-client';
+import { anIssue, fakeApiClient } from './fake-api-client';
 
 const occurrences = (count: number, page: number, total: number): OccurrencePage => ({
   items: Array.from({ length: count }, (_, index) => ({
@@ -91,4 +91,20 @@ it('renders the not-found page with status 404 for a non numeric check id withou
 
   expect(response.status).toBe(404);
   expect(calls).toEqual([]);
+});
+
+it('shows the severity badge of the checked issue', async () => {
+  const container = await AstroContainer.create();
+  const response = await container.renderToResponse(DetailPage, {
+    params: { id: 's1', checkId: '15' },
+    request: new Request('http://localhost/snapshots/s1/issues/15'),
+    locals: {
+      apiClient: fakeApiClient({
+        getOccurrences: () => Promise.resolve(occurrences(1, 1, 1)),
+        listIssues: () => Promise.resolve([anIssue({ checkId: 15, severity: 'error' })]),
+      }),
+    },
+  });
+
+  expect(await response.text()).toContain('severity-badge severity-error');
 });

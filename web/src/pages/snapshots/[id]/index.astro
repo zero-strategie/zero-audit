@@ -1,11 +1,14 @@
 ---
 import ErrorView from '../../../components/ErrorView.astro';
+import HealthGauge from '../../../components/HealthGauge.astro';
+import SeverityBadge from '../../../components/SeverityBadge.astro';
 import SnapshotSelector from '../../../components/SnapshotSelector.astro';
+import ThemeCard from '../../../components/ThemeCard.astro';
 import Layout from '../../../layouts/Layout.astro';
-import type { Severity, SnapshotListing, SnapshotReport } from '../../../lib/api/types';
+import type { SnapshotListing, SnapshotReport, Theme } from '../../../lib/api/types';
 import { toFailure } from '../../../lib/failure';
-import { PAGE_GROUP_LABELS, SEVERITY_LABELS, SITE_FILE_LABELS, THEME_LABELS } from '../../../lib/labels';
-import { formatScoreWithVariation, formatVariation } from '../../../lib/presentation';
+import { PAGE_GROUP_LABELS, SITE_FILE_LABELS } from '../../../lib/labels';
+import { formatVariation } from '../../../lib/presentation';
 
 const snapshotId = Astro.params.id ?? '';
 let report: SnapshotReport | null = null;
@@ -38,18 +41,14 @@ const siteFileStatus = (status: number | null, error: string | null) =>
 
       <section>
         <h2>Santé du site</h2>
-        <p>
-          <strong data-testid="health-score">{formatScoreWithVariation(report.health.score, report.health.variation)}</strong>
-        </p>
+        <HealthGauge score={report.health.score} variation={report.health.variation} />
       </section>
 
       <section>
         <h2>Thèmes</h2>
-        <ul>
+        <ul class="theme-cards">
           {Object.entries(report.themes).map(([theme, { score, variation }]) => (
-            <li data-testid={`theme-${theme}`}>
-              {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatScoreWithVariation(score, variation)}
-            </li>
+            <ThemeCard theme={theme as Theme} score={score} variation={variation} />
           ))}
         </ul>
       </section>
@@ -81,7 +80,7 @@ const siteFileStatus = (status: number | null, error: string | null) =>
           {report.topIssues.map(({ checkId, label, severity, count }) => (
             <li>
               <a href={`/snapshots/${report.snapshot.id}/issues/${String(checkId)}`}>{label}</a>
-              ({SEVERITY_LABELS[severity as Severity]}, {count})
+              <SeverityBadge severity={severity} /> ({count})
             </li>
           ))}
         </ol>
