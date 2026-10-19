@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { describe, expect, it } from 'vitest';
 import ProjectsPage from '../src/pages/index.astro';
@@ -89,13 +90,21 @@ const render = async (screen: (typeof SCREENS)[number]) => {
   return response.text();
 };
 
+// The Astro container does not resolve asset URLs, so the link target is checked in the source.
+it('links the layout to the global stylesheet', () => {
+  const layout = readFileSync(new URL('../src/layouts/Layout.astro', import.meta.url), 'utf8');
+
+  expect(layout).toMatch(/import \w+ from '..\/styles\/global\.css\?url'/);
+  expect(layout).toMatch(/<link rel="stylesheet" href=\{\w+\}/);
+});
+
 describe.each(SCREENS)('$name screen', (screen) => {
   it('declares the viewport, the color scheme and the global stylesheet', async () => {
     const html = await render(screen);
 
     expect(html).toContain('<meta name="viewport" content="width=device-width, initial-scale=1">');
     expect(html).toContain('<meta name="color-scheme" content="light dark">');
-    expect(html).toMatch(/<link[^>]+rel="stylesheet"|<style/);
+    expect(html).toMatch(/<link[^>]+rel="stylesheet"/);
   });
 
   it('shows the common navigation with a link to the projects list', async () => {
@@ -126,6 +135,14 @@ describe('snapshot navigation', () => {
       expect(html).toMatch(/data-testid="main-nav"[\s\S]*href="\/snapshots\/s1\/pages"/);
     },
   );
+
+  it.each(SNAPSHOT_SCREENS)('links to the comparison from the $name screen', async (screen) => {
+    const html = await render(screen);
+
+    expect(html).toMatch(
+      /data-testid="main-nav"[\s\S]*href="\/(projects\/p1|snapshots\/s1)\/compare"/,
+    );
+  });
 
   it('links to the comparison of the project from the overview', async () => {
     const html = await render(SCREENS[1]);

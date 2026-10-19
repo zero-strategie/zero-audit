@@ -63,3 +63,24 @@ it('defines colors only through tokens: no hex or rgb literal outside :root and 
   expect(withoutTokens).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
   expect(globalCss).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(/i);
 });
+
+it('assigns colors in global.css only through tokens or neutral keywords', () => {
+  const colorDeclaration =
+    /(?:^|[\s;{])(?:color|background(?:-color)?|border(?:-(?:top|right|bottom|left))?(?:-color)?|outline(?:-color)?)\s*:\s*([^;}]+)/g;
+  const allowedWords = new Set([
+    'inherit',
+    'currentColor',
+    'transparent',
+    'none',
+    'solid',
+    'dashed',
+  ]);
+  const offendingWords = [...globalCss.matchAll(colorDeclaration)].flatMap(([, value]) =>
+    (value ?? '')
+      .replace(/var\([^)]*\)/g, '')
+      .split(/\s+/)
+      .filter((word) => /^[a-z]+$/i.test(word) && !allowedWords.has(word)),
+  );
+
+  expect(offendingWords).toEqual([]);
+});
