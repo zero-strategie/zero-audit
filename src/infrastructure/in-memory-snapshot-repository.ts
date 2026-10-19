@@ -4,7 +4,7 @@ import type {
   SnapshotRepository,
 } from '../application/ports/snapshot-repository.js';
 import type { CheckResult } from '../domain/check.js';
-import type { Link, Page } from '../domain/crawl.js';
+import type { Link, Page, SiteFile } from '../domain/crawl.js';
 import { SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
 
@@ -13,14 +13,18 @@ interface Stored {
   pages: Page[];
   links: Link[];
   checkResults: CheckResult[];
+  siteFiles: SiteFile[];
 }
+
+const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
+  a.kind === b.kind ? Number(a.url > b.url) - Number(a.url < b.url) : Number(a.kind > b.kind) - Number(a.kind < b.kind);
 
 export class InMemorySnapshotRepository implements SnapshotRepository {
   private readonly stored = new Map<string, Stored>();
 
   create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
     const snapshot = Snapshot.start({ id: randomUUID(), ...input });
-    this.stored.set(snapshot.id, { snapshot, pages: [], links: [], checkResults: [] });
+    this.stored.set(snapshot.id, { snapshot, pages: [], links: [], checkResults: [], siteFiles: [] });
     return Promise.resolve(snapshot);
   }
 
@@ -30,6 +34,10 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
 
   addLinks(id: string, links: readonly Link[]): Promise<void> {
     return this.write(id, (entry) => entry.links.push(...links));
+  }
+
+  addSiteFiles(id: string, files: readonly SiteFile[]): Promise<void> {
+    return this.write(id, (entry) => entry.siteFiles.push(...files));
   }
 
   addCheckResults(id: string, results: readonly CheckResult[]): Promise<void> {
@@ -56,6 +64,7 @@ export class InMemorySnapshotRepository implements SnapshotRepository {
       pages: [...entry.pages],
       links: [...entry.links],
       checkResults: [...entry.checkResults],
+      siteFiles: [...entry.siteFiles].sort(bySiteFileOrder),
     });
   }
 

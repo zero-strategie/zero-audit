@@ -18,7 +18,10 @@ const crawlResult: CrawlResult = {
   pages: [makePage(ROOT), makePage('https://exemple.com/a')],
   blockedPages: [],
   links: [makeLink(ROOT, 'https://exemple.com/a')],
-  siteFiles: [],
+  siteFiles: [
+    { kind: 'robots', url: `${ROOT}robots.txt`, status: 200, error: null },
+    { kind: 'llms', url: `${ROOT}llms.txt`, status: null, error: 'connection' },
+  ],
   site: { robotsFound: true, sitemapFound: true },
 };
 
@@ -51,6 +54,17 @@ const blocked = makePage('https://exemple.com/private/a', {
 });
 
 describe('RunAudit', () => {
+  it('stores the technical files without counting them as crawled pages', async () => {
+    const { useCase, repository } = build(new FakeCrawler());
+
+    const details = await useCase.execute({ rootUrl: ROOT, limit: 10, delayMs: 0 });
+
+    const stored = await repository.getById(details.snapshot.id);
+    expect(stored?.siteFiles).toEqual(crawlResult.siteFiles.toReversed());
+    expect(stored?.snapshot.pagesCrawled).toBe(2);
+    expect(stored?.pages.map(({ url }) => url)).toEqual([ROOT, 'https://exemple.com/a']);
+  });
+
   it('stores blocked pages without counting them as crawled or examining them', async () => {
     const { useCase, repository } = build({
       crawl: () => Promise.resolve({ ...crawlResult, blockedPages: [blocked] }),

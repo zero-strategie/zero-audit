@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectRepository } from '../../src/application/ports/project-repository.js';
 import type { SnapshotRepository } from '../../src/application/ports/snapshot-repository.js';
 import type { CheckResult } from '../../src/domain/check.js';
-import type { Link, Page } from '../../src/domain/crawl.js';
+import type { Link, Page, SiteFile } from '../../src/domain/crawl.js';
 import { SnapshotImmutable } from '../../src/domain/errors.js';
 
 const startedAt = new Date('2026-01-01T10:00:00.000Z');
@@ -149,6 +149,38 @@ export const describeSnapshotRepositoryContract = (
       expect(details?.checkResults).toEqual(results);
     });
 
+    it('reads back an empty list of site files when none was written', async () => {
+      const { repo, id } = await createRunning();
+      expect((await repo.getById(id))?.siteFiles).toEqual([]);
+    });
+
+    it('reads back site files unchanged and in a stable order', async () => {
+      const { repo, id } = await createRunning();
+      const robots: SiteFile = {
+        kind: 'robots',
+        url: 'https://example.test/robots.txt',
+        status: 200,
+        error: null,
+      };
+      const sitemapB: SiteFile = {
+        kind: 'sitemap',
+        url: 'https://example.test/b.xml',
+        status: 404,
+        error: null,
+      };
+      const sitemapA: SiteFile = { ...sitemapB, url: 'https://example.test/a.xml', status: 200 };
+      const llms: SiteFile = {
+        kind: 'llms',
+        url: 'https://example.test/llms.txt',
+        status: null,
+        error: 'connection',
+      };
+
+      await repo.addSiteFiles(id, [sitemapB, robots, llms, sitemapA]);
+
+      expect((await repo.getById(id))?.siteFiles).toEqual([llms, robots, sitemapA, sitemapB]);
+    });
+
     it('keeps a check result whose count is zero', async () => {
       const { repo, id } = await createRunning();
       const clean = checkResult({ count: 0, examined: 7, occurrences: [] });
@@ -176,6 +208,7 @@ export const describeSnapshotRepositoryContract = (
       );
       await expect(repo.addLinks(id, [link])).rejects.toThrow(SnapshotImmutable);
       await expect(repo.addCheckResults(id, [checkResult()])).rejects.toThrow(SnapshotImmutable);
+      await expect(repo.addSiteFiles(id, [])).rejects.toThrow(SnapshotImmutable);
       await expect(repo.finish(id, { finishedAt, pagesCrawled: 2 })).rejects.toThrow(
         SnapshotImmutable,
       );

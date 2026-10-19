@@ -7,7 +7,7 @@ import type {
   SnapshotRepository,
 } from '../../application/ports/snapshot-repository.js';
 import type { CheckResult, IssueOccurrence, Severity } from '../../domain/check.js';
-import type { Link, LinkType, Page } from '../../domain/crawl.js';
+import type { Link, LinkType, Page, SiteFile, SiteFileKind } from '../../domain/crawl.js';
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
@@ -51,6 +51,13 @@ interface LinkRow {
   type: LinkType;
   rel: string | null;
   anchor: string | null;
+}
+
+interface SiteFileRow {
+  kind: SiteFileKind;
+  url: string;
+  status: number | null;
+  error: string | null;
 }
 
 interface CheckResultRow {
@@ -103,6 +110,13 @@ const toLink = (row: LinkRow): Link => ({
   type: row.type,
   rel: row.rel,
   anchor: row.anchor,
+});
+
+const toSiteFile = (row: SiteFileRow): SiteFile => ({
+  kind: row.kind,
+  url: row.url,
+  status: row.status,
+  error: row.error,
 });
 
 export class SqliteSnapshotRepository implements SnapshotRepository {
@@ -187,6 +201,15 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     });
   }
 
+  addSiteFiles(id: string, files: readonly SiteFile[]): Promise<void> {
+    return this.writeToRunning(id, () => {
+      const insert = this.db.prepare(
+        'INSERT INTO site_files (snapshot_id, kind, url, status, error) VALUES (?, ?, ?, ?, ?)',
+      );
+      for (const file of files) insert.run(id, file.kind, file.url, file.status, file.error);
+    });
+  }
+
   addCheckResults(id: string, results: readonly CheckResult[]): Promise<void> {
     return this.writeToRunning(id, () => {
       const insertResult = this.db.prepare(
@@ -252,6 +275,11 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
             .all(id) as LinkRow[]
         ).map(toLink),
         checkResults: this.readCheckResults(id),
+        siteFiles: (
+          this.db
+            .prepare('SELECT * FROM site_files WHERE snapshot_id = ? ORDER BY kind, url, id')
+            .all(id) as SiteFileRow[]
+        ).map(toSiteFile),
       };
     });
   }
