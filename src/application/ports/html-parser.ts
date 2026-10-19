@@ -16,6 +16,8 @@ export interface ParsedHtml {
   canonical: string | null;
   h1: string[];
   wordCount: number;
+  /** UTF-8 bytes of the visible body text over UTF-8 bytes of the received html, in [0, 1]. */
+  textRatio: number;
   contentHash: string;
 }
 
