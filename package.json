@@ -7,7 +7,12 @@
     "node": ">=22"
   },
   "packageManager": "pnpm@10.24.0",
+  "bin": {
+    "zero-audit": "dist/cli/main.js"
+  },
   "scripts": {
+    "audit": "tsx src/cli/main.ts",
+    "zero-audit": "tsx src/cli/main.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
