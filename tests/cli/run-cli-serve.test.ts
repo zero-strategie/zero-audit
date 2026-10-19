@@ -54,17 +54,18 @@ describe('runCli serve', () => {
   let dbPath: string;
   let events: string[];
   let storageCloses: number;
-  let effectiveCloses: number;
+  let closeResults: Promise<void>[];
 
   const storageFactory: StorageFactory = async (config) => {
     const real = await createStorage(config);
     return {
       projects: real.projects,
       snapshots: real.snapshots,
-      close: async () => {
+      close: () => {
         storageCloses += 1;
-        if (storageCloses === 1) effectiveCloses += 1;
-        await real.close();
+        const result = real.close();
+        closeResults.push(result);
+        return result;
       },
     };
   };
@@ -87,7 +88,7 @@ describe('runCli serve', () => {
     dbPath = join(dir, 'audit.db');
     events = [];
     storageCloses = 0;
-    effectiveCloses = 0;
+    closeResults = [];
   });
 
   afterEach(() => {
@@ -149,7 +150,7 @@ describe('runCli serve', () => {
     expect(storageCloses).toBe(1);
   });
 
-  it('releases the storage a single time when SIGINT interrupts a running server', async () => {
+  it('releases the storage without error when SIGINT and the end of the command both close it', async () => {
     const exits: number[] = [];
     const controller = createInterruptController((code) => {
       exits.push(code);
@@ -176,6 +177,7 @@ describe('runCli serve', () => {
 
     expect(exits).toEqual([130]);
     expect(events).toContain('server-close');
-    expect(effectiveCloses).toBe(1);
+    expect(storageCloses).toBeGreaterThan(1);
+    await expect(Promise.all(closeResults)).resolves.toBeDefined();
   });
 });

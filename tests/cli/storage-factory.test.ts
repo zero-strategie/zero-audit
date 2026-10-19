@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createStorage, redactDatabaseUrl } from '../../src/cli/storage-factory.js';
+import { TEST_DATABASE_URL } from '../support/postgres-test-database.js';
 
 describe('redactDatabaseUrl', () => {
   it('replaces the password and keeps the rest of the URL', () => {
@@ -59,5 +60,27 @@ describe('createStorage', () => {
     const message = (failure as Error).message;
     expect(message).toContain('127.0.0.1');
     expect(message).not.toContain('s3cret-pw');
+  });
+});
+
+describe.skipIf(TEST_DATABASE_URL === undefined)('createStorage with Postgres', () => {
+  const open = () =>
+    createStorage({ store: 'postgres', databaseUrl: TEST_DATABASE_URL ?? null, dbPath: '' });
+
+  it('closes the pool only once when close is called twice in sequence', async () => {
+    const storage = await open();
+
+    await storage.close();
+
+    await expect(storage.close()).resolves.toBeUndefined();
+  });
+
+  it('closes the pool only once when close is called concurrently', async () => {
+    const storage = await open();
+
+    await expect(Promise.all([storage.close(), storage.close()])).resolves.toEqual([
+      undefined,
+      undefined,
+    ]);
   });
 });
