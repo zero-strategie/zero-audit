@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-import type { SnapshotRepository } from '../application/ports/snapshot-repository.js';
-import { EXIT_INTERRUPTED, runCli } from './run-cli.js';
+import { createInterruptController } from './interrupt-controller.js';
+import { runCli } from './run-cli.js';
 
-let interrupt: (() => void) | null = null;
+const interrupts = createInterruptController((code) => process.exit(code));
 
-process.once('SIGINT', () => interrupt?.());
+process.once('SIGINT', () => {
+  void interrupts.interrupt();
+});
 
 const exitCode = await runCli(
   process.argv.slice(2),
@@ -15,12 +17,8 @@ const exitCode = await runCli(
     stderrIsTty: process.stderr.isTTY,
   },
   {
-    onAuditStarted: (repository: SnapshotRepository, snapshotId: string) => {
-      interrupt = () => {
-        void repository.fail(snapshotId, new Date()).finally(() => {
-          process.exit(EXIT_INTERRUPTED);
-        });
-      };
+    onAuditStarted: (storage, snapshotId) => {
+      interrupts.onAuditStarted(storage, snapshotId);
     },
   },
 );

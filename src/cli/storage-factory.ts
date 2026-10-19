@@ -61,6 +61,7 @@ const openPostgres = async (databaseUrl: string): Promise<Storage> => {
     const reason = error instanceof Error ? error.message : String(error);
     throw new Error(
       `Connexion à ${redactDatabaseUrl(databaseUrl)} impossible : ${withoutPasswords(reason, databaseUrl)}`,
+      { cause: error },
     );
   }
   const repository = new PostgresSnapshotRepository(pool);
