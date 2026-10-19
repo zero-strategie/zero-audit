@@ -27,14 +27,27 @@ export const canonicalJson = (value: unknown): string => JSON.stringify(sortKeys
 export const occurrenceKey = (occurrence: IssueOccurrence): string =>
   canonicalJson([occurrence.checkId, occurrence.pageUrl, occurrence.info]);
 
-const occurrencesByKey = (occurrences: readonly IssueOccurrence[]): Map<string, IssueOccurrence> =>
-  new Map(occurrences.map((occurrence) => [occurrenceKey(occurrence), occurrence]));
+const groupByKey = (occurrences: readonly IssueOccurrence[]): Map<string, IssueOccurrence[]> => {
+  const groups = new Map<string, IssueOccurrence[]>();
+  for (const occurrence of occurrences) {
+    const key = occurrenceKey(occurrence);
+    groups.set(key, [...(groups.get(key) ?? []), occurrence]);
+  }
+  return groups;
+};
+
+/** Occurrences of `from` that have no counterpart in `other`; identical occurrences pair up one to one. */
+const unmatched = (
+  from: Map<string, IssueOccurrence[]>,
+  other: Map<string, IssueOccurrence[]>,
+): IssueOccurrence[] =>
+  [...from].flatMap(([key, group]) => group.slice(other.get(key)?.length ?? 0));
 
 const diffCheck = (previous: readonly IssueOccurrence[], current: CheckResult): CheckDiff => {
-  const before = occurrencesByKey(previous);
-  const after = occurrencesByKey(current.occurrences);
-  const added = [...after].filter(([key]) => !before.has(key)).map(([, o]) => o);
-  const removed = [...before].filter(([key]) => !after.has(key)).map(([, o]) => o);
+  const before = groupByKey(previous);
+  const after = groupByKey(current.occurrences);
+  const added = unmatched(after, before);
+  const removed = unmatched(before, after);
   return {
     checkId: current.checkId,
     count: current.count,

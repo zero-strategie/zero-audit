@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { SnapshotDetails } from '../../src/application/ports/snapshot-repository.js';
 import type { CheckResult, Severity } from '../../src/domain/check.js';
 import { Snapshot } from '../../src/domain/snapshot.js';
+import type { SnapshotReport } from '../../src/application/get-snapshot-report.js';
+import { diffChecks } from '../../src/domain/snapshot-diff.js';
 import { renderSummary } from '../../src/cli/render-summary.js';
 import { makePage } from '../support/check-fixtures.js';
 
@@ -57,8 +59,20 @@ const labels = new Map([
   [15, 'Meta en double'],
 ]);
 
+const previousResults: CheckResult[] = [
+  result(103, 'warning', 0, 5),
+  result(213, 'notice', 1, 4),
+  result(2, 'error', 3, 6),
+  result(1, 'error', 3, 6),
+];
+
+const report: SnapshotReport = {
+  details,
+  checkDiffs: diffChecks(previousResults, details.checkResults),
+};
+
 describe('renderSummary', () => {
-  const lines = renderSummary(details, labels).split('\n');
+  const lines = renderSummary(report, labels).split('\n');
 
   it('shows the snapshot id and the page count per status class', () => {
     const text = lines.join('\n');
@@ -79,11 +93,21 @@ describe('renderSummary', () => {
 
   it('lists triggered checks sorted by severity then id, hiding zero counts', () => {
     const checkLines = lines.filter((line) => line.includes(' – '));
-    expect(checkLines.map((line) => line.trim())).toEqual([
+    expect(checkLines.map((line) => line.trim().split(' – ').slice(0, 3).join(' – '))).toEqual([
       '1 – Erreurs serveur – 3 / 6',
       '2 – Erreurs client – 1 / 6',
       '103 – H1 absent – 2 / 5',
       '213 – Lien entrant unique – 1 / 4',
+    ]);
+  });
+
+  it('shows the signed delta, new and fixed occurrences of each check', () => {
+    const checkLines = lines.filter((line) => line.includes(' – ')).map((line) => line.trim());
+    expect(checkLines.map((line) => line.split(' – ').slice(3).join(' – '))).toEqual([
+      'Δ 0 – nouvelles 0 – corrigées 0',
+      'Δ -2 – nouvelles 0 – corrigées 2',
+      'Δ +2 – nouvelles 2 – corrigées 0',
+      'Δ 0 – nouvelles 0 – corrigées 0',
     ]);
   });
 });

@@ -38,10 +38,12 @@ describe('occurrenceKey', () => {
 });
 
 describe('diffChecks', () => {
-  const [o1, o2, o3] = ['/1', '/2', '/3'].map((path) => occurrence(15, `https://e.com${path}`));
+  const o1 = occurrence(15, 'https://e.com/1');
+  const o2 = occurrence(15, 'https://e.com/2');
+  const o3 = occurrence(15, 'https://e.com/3');
 
   it('reports new and fixed occurrences with a zero delta when counts are equal', () => {
-    const [diff] = diffChecks([result(15, [o1!, o2!])], [result(15, [o2!, o3!])]);
+    const [diff] = diffChecks([result(15, [o1, o2])], [result(15, [o2, o3])]);
 
     expect(diff).toMatchObject({ checkId: 15, count: 2, delta: 0, newCount: 1, fixedCount: 1 });
     expect(diff?.added).toEqual([o3]);
@@ -53,17 +55,17 @@ describe('diffChecks', () => {
       [
         result(
           8,
-          [o1!, o2!, o3!].map((o) => ({ ...o, checkId: 8 })),
+          [o1, o2, o3].map((o) => ({ ...o, checkId: 8 })),
         ),
       ],
-      [result(8, [{ ...o1!, checkId: 8 }])],
+      [result(8, [{ ...o1, checkId: 8 }])],
     );
 
     expect(diff).toMatchObject({ checkId: 8, count: 1, delta: -2, newCount: 0, fixedCount: 2 });
   });
 
   it('treats every occurrence as new without a previous snapshot', () => {
-    const diffs = diffChecks(null, [result(15, [o1!, o2!]), result(3, [])]);
+    const diffs = diffChecks(null, [result(15, [o1, o2]), result(3, [])]);
 
     expect(diffs).toMatchObject([
       { checkId: 15, count: 2, delta: 0, newCount: 2, fixedCount: 0 },
@@ -72,13 +74,21 @@ describe('diffChecks', () => {
   });
 
   it('gives zero deltas for identical results', () => {
-    const results = [result(15, [o1!, o2!])];
+    const results = [result(15, [o1, o2])];
 
     expect(diffChecks(results, results)).toMatchObject([{ delta: 0, newCount: 0, fixedCount: 0 }]);
   });
 
   it('treats a check absent from the previous snapshot as having no occurrence', () => {
-    const [diff] = diffChecks([], [result(15, [o1!])]);
+    const [diff] = diffChecks([], [result(15, [o1])]);
+
+    expect(diff).toMatchObject({ delta: 1, newCount: 1, fixedCount: 0 });
+  });
+
+  it('pairs identical occurrences one to one', () => {
+    const same = occurrence(15, 'https://e.com/1');
+
+    const [diff] = diffChecks([result(15, [same])], [result(15, [same, same])]);
 
     expect(diff).toMatchObject({ delta: 1, newCount: 1, fixedCount: 0 });
   });

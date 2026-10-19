@@ -1,5 +1,6 @@
 import { BfsCrawler } from '../application/bfs-crawler.js';
 import type { SnapshotRepository } from '../application/ports/snapshot-repository.js';
+import { GetSnapshotReport } from '../application/get-snapshot-report.js';
 import { RunAudit } from '../application/run-audit.js';
 import { CheckRegistry } from '../domain/check.js';
 import { allChecks } from '../domain/checks/index.js';
@@ -74,8 +75,9 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
       },
     });
     progress.finish();
-    io.stdout(renderSummary(details, labelsById()));
-    if (config.jsonPath !== null) writeJsonExport(config.jsonPath, details);
+    const report = await new GetSnapshotReport(repository).execute(details.snapshot.id);
+    io.stdout(renderSummary(report, labelsById()));
+    if (config.jsonPath !== null) writeJsonExport(config.jsonPath, report);
     return EXIT_SUCCESS;
   } catch (error) {
     progress.finish();

@@ -109,6 +109,25 @@ describe('runCli', () => {
     expect(run.err.endsWith('5/10\n')).toBe(true);
   });
 
+  it('reports zero deltas in the console and the JSON export for two audits of an unchanged site', async () => {
+    const args = [server.baseUrl, '--limit', '10', '--delay', '0', '--db', dbPath];
+    await runCli(args, {}, capture().io);
+    const jsonPath = join(dir, 'second.json');
+    const second = capture();
+
+    await runCli([...args, '--json', jsonPath], {}, second.io);
+
+    const exported = JSON.parse(readFileSync(jsonPath, 'utf8')) as {
+      checkResults: { delta: number; newCount: number; fixedCount: number }[];
+    };
+    expect(exported.checkResults).toHaveLength(15);
+    for (const result of exported.checkResults) {
+      expect(result).toMatchObject({ delta: 0, newCount: 0, fixedCount: 0 });
+    }
+    expect(second.out).toMatch(/ – Δ 0 – nouvelles 0 – corrigées 0/);
+    expect(second.out).not.toMatch(/nouvelles [1-9]/);
+  });
+
   it('rewrites a single progress line on a terminal', async () => {
     const run = capture(true);
 

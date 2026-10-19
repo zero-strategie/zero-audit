@@ -1,6 +1,7 @@
-import type { SnapshotDetails } from '../application/ports/snapshot-repository.js';
+import type { SnapshotReport } from '../application/get-snapshot-report.js';
 import type { CheckResult, Severity } from '../domain/check.js';
 import type { Page } from '../domain/crawl.js';
+import type { CheckDiff } from '../domain/snapshot-diff.js';
 
 const SEVERITY_ORDER: readonly Severity[] = ['error', 'warning', 'notice'];
 const SEVERITY_TITLES: Readonly<Record<Severity, string>> = {
@@ -34,8 +35,16 @@ const occurrencesBySeverity = (results: readonly CheckResult[], severity: Severi
 
 const severityRank = (severity: Severity): number => SEVERITY_ORDER.indexOf(severity);
 
+const signedDelta = (delta: number): string => (delta > 0 ? `+${String(delta)}` : String(delta));
+
+const evolution = (diff: CheckDiff | undefined): string =>
+  diff
+    ? ` – Δ ${signedDelta(diff.delta)} – nouvelles ${String(diff.newCount)} – corrigées ${String(diff.fixedCount)}`
+    : '';
+
 const triggeredLines = (
   results: readonly CheckResult[],
+  diffs: readonly CheckDiff[],
   labels: ReadonlyMap<number, string>,
 ): string[] =>
   results
@@ -43,11 +52,11 @@ const triggeredLines = (
     .sort((a, b) => severityRank(a.severity) - severityRank(b.severity) || a.checkId - b.checkId)
     .map(
       (result) =>
-        `  ${String(result.checkId)} – ${labels.get(result.checkId) ?? 'Check inconnu'} – ${String(result.count)} / ${String(result.examined)}`,
+        `  ${String(result.checkId)} – ${labels.get(result.checkId) ?? 'Check inconnu'} – ${String(result.count)} / ${String(result.examined)}${evolution(diffs.find((diff) => diff.checkId === result.checkId))}`,
     );
 
 export const renderSummary = (
-  details: SnapshotDetails,
+  { details, checkDiffs }: SnapshotReport,
   labels: ReadonlyMap<number, string>,
 ): string => {
   const { snapshot, pages, checkResults } = details;
@@ -65,7 +74,7 @@ export const renderSummary = (
     ),
     '',
     'Checks déclenchés',
-    ...triggeredLines(checkResults, labels),
+    ...triggeredLines(checkResults, checkDiffs, labels),
     '',
   ].join('\n');
 };
