@@ -20,7 +20,10 @@ export const duplicateOccurrences = (
   for (const group of groups.values()) {
     if (group.length < 2) continue;
     for (const page of group) {
-      const duplicates = group.filter((other) => other !== page).map((other) => other.url);
+      const duplicates = group
+        .filter((other) => other !== page)
+        .map((other) => other.url)
+        .sort();
       occurrences.push({ checkId, pageUrl: page.url, info: { duplicates } });
     }
   }

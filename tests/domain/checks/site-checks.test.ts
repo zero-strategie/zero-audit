@@ -31,6 +31,17 @@ describe('check 6 (duplicate title)', () => {
     expect(result.examined).toBe(3);
   });
 
+  it('lists duplicates in a stable order whatever the crawl order', () => {
+    const titled = (path: string) => makePage(u(path), { title: 'Accueil' });
+    const forward = run(6, [titled('a'), titled('b'), titled('c')]);
+    const backward = run(6, [titled('c'), titled('b'), titled('a')]);
+
+    const infoOf = (result: CheckResult, url: string) =>
+      result.occurrences.find((o) => o.pageUrl === url)?.info;
+    expect(infoOf(backward, u('a'))).toEqual(infoOf(forward, u('a')));
+    expect(infoOf(backward, u('a'))).toEqual({ duplicates: [u('b'), u('c')] });
+  });
+
   it('never treats missing or empty titles as duplicates', () => {
     const result = run(6, [
       makePage(u('a'), { title: null }),
