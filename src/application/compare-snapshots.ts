@@ -4,6 +4,7 @@ import {
   SnapshotsFromDifferentProjects,
 } from '../domain/errors.js';
 import type { Snapshot } from '../domain/snapshot.js';
+import { buildScoreCard, type ScoreCard } from '../domain/scoring.js';
 import { diffChecks, type CheckDiff } from '../domain/snapshot-diff.js';
 import type { SnapshotDetails, SnapshotRepository } from './ports/snapshot-repository.js';
 
@@ -12,6 +13,8 @@ export interface SnapshotComparison {
   readonly target: Snapshot;
   /** `count` is the target's count; `delta` is target minus base. */
   readonly checkDiffs: readonly CheckDiff[];
+  /** Scores of the target, their variation being target minus base. */
+  readonly scores: ScoreCard;
 }
 
 export class CompareSnapshots {
@@ -31,6 +34,7 @@ export class CompareSnapshots {
       base: base.snapshot,
       target: target.snapshot,
       checkDiffs: diffChecks(base.checkResults, target.checkResults),
+      scores: buildScoreCard(base.checkResults, target.checkResults),
     };
   }
 

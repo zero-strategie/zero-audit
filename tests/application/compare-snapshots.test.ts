@@ -82,4 +82,15 @@ describe('CompareSnapshots', () => {
     await expect(useCase.execute(a, b)).rejects.toBeInstanceOf(SnapshotNotFinished);
     await expect(useCase.execute(b, a)).rejects.toBeInstanceOf(SnapshotNotFinished);
   });
+
+  it('scores B with its variation against A', async () => {
+    const { record, useCase } = build();
+    const a = await record('p', 0, 'finished', [check15('o1')]);
+    const b = await record('p', 10, 'finished', [check15('o1', 'o2')]);
+
+    const comparison = await useCase.execute(a, b);
+
+    expect(comparison.scores.health).toEqual({ score: 60, variation: -20 });
+    expect(comparison.scores.themes['on-page']).toEqual({ score: 60, variation: -20 });
+  });
 });

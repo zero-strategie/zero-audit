@@ -95,4 +95,25 @@ describe('GetSnapshotReport', () => {
 
     await expect(useCase.execute('missing')).rejects.toBeInstanceOf(SnapshotNotFound);
   });
+
+  it('scores the snapshot and its variation since the previous finished one', async () => {
+    const { record, useCase } = build();
+    await record(0, 'finished', [check15('o1', 'o2')]);
+    const current = await record(10, 'finished', [check15('o1')]);
+
+    const report = await useCase.execute(current);
+
+    expect(report.scores.health).toEqual({ score: 80, variation: 20 });
+    expect(report.scores.themes['on-page']).toEqual({ score: 80, variation: 20 });
+    expect(report.scores.themes.https).toEqual({ score: null, variation: null });
+  });
+
+  it('has no score variation for the first snapshot of a project', async () => {
+    const { record, useCase } = build();
+    const first = await record(0, 'finished', [check15('o1')]);
+
+    const report = await useCase.execute(first);
+
+    expect(report.scores.health).toEqual({ score: 80, variation: null });
+  });
 });
