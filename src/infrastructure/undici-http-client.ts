@@ -63,7 +63,7 @@ export class UndiciHttpClient implements HttpClient {
         headers: Object.fromEntries(response.headers),
         body,
         truncated,
-        responseTimeMs: this.options.clock.now() - startedAt,
+        responseTimeMs: Math.round(this.options.clock.now() - startedAt),
       };
     } catch (error) {
       return {

@@ -22,6 +22,17 @@ const expectResponse = (result: Awaited<ReturnType<UndiciHttpClient['get']>>): H
 };
 
 describe('UndiciHttpClient', () => {
+  it('reports the response time as a whole number of milliseconds', async () => {
+    server = await startFixtureServer({ '/': { status: 200, body: 'ok' } });
+    const readings = [10.25, 12.5];
+    const clock = { now: () => readings.shift() ?? 0 };
+    const client = new UndiciHttpClient({ clock, userAgent: buildUserAgent() });
+
+    const response = expectResponse(await client.get(`${server.baseUrl}/`));
+
+    expect(response.responseTimeMs).toBe(2);
+  });
+
   it('sends the ZeroAuditBot user-agent built from the package version', async () => {
     server = await startFixtureServer({ '/': { status: 200, body: 'ok' } });
 
