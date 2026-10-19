@@ -81,7 +81,9 @@ Exit codes: 0 success, 1 crawl failure (snapshot marked `failed`), 2 invalid usa
 pnpm zero-audit serve [--port <n>] [--db <path>] [--store <sqlite|postgres>]
 ```
 
-Starts a read-only HTTP API on `127.0.0.1` (port 3000 by default, `--port` to change it; there is no host option). There is no authentication and no CORS: the API is meant to be read by the dashboard's server on the same machine, so do not expose the port. `--db`, `--store` and `DATABASE_URL` behave as for an audit. Ctrl+C stops the server and releases the storage.
+Starts a read-only HTTP API. It listens on `HOST` (default `127.0.0.1`) and on `--port`, else `PORT`, else 3000. An invalid port (not an integer between 1 and 65535) makes the command fail with a message and a non-zero exit code. Set `HOST=0.0.0.0` only inside a container. There is no authentication and no CORS: the API must only be published on `127.0.0.1` (for example `127.0.0.1:3000:3000` in Docker), the dashboard's server reading it from the same machine. `--db`, `--store` and `DATABASE_URL` behave as for an audit. Ctrl+C (SIGINT) and `SIGTERM` (`docker stop`) release the storage: an audit in progress is marked `failed`; a stopped `serve` closes the server, then the storage, and exits 0.
+
+The web server (`web/`, Astro standalone) reads `HOST`, `PORT` and `ZERO_AUDIT_API_URL` at runtime; they take precedence over `server.host` and `server.port` in `web/astro.config.mjs`, which only apply to `astro dev`. `.env.example` lists the variables of each image.
 
 | Route | Answer |
 | --- | --- |

@@ -25,4 +25,21 @@ describe('local Postgres setup files', () => {
       expect(readme).toContain(term);
     }
   });
+
+  it('documents HOST and PORT for the API and the web image in .env.example', () => {
+    const example = read('.env.example');
+    for (const variable of ['HOST', 'PORT', 'ZERO_AUDIT_API_URL']) {
+      expect(example).toMatch(new RegExp(`^#? ?${variable}=`, 'm'));
+    }
+    expect(example).toMatch(/API image/i);
+    expect(example).toMatch(/web image/i);
+  });
+
+  it('documents HOST and the exposure warning in the README', () => {
+    const readme = read('README.md');
+    expect(readme).not.toContain('no host option');
+    expect(readme).toContain('`HOST`');
+    expect(readme).toContain('SIGTERM');
+    expect(readme).toMatch(/only be published on `127\.0\.0\.1`/);
+  });
 });

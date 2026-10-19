@@ -5,7 +5,7 @@ export const USAGE = `Usage : zero-audit [audit] <url> [options]
 Commandes
   audit <url>       lance un audit (commande par défaut : « audit » est facultatif)
   compare <A> <B>   compare deux snapshots terminés du même site (A = base, B = cible)
-  serve             démarre l'API HTTP en lecture seule sur 127.0.0.1
+  serve             démarre l'API HTTP en lecture seule (HOST, défaut 127.0.0.1)
 
 Arguments
   url               URL de départ de l'audit (http ou https)
@@ -18,7 +18,7 @@ Options
                     variable ZERO_AUDIT_DB_PATH)
   --store <type>    stockage : sqlite (défaut) ou postgres (variable ZERO_AUDIT_STORE ;
                     postgres exige la variable DATABASE_URL)
-  --port <n>        port de l'API pour serve (défaut : 3000)
+  --port <n>        port de l'API pour serve (défaut : PORT, sinon 3000)
   --json <fichier>  écrit le snapshot complet au format JSON
   --help            affiche cette aide
 `;

@@ -86,3 +86,36 @@ describe('createInterruptController', () => {
     expect(calls).toEqual(['server-close', 'close', 'exit:130']);
   });
 });
+
+describe('createInterruptController terminate (SIGTERM)', () => {
+  it('marks the running snapshot failed, closes the storage, then exits 143', async () => {
+    const calls: string[] = [];
+    const controller = createInterruptController((code) => {
+      calls.push(`exit:${String(code)}`);
+    });
+    controller.onStorageOpened(fakeStorage(calls));
+    controller.onAuditStarted('snap-1');
+
+    await controller.terminate();
+
+    expect(calls).toEqual(['fail:snap-1', 'close', 'exit:143']);
+  });
+
+  it('closes the server then the storage and exits 0 when serving', async () => {
+    const calls: string[] = [];
+    const controller = createInterruptController((code) => {
+      calls.push(`exit:${String(code)}`);
+    });
+    controller.onStorageOpened(fakeStorage(calls));
+    controller.onServerStarted({
+      close: () => {
+        calls.push('server-close');
+        return Promise.resolve();
+      },
+    });
+
+    await controller.terminate();
+
+    expect(calls).toEqual(['server-close', 'close', 'exit:0']);
+  });
+});

@@ -8,6 +8,10 @@ process.once('SIGINT', () => {
   void interrupts.interrupt();
 });
 
+process.once('SIGTERM', () => {
+  void interrupts.terminate();
+});
+
 const exitCode = await runCli(
   process.argv.slice(2),
   process.env,
