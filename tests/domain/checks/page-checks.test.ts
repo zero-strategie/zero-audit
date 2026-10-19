@@ -113,6 +113,31 @@ describe('check 104 (multiple H1)', () => {
   });
 });
 
+describe('check 105 (H1 equals title)', () => {
+  it('flags a page whose H1 equals the title once normalized', () => {
+    const result = run(105, [makePage(u('a'), { title: 'Accueil  Zero', h1: ['accueil zero'] })]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('flags a page once even when several H1 equal the title', () => {
+    const result = run(105, [
+      makePage(u('a'), { title: 'Zero', h1: ['Autre', 'zero', ' ZERO '] }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('ignores pages without title, without H1 or with different H1', () => {
+    const result = run(105, [
+      makePage(u('no-title'), { title: null, h1: ['Zero'] }),
+      makePage(u('no-h1'), { title: 'Zero', h1: [] }),
+      makePage(u('different'), { title: 'Zero', h1: ['Autre'] }),
+      makePage(u('non-html'), { isHtml: false, title: 'Zero', h1: ['Zero'] }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(3);
+  });
+});
+
 describe('check 106 (meta description missing)', () => {
   it('flags null and empty descriptions', () => {
     const result = run(106, [
@@ -164,6 +189,7 @@ describe('registry metadata', () => {
       106: 'warning',
       117: 'warning',
       104: 'notice',
+      105: 'warning',
     });
   });
 
