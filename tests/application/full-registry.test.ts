@@ -21,6 +21,7 @@ describe('full check registry', () => {
       [104, 'notice'],
       [105, 'warning'],
       [106, 'warning'],
+      [112, 'warning'],
       [117, 'warning'],
       [125, 'warning'],
       [137, 'notice'],

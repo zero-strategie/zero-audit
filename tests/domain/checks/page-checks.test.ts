@@ -159,6 +159,26 @@ describe('check 117 (low word count)', () => {
   });
 });
 
+describe('check 112 (low text ratio)', () => {
+  it('flags a ratio of 0.09 but not exactly 0.10, with the ratio', () => {
+    const result = run(112, [
+      makePage(u('low'), { textRatio: 0.09 }),
+      makePage(u('limit'), { textRatio: 0.1 }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('low')]);
+    expect(result.occurrences[0]?.info).toEqual({ textRatio: 0.09 });
+  });
+
+  it('ignores non-HTML pages, 404 pages and unknown ratios', () => {
+    const result = run(112, [
+      makePage(u('img'), { isHtml: false, textRatio: null }),
+      makePage(u('notfound'), { status: 404, textRatio: 0.01 }),
+      makePage(u('old'), { textRatio: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+});
+
 describe('non-HTML resources', () => {
   it('are counted by no content check', () => {
     const image = makePage(u('logo.png'), {
@@ -168,8 +188,9 @@ describe('non-HTML resources', () => {
       h1: [],
       metaDescription: null,
       wordCount: null,
+      textRatio: null,
     });
-    for (const id of [3, 101, 102, 103, 104, 106, 117]) {
+    for (const id of [3, 101, 102, 103, 104, 106, 112, 117]) {
       expect(run(id, [image]).examined).toBe(0);
     }
   });
@@ -185,6 +206,7 @@ describe('registry metadata', () => {
       102: 'warning',
       103: 'warning',
       106: 'warning',
+      112: 'warning',
       117: 'warning',
       104: 'notice',
       105: 'warning',

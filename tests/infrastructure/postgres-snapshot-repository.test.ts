@@ -18,7 +18,10 @@ const CONTENT_TABLES =
   'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects';
 
 const readMigration = (file: string): string =>
-  readFileSync(join(import.meta.dirname, '../../src/infrastructure/postgres/migrations', file), 'utf8');
+  readFileSync(
+    join(import.meta.dirname, '../../src/infrastructure/postgres/migrations', file),
+    'utf8',
+  );
 
 const canonical = (value: unknown): string =>
   JSON.stringify(value, (_key, nested: unknown) =>

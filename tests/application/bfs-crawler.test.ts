@@ -265,7 +265,11 @@ describe('BfsCrawler traversal', () => {
 
     expect(pageAt(result, '/')).toMatchObject({ title: 'T', h1: ['H'], wordCount: 4 });
     expect(pageAt(result, '/')?.contentHash).toMatch(/^[0-9a-f]{64}$/);
-    expect(pageAt(result, '/gone')).toMatchObject({ title: null, wordCount: null, textRatio: null });
+    expect(pageAt(result, '/gone')).toMatchObject({
+      title: null,
+      wordCount: null,
+      textRatio: null,
+    });
     expect(pageAt(result, '/')?.textRatio).toBeGreaterThan(0);
   });
 
