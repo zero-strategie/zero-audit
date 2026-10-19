@@ -135,7 +135,10 @@ describe('runCli', () => {
 
     const exported = JSON.parse(readFileSync(jsonPath, 'utf8')) as {
       checkResults: { delta: number; newCount: number; fixedCount: number }[];
+      scores: { health: { score: number; variation: number | null } };
     };
+    expect(Number.isInteger(exported.scores.health.score)).toBe(true);
+    expect(exported.scores.health.variation).toBe(0);
     expect(exported.checkResults).toHaveLength(16);
     for (const result of exported.checkResults) {
       expect(result).toMatchObject({ delta: 0, newCount: 0, fixedCount: 0 });

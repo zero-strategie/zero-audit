@@ -60,6 +60,16 @@ it('shows the five page groups with their variation', async () => {
   expect(html).toMatch(/data-testid="group-healthy"[^]*?\+3/);
 });
 
+it('shows a dash for a page group whose variation is null', async () => {
+  const report = aReport();
+  const html = await renderReport({
+    ...report,
+    pageGroups: { ...report.pageGroups, healthy: { count: 20, variation: null } },
+  });
+
+  expect(html).toMatch(/data-testid="group-healthy"[^>]*>[^<]*20 \(—\)/);
+});
+
 it('lists the top issues with a link to their detail', async () => {
   const html = await renderReport(aReport());
 
