@@ -3,6 +3,7 @@ import { load, type CheerioAPI } from 'cheerio';
 import type { HtmlParser, ParsedHtml, RawLink } from '../application/ports/html-parser.js';
 import { resolveUrl } from '../domain/url.js';
 
+const TEXT_NODE_TYPE = 3;
 const NON_VISIBLE_SELECTOR = 'script, style, noscript, template';
 
 const normalizeSpaces = (text: string): string => text.replace(/\s+/g, ' ').trim();
@@ -68,7 +69,7 @@ export class CheerioHtmlParser implements HtmlParser {
       .addBack()
       .contents()
       .toArray()
-      .flatMap((node) => (node.type === 'text' ? [node.data] : []))
+      .flatMap((node) => (node.nodeType === TEXT_NODE_TYPE ? [node.data] : []))
       .join(' ');
     return text.split(/\s+/u).filter((word) => word !== '').length;
   }
