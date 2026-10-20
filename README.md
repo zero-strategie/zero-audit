@@ -56,7 +56,7 @@ Options (an option wins over its environment variable, which wins over the defau
 SQLite stays the default. To use Postgres, start the local database and point `DATABASE_URL` at it (see `.env.example`; the schema is migrated automatically on first use):
 
 ```
-POSTGRES_PASSWORD=<your password> docker compose up -d
+POSTGRES_PASSWORD=<your password> docker compose up -d postgres
 DATABASE_URL=postgresql://zero_audit:<your password>@127.0.0.1:5432/zero_audit \
   pnpm zero-audit https://exemple.com --store postgres
 ```
@@ -109,3 +109,33 @@ Both servers expose `GET /health` for `deploy.sh` and the deployment job. The bo
 Any other method on the API's `/health` answers 404. **Requirement for zero-infra:** Caddy protects the application with basic auth, so `/health` must be exempted from it on both hosts; otherwise the health check of `deploy.sh` and of the deployment job gets a 401.
 
 Errors share one format: `{ "error": { "code": "not_found" | "invalid_request", "message": "…" } }` (404 unknown id or route, 400 malformed id). Any non-GET method answers 404. An unexpected failure answers 500 with the code `internal_error` and a generic message.
+
+## Docker
+
+One `Dockerfile` builds two images (Node 22 `bookworm-slim`, amd64, non-root user):
+
+```
+docker build --target api -t zero-audit-api .   # core, CLI, API and SQL migrations
+docker build --target web -t zero-audit-web .   # Astro standalone server
+```
+
+The api image uses `node dist/cli/main.js` as its entry point and `serve` (with `HOST=0.0.0.0`, port 3000) as its default command, so the same image runs the other commands:
+
+```
+docker run --rm zero-audit-api migrate --store postgres      # with DATABASE_URL
+docker run --rm zero-audit-api audit https://exemple.com
+```
+
+The web image runs `node dist/server/entry.mjs` on port 4321 and reads `ZERO_AUDIT_API_URL`. Both images carry the `org.opencontainers.image.source` label pointing to this repository.
+
+`docker-compose.yml` starts the whole stack locally: `postgres` (16), `migrate` (runs once), then `api` and `web`, which wait for `migrate` to finish successfully. Every port is published on `127.0.0.1` only.
+
+```
+POSTGRES_PASSWORD=<your password> docker compose up --build
+curl http://127.0.0.1:3000/health   # API
+curl http://127.0.0.1:4321/health   # web (reflects the API health)
+```
+
+The Postgres volume is `postgres-16-data`: a volume created by the former Postgres 17 setup cannot be opened by version 16 and is left untouched.
+
+Docker is not required to develop or to run the local test suite (`pnpm test`); the CI builds both images, without pushing them, in the `verify` job.
