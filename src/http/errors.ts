@@ -20,6 +20,8 @@ const HTTP_INTERNAL_ERROR = 500;
 const INTERNAL_MESSAGE = 'Internal server error';
 const PRIVATE_ADDRESS_MESSAGE =
   'Adresse interne refusée : le site cible une adresse réseau non publique';
+const auditAlreadyRunningMessage = (error: AuditAlreadyRunning): string =>
+  `Un audit est déjà en cours depuis ${error.startedAt.toISOString()} : attendez qu'il se termine avant d'en lancer un autre`;
 const HOST_NOT_RESOLVED_MESSAGE = 'Site introuvable : le nom de domaine ne résout pas';
 
 const INVALID_URL_MESSAGE =
@@ -80,7 +82,7 @@ export const registerErrorHandlers = (app: FastifyInstance): void => {
       return send(reply, HTTP_BAD_REQUEST, 'invalid_request', HOST_NOT_RESOLVED_MESSAGE);
     }
     if (error instanceof AuditAlreadyRunning) {
-      return send(reply, HTTP_CONFLICT, 'conflict', error.message);
+      return send(reply, HTTP_CONFLICT, 'conflict', auditAlreadyRunningMessage(error));
     }
     request.log.error({ err: error }, 'Unhandled error');
     return send(reply, HTTP_INTERNAL_ERROR, 'internal_error', INTERNAL_MESSAGE);
