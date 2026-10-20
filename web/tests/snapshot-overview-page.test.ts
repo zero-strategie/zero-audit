@@ -153,3 +153,22 @@ it('draws the health gauge, one card per theme and severity badges for top issue
   expect(html.match(/class="theme-card"/g)).toHaveLength(5);
   expect(html).toContain('severity-badge severity-warning');
 });
+
+const relaunchFormOf = (html: string) => html.match(/<form[^>]*action="\/audits\/new"[^]*?<\/form>/)?.[0] ?? '';
+
+it('offers to relaunch the audit with the snapshot page limit when it is allowed', async () => {
+  const base = aReport();
+  const html = await renderReport(aReport({ snapshot: { ...base.snapshot, pagesLimit: 500 } }));
+  const form = relaunchFormOf(html);
+
+  expect(form).toContain('name="url" value="https://alpha.test/"');
+  expect(form).toContain('name="limit" value="500"');
+  expect(form).toMatch(/Relancer l(?:'|&#39;)audit/);
+});
+
+it('relaunches with 100 pages when the snapshot limit is not offered', async () => {
+  const base = aReport();
+  const html = await renderReport(aReport({ snapshot: { ...base.snapshot, pagesLimit: 30 } }));
+
+  expect(relaunchFormOf(html)).toContain('name="limit" value="100"');
+});

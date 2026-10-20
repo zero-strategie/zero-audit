@@ -2,12 +2,13 @@
 interface Props {
   url: string;
   limit: number;
+  label?: string;
 }
-const { url, limit } = Astro.props;
+const { url, limit, label = 'Relancer' } = Astro.props;
 ---
 
 <form method="post" action="/audits/new">
   <input type="hidden" name="url" value={url} />
   <input type="hidden" name="limit" value={limit} />
-  <button type="submit" class="button-primary">Relancer</button>
+  <button type="submit" class="button-primary">{label}</button>
 </form>
