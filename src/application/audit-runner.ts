@@ -32,6 +32,8 @@ export interface AuditProgress {
 interface ActiveAudit {
   startedAt: Date;
   stopRequested: boolean;
+  /** Once the crawl owns a snapshot, only its completion may release the lock. */
+  snapshotCreated: boolean;
   /** Set once the snapshot exists; live counters live here, not in the database. */
   snapshot: { id: string; rootUrl: string; pagesLimit: number; pagesCrawled: number } | null;
   done: Promise<void>;
@@ -61,7 +63,7 @@ export class AuditRunner {
       await this.assertNoRunningSnapshotElsewhere();
       return await this.launch(active, request);
     } catch (error) {
-      this.release(active);
+      if (!active.snapshotCreated) this.release(active);
       throw error;
     }
   }
@@ -117,6 +119,7 @@ export class AuditRunner {
     const active: ActiveAudit = {
       startedAt: new Date(this.dependencies.clock.now()),
       stopRequested: false,
+      snapshotCreated: false,
       snapshot: null,
       done: Promise.resolve(),
     };
@@ -150,6 +153,7 @@ export class AuditRunner {
           },
           onSnapshotCreated: (id) => {
             created = true;
+            active.snapshotCreated = true;
             resolve(id);
           },
         })

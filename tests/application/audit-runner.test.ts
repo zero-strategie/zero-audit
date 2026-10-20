@@ -114,6 +114,20 @@ describe('AuditRunner.start locking', () => {
     ).rejects.toBeInstanceOf(AuditAlreadyRunning);
   });
 
+  it('keeps the lock while the crawl runs when reading the new snapshot fails', async () => {
+    const harness = new Harness();
+    vi.spyOn(harness.snapshots, 'getById').mockRejectedValueOnce(new Error('read failed'));
+
+    await expect(harness.runner.start({ rootUrl: ROOT, limit: 100 })).rejects.toThrow(
+      'read failed',
+    );
+
+    vi.spyOn(harness.snapshots, 'listRunning').mockResolvedValue([]);
+    await expect(
+      harness.runner.start({ rootUrl: ROOT, limit: 100 }),
+    ).rejects.toBeInstanceOf(AuditAlreadyRunning);
+  });
+
   it('rejects with the start date of a running snapshot created less than 6 hours ago elsewhere', async () => {
     const harness = new Harness();
     const project = await harness.projects.findOrCreateByRootUrl({
