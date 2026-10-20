@@ -33,11 +33,50 @@ it('lists each project with root URL, health, French date and a link to its late
   expect(html).toMatch(/href="\/snapshots\/s9"/);
 });
 
+it('links to the audit launch form', async () => {
+  const html = await (await render(() => Promise.resolve([aProject()]))).text();
+
+  expect(html).toMatch(/<a [^>]*href="\/audits\/new"[^>]*>\s*Nouvel audit/);
+});
+
+it('shows a running project as in progress with a link to its audit', async () => {
+  const html = await (
+    await render(() =>
+      Promise.resolve([aProject({ latestRun: { id: 'r7', status: 'running', startedAt: '2026-03-06T09:00:00.000Z' } })]),
+    )
+  ).text();
+
+  expect(html).toMatch(/<a [^>]*href="\/audits\/r7"[^>]*>\s*en cours…/);
+});
+
+it('shows a failed project as failed', async () => {
+  const html = await (
+    await render(() =>
+      Promise.resolve([aProject({ latestRun: { id: 'r8', status: 'failed', startedAt: '2026-03-06T09:00:00.000Z' } })]),
+    )
+  ).text();
+
+  expect(html).toContain('échoué');
+});
+
+it('offers a relaunch form posting the root URL with 100 pages', async () => {
+  const html = await (await render(() => Promise.resolve([aProject()]))).text();
+
+  expect(html).toMatch(/<form[^>]*action="\/audits\/new"[^]*?name="url" value="https:\/\/alpha.test\/"[^]*?name="limit" value="100"[^]*?Relancer/);
+});
+
+it('names the site in each relaunch button for screen readers', async () => {
+  const html = await (await render(() => Promise.resolve([aProject()]))).text();
+
+  expect(html).toContain(`aria-label="Relancer l'audit de alpha.test"`);
+});
+
 it('invites to run a first audit when there is no project', async () => {
   const html = await (await render(() => Promise.resolve([]))).text();
 
   expect(html).toContain("Aucun audit n'a encore été lancé");
-  expect(html).toContain('pnpm zero-audit &lt;url&gt;');
+  expect(html).toMatch(/<a [^>]*href="\/audits\/new"/);
+  expect(html).not.toContain('pnpm zero-audit');
 });
 
 it('renders a 502 error page when the API is unreachable', async () => {

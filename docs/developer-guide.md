@@ -163,7 +163,7 @@ Migrations are **additive**: never edit one that has shipped. Add a new file to 
 
 ## HTTP API
 
-The API is read-only and has no authentication. It listens on `HOST:PORT`, `127.0.0.1:3000` by default. Routes live in `src/http/routes/`. Their inputs are validated by JSON schemas, and the response bodies are shaped by `presenters.ts`.
+The API has no authentication (**no authentication, loopback only**): it listens on `HOST:PORT`, `127.0.0.1:3000` by default. Apart from `POST /audits`, it is read-only. Routes live in `src/http/routes/`. Their inputs are validated by JSON schemas, and the response bodies are shaped by `presenters.ts`.
 
 | Route | Answer |
 |---|---|
@@ -175,7 +175,19 @@ The API is read-only and has no authentication. It listens on `HOST:PORT`, `127.
 | `GET /snapshots/:id/issues?severity=` | every check with `count`, `examined`, delta, new and fixed counts |
 | `GET /snapshots/:id/issues/:checkId?page=&limit=` | occurrences of one check, paginated |
 | `GET /snapshots/:id/pages?page=&limit=&sort=` | crawled pages with group, issue count and response time. `sort` is one of `url`, `status`, `depth`, `issues`, `responseTime`, prefixed with `-` for descending order. |
+| `GET /snapshots/:id/progress` | `200 {status, pagesCrawled, pagesLimit, startedAt, rootUrl}`; `404` for an unknown id. See [Background audits](#background-audits-auditrunner). |
+| `POST /audits` | launches a background audit, see below |
 | `GET /compare?a=&b=` | comparison of two finished snapshots of the same project |
+
+### `POST /audits`
+
+Body: `{ "url": "https://site.test/", "limit": 100 }`. `url` is required and must start with `http://` or `https://` (no scheme is added for the caller). `limit` is one of 50, 100, 250 or 500 and defaults to 100. The call returns as soon as the snapshot exists; follow it with `GET /snapshots/:id/progress`.
+
+- **202** `{ "snapshotId", "projectId" }`: the audit runs in the background.
+- **400** `invalid_request`: bad body or `limit`; a host with at least one non-public address (literal IP, or any resolved address); a domain that does not resolve (`Site introuvable : le nom de domaine ne résout pas`). Nothing is started.
+- **409** `conflict`: an audit is already running; the message carries the start date of the blocking audit.
+
+The address check (`LaunchAudit`, `HostResolver` port, `DnsHostResolver` adapter) is a fast pre-check; the connection-time guard of the HTTP client remains the authority. `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true` turns both off. `PUT`, `DELETE` and `GET` on `/audits` answer 404.
 
 Pagination:
 
@@ -183,13 +195,34 @@ Pagination:
 - `limit` defaults to 50, with a maximum of 200;
 - responses carry `items`, `total`, `page` and `limit`.
 
-Errors share one format: `{ "error": { "code": "not_found" | "invalid_request" | "internal_error", "message": "…" } }`.
+Errors share one format: `{ "error": { "code": "not_found" | "invalid_request" | "conflict" | "internal_error", "message": "…" } }`.
 
 - **404**: unknown id or route.
 - **400**: invalid parameter, or a comparison across sites.
+- **409**: an audit is already running.
 - **500**: unexpected failure, returned with a generic message.
 
 Tests use `fastify.inject()` and never open a port. See `tests/http/`.
+
+## SSRF guard
+
+The server (`serve`) crawls any public site on request, so its HTTP client must never reach an internal service such as Postgres or the API on the Docker network. `UndiciHttpClient` enforces this when built with `blockPrivateAddresses: true`; the `audit` command does not enable it.
+
+- **Refused ranges** (`src/domain/network-address.ts`, `isPublicAddress`): `0.0.0.0/8`, `10/8`, `100.64/10`, `127/8`, `169.254/16`, `172.16/12`, `192.168/16`, `224/4` and `240/4` (including `255.255.255.255`), plus `::`, `::1`, `fc00::/7`, `fe80::/10` and every IPv4-mapped address (`::ffff:0:0/96`).
+- **Name resolution**: the undici agent has a custom `connect.lookup`. It keeps only public addresses and fails if none is left, so a host with one internal and one public address is still reachable on the public one. Node 22 calls `lookup` with `all: true` (autoSelectFamily), others with the simple form; both are handled. Checking at connection time also covers DNS rebinding and every redirect hop, because redirects are not followed by the client: each hop is a new request.
+- **Literal IPs**: `lookup` is not called for an IP in the URL, so `get` checks `new URL(url).hostname` before `fetch` (`new URL` already normalises forms such as `0x7f.1` to `127.0.0.1`).
+- **`blocked`**: a refused request is a `NetworkFailure` of kind `blocked`. The crawler records it like any other network error; if the root itself is blocked the audit fails with `RootUnreachable`.
+- **`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`**: read by `serve` only. The exact value `true` turns the guard off (`allowPrivateTargets`); `TRUE`, `1` or `yes` do not.
+
+### Background audits (`AuditRunner`)
+
+`src/application/audit-runner.ts` runs one audit at a time inside the `serve` process, without making the caller wait for the crawl.
+
+- **Lock**: global, all projects together. It is held in memory and, for audits started by another process, by any `running` snapshot younger than `ORPHAN_AUDIT_MAX_AGE_MS` (6 hours, `src/domain/snapshot.ts`). `start` then rejects with `AuditAlreadyRunning`, which carries the start date of the blocking audit. The CLI `audit` command is not blocked by this lock, so a scheduled audit and one launched from the server may overlap.
+- **Orphans**: `serve` runs `FailOrphanedAudits` at startup and marks every `running` snapshot older than 6 hours as `failed`. Younger ones keep blocking until they age out; to unblock by hand, set the snapshot to `failed` in the database.
+- **Progress**: `GET /snapshots/:id/progress` calls `progress(snapshotId)`, which reads the page counter from memory for the audit it runs, and from the database otherwise (0 pages for a `running` snapshot owned by another process).
+- **Shutdown**: on SIGINT / SIGTERM the server is closed, then `stop()` aborts the crawl at its next page (the progress callback throws), marks the snapshot `failed`, and only then is the storage closed.
+- **Config**: `serve` reads `ZERO_AUDIT_DELAY_MS` like `audit`.
 
 ## Dashboard
 
@@ -202,6 +235,8 @@ Tests use `fastify.inject()` and never open a port. See `tests/http/`.
 Dashboard tests render pages and components with Astro's **Container API** and a stubbed API client. They need no browser. See `web/tests/`.
 
 The dashboard reads `HOST`, `PORT` and `ZERO_AUDIT_API_URL` at runtime. For the dev server, `pnpm --filter web dev` serves it on `127.0.0.1:4321`.
+
+Form posts are protected twice. Astro's `security.checkOrigin` stays on, and `isSameOrigin` (`web/src/lib/same-origin.ts`) is called by every page that handles a POST. Behind Caddy the server only sees `127.0.0.1:4321`, so `astro.config.mjs` sets `security.allowedDomains` from `ZERO_AUDIT_PUBLIC_HOSTS` (comma-separated host names, read at **build** time, for example `audit.zero-strategie.dev`). Astro then trusts `X-Forwarded-Host` and `X-Forwarded-Proto` for these hosts only, which is safe because the server listens on loopback and Caddy overwrites those headers. Without the variable, any host over https is accepted. The `Dockerfile` exposes it as a build argument (`--build-arg ZERO_AUDIT_PUBLIC_HOSTS=...`); the CI does not pass it yet, so published images use the fallback. A POST from another origin still gets a 403.
 
 ## Testing
 

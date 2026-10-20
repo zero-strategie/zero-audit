@@ -27,6 +27,9 @@ export interface ServeConfig extends StoreSelection {
   host: string;
   port: number;
   dbPath: string;
+  /** Disables the SSRF guard; only the exact value `true` of the environment variable does. */
+  allowPrivateTargets: boolean;
+  delayMs: number;
 }
 
 export interface MigrateConfig extends StoreSelection {
@@ -51,6 +54,7 @@ export const DEFAULT_DB_PATH = './.zero-audit/audit.db';
 
 const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
 const DB_ENV = 'ZERO_AUDIT_DB_PATH';
+const ALLOW_PRIVATE_TARGETS_ENV = 'ZERO_AUDIT_ALLOW_PRIVATE_TARGETS';
 const STORE_ENV = 'ZERO_AUDIT_STORE';
 const HOST_ENV = 'HOST';
 const PORT_ENV = 'PORT';
@@ -155,6 +159,8 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
     host: env[HOST_ENV] ?? DEFAULT_HOST,
     port,
     dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
+    allowPrivateTargets: env[ALLOW_PRIVATE_TARGETS_ENV] === 'true',
+    delayMs: parseInteger(env[DELAY_ENV] ?? String(DEFAULT_DELAY_MS), DELAY_ENV, 0),
     ...parseStore(values.store, env),
   };
 };

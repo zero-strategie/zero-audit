@@ -1,11 +1,13 @@
 ---
 import ErrorView from '../../../components/ErrorView.astro';
 import HealthGauge from '../../../components/HealthGauge.astro';
+import RelaunchForm from '../../../components/RelaunchForm.astro';
 import SeverityBadge from '../../../components/SeverityBadge.astro';
 import SnapshotSelector from '../../../components/SnapshotSelector.astro';
 import ThemeCard from '../../../components/ThemeCard.astro';
 import Layout from '../../../layouts/Layout.astro';
 import type { SnapshotListing, SnapshotReport, Theme } from '../../../lib/api/types';
+import { relaunchLimit } from '../../../lib/audit-limits';
 import { toFailure } from '../../../lib/failure';
 import { PAGE_GROUP_LABELS, SITE_FILE_LABELS } from '../../../lib/labels';
 import { formatVariation } from '../../../lib/presentation';
@@ -38,6 +40,7 @@ const siteFileStatus = (status: number | null, error: string | null) =>
     <Layout title="Vue d'ensemble – zero-audit" projectId={report.snapshot.projectId} snapshotId={report.snapshot.id}>
       <h1>Vue d'ensemble</h1>
       <SnapshotSelector snapshots={snapshots} currentId={report.snapshot.id} />
+      <RelaunchForm url={report.snapshot.rootUrl} limit={relaunchLimit(report.snapshot.pagesLimit)} label="Relancer l'audit" />
 
       <section>
         <h2>Santé du site</h2>

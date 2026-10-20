@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ApiUnreachable, InvalidRequest, NotFound } from '../src/lib/api/errors';
+import { ApiUnreachable, Conflict, InvalidRequest, NotFound } from '../src/lib/api/errors';
 import { resolveApiBaseUrl } from '../src/lib/api/config';
 import { fetchApiClient } from '../src/lib/api/fetch-api-client';
 
@@ -18,6 +18,91 @@ describe('resolveApiBaseUrl', () => {
     expect(resolveApiBaseUrl({ ZERO_AUDIT_API_URL: 'http://api.test:9/' })).toBe(
       'http://api.test:9',
     );
+  });
+});
+
+describe('fetchApiClient audit launch', () => {
+  const apiError = (message: string, status: number) =>
+    json({ error: { code: 'x', message } }, status);
+
+  it('startAudit posts the url and limit as JSON and returns the ids on 202', async () => {
+    const requests: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchImpl: typeof fetch = (input, init) => {
+      requests.push({ url: typeof input === 'string' ? input : '', init });
+      return Promise.resolve(json({ snapshotId: 's9', projectId: 'p9' }, 202));
+    };
+
+    const started = await fetchApiClient(BASE_URL, fetchImpl).startAudit({
+      url: 'https://e.com/',
+      limit: 50,
+    });
+
+    expect(started).toEqual({ snapshotId: 's9', projectId: 'p9' });
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toBe(`${BASE_URL}/audits`);
+    expect(requests[0]?.init?.method).toBe('POST');
+    expect(new Headers(requests[0]?.init?.headers).get('content-type')).toBe('application/json');
+    expect(JSON.parse(requests[0]?.init?.body as string)).toEqual({
+      url: 'https://e.com/',
+      limit: 50,
+    });
+  });
+
+  it('startAudit translates a 400 into InvalidRequest with the API message', async () => {
+    const client = fetchApiClient(BASE_URL, () =>
+      Promise.resolve(apiError('Adresse refusée', 400)),
+    );
+
+    await expect(client.startAudit({ url: 'x', limit: 100 })).rejects.toEqual(
+      new InvalidRequest('Adresse refusée'),
+    );
+  });
+
+  it('startAudit translates a 409 into Conflict with the API message', async () => {
+    const client = fetchApiClient(BASE_URL, () =>
+      Promise.resolve(apiError('Un audit est déjà en cours', 409)),
+    );
+
+    const failure = await client
+      .startAudit({ url: 'x', limit: 100 })
+      .catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Conflict);
+    expect((failure as Error).message).toBe('Un audit est déjà en cours');
+  });
+
+  it('startAudit reports an unexpected status as ApiUnreachable', async () => {
+    const client = fetchApiClient(BASE_URL, () => Promise.resolve(json({}, 500)));
+
+    await expect(client.startAudit({ url: 'x', limit: 100 })).rejects.toBeInstanceOf(
+      ApiUnreachable,
+    );
+  });
+
+  it('getAuditProgress reads /snapshots/:id/progress', async () => {
+    const calls: string[] = [];
+    const progress = {
+      status: 'running',
+      pagesCrawled: 3,
+      pagesLimit: 100,
+      startedAt: '2026-03-05T09:00:00.000Z',
+      rootUrl: 'https://e.com/',
+    };
+    const fetchImpl: typeof fetch = (input) => {
+      calls.push(typeof input === 'string' ? input : '');
+      return Promise.resolve(json(progress));
+    };
+
+    const result = await fetchApiClient(BASE_URL, fetchImpl).getAuditProgress('a/b');
+
+    expect(result).toEqual(progress);
+    expect(calls).toEqual([`${BASE_URL}/snapshots/a%2Fb/progress`]);
+  });
+
+  it('getAuditProgress translates a 404 into NotFound', async () => {
+    const client = fetchApiClient(BASE_URL, () => Promise.resolve(json({}, 404)));
+
+    await expect(client.getAuditProgress('missing')).rejects.toBeInstanceOf(NotFound);
   });
 });
 

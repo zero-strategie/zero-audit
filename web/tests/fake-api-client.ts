@@ -1,5 +1,6 @@
 import type { ApiClient } from '../src/lib/api/api-client';
 import type {
+  AuditProgress,
   CheckComparison,
   Comparison,
   IssueRow,
@@ -7,6 +8,7 @@ import type {
   ProjectOverview,
   SnapshotListing,
   SnapshotReport,
+  StartedAudit,
 } from '../src/lib/api/types';
 
 const unexpected = (): never => {
@@ -21,6 +23,8 @@ export const fakeApiClient = (overrides: Partial<ApiClient>): ApiClient => ({
   listPages: unexpected,
   listProjectSnapshots: unexpected,
   compare: unexpected,
+  startAudit: unexpected,
+  getAuditProgress: unexpected,
   checkHealth: unexpected,
   ...overrides,
 });
@@ -30,6 +34,7 @@ export const aProject = (overrides: Partial<ProjectOverview> = {}): ProjectOverv
   rootUrl: 'https://alpha.test/',
   createdAt: '2026-01-01T00:00:00.000Z',
   latestSnapshot: { id: 's1', finishedAt: '2026-03-05T10:00:00.000Z', health: 82 },
+  latestRun: { id: 's1', status: 'finished', startedAt: '2026-03-05T09:00:00.000Z' },
   ...overrides,
 });
 
@@ -37,6 +42,7 @@ export const aReport = (overrides: Partial<SnapshotReport> = {}): SnapshotReport
   snapshot: {
     id: 's1',
     projectId: 'p1',
+    rootUrl: 'https://alpha.test/',
     status: 'finished',
     startedAt: '2026-03-05T09:00:00.000Z',
     finishedAt: '2026-03-05T10:00:00.000Z',
@@ -130,5 +136,20 @@ export const aComparison = (overrides: Partial<Comparison> = {}): Comparison => 
   health: aReport().health,
   themes: aReport().themes,
   checks: [],
+  ...overrides,
+});
+
+export const aStartedAudit = (overrides: Partial<StartedAudit> = {}): StartedAudit => ({
+  snapshotId: 's2',
+  projectId: 'p1',
+  ...overrides,
+});
+
+export const anAuditProgress = (overrides: Partial<AuditProgress> = {}): AuditProgress => ({
+  status: 'running',
+  pagesCrawled: 12,
+  pagesLimit: 100,
+  startedAt: '2026-03-05T09:00:00.000Z',
+  rootUrl: 'https://alpha.test/',
   ...overrides,
 });

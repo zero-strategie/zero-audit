@@ -1,0 +1,61 @@
+---
+import ErrorView from '../../components/ErrorView.astro';
+import Layout from '../../layouts/Layout.astro';
+import { ALLOWED_LIMITS, DEFAULT_LIMIT } from '../../lib/audit-limits';
+import { Conflict, InvalidRequest } from '../../lib/api/errors';
+import { toFailure } from '../../lib/failure';
+import { isSameOrigin } from '../../lib/same-origin';
+
+const HTTP_FORBIDDEN = 403;
+const HTTP_SEE_OTHER = 303;
+
+let url = '';
+let limit: number = DEFAULT_LIMIT;
+let message: string | null = null;
+let failure = null;
+
+if (Astro.request.method === 'POST') {
+  if (!isSameOrigin(Astro.request)) return new Response('Forbidden', { status: HTTP_FORBIDDEN });
+  const form = await Astro.request.formData();
+  url = String(form.get('url') ?? '').trim();
+  const requestedLimit = Number(form.get('limit'));
+  limit = Number.isInteger(requestedLimit) ? requestedLimit : DEFAULT_LIMIT;
+  try {
+    const { snapshotId } = await Astro.locals.apiClient.startAudit({ url, limit });
+    return Astro.redirect(`/audits/${encodeURIComponent(snapshotId)}`, HTTP_SEE_OTHER);
+  } catch (error) {
+    if (error instanceof InvalidRequest || error instanceof Conflict) {
+      message = error.message;
+    } else {
+      failure = toFailure(error);
+      Astro.response.status = failure.status;
+    }
+  }
+}
+---
+
+{
+  failure ? (
+    <ErrorView failure={failure} />
+  ) : (
+    <Layout title="Lancer un audit – zero-audit">
+      <h1>Lancer un audit</h1>
+      {message && <p class="alert alert-error" role="alert">{message}</p>}
+      <form method="post" action="/audits/new">
+        <label>
+          Adresse du site
+          <input type="url" name="url" value={url} placeholder="https://exemple.fr/" required />
+        </label>
+        <label>
+          Pages maximum
+          <select name="limit">
+            {ALLOWED_LIMITS.map((allowed) => (
+              <option value={allowed} selected={allowed === limit}>{allowed}</option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" class="button-primary">Lancer l'audit</button>
+      </form>
+    </Layout>
+  )
+}

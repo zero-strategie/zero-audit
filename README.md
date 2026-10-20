@@ -1,6 +1,6 @@
 # zero-audit
 
-Open-source technical SEO audit tool. zero-audit crawls a website, runs [20 checks](docs/checks.md), scores the site's health and tracks every change between two audits. You can use it from the command line, through a read-only HTTP API, or in a web dashboard.
+Open-source technical SEO audit tool. zero-audit crawls a website, runs [20 checks](docs/checks.md), scores the site's health and tracks every change between two audits. You can use it from the command line, through an HTTP API, or in a web dashboard.
 
 - **Crawler**:
   - honours robots.txt and sitemaps;
@@ -19,7 +19,7 @@ Open-source technical SEO audit tool. zero-audit crawls a website, runs [20 chec
   - variation since the previous audit.
 - **History**: every audit is an immutable snapshot, with new and fixed issues and a `compare` command.
 - **Storage**: SQLite out of the box, or Postgres.
-- **Dashboard**: built with Astro, responsive, with a dark mode. The interface is in French.
+- **Dashboard**: built with Astro, responsive, with a dark mode. The interface is in French. You can launch an audit, follow its progress and relaunch it from the dashboard.
 
 ## Quick start
 

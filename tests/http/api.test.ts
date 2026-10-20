@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CheckResult, Severity, Theme } from '../../src/domain/check.js';
 import type { SiteFile } from '../../src/domain/crawl.js';
+import { idleAuditDependencies } from '../support/audit-doubles.js';
 import { buildServer } from '../../src/http/server.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
@@ -59,7 +60,7 @@ describe('read-only HTTP API', () => {
   beforeEach(() => {
     projects = new InMemoryProjectRepository();
     snapshots = new InMemorySnapshotRepository();
-    app = buildServer({ projects, snapshots, health: snapshots });
+    app = buildServer({ projects, snapshots, health: snapshots, ...idleAuditDependencies() });
   });
 
   afterEach(async () => {
@@ -88,14 +89,33 @@ describe('read-only HTTP API', () => {
           rootUrl: 'https://e.com/',
           createdAt: minutes(0).toISOString(),
           latestSnapshot: { id: latest, finishedAt: minutes(11).toISOString(), health: 90 },
+          latestRun: { id: latest, status: 'finished', startedAt: minutes(10).toISOString() },
         },
         {
           id: expect.any(String) as string,
           rootUrl: 'https://other.com/',
           createdAt: minutes(5).toISOString(),
           latestSnapshot: null,
+          latestRun: null,
         },
       ]);
+    });
+
+    it('gives a running snapshot as latest run of the project', async () => {
+      const project = await newProject('https://e.com/');
+      const { id } = await snapshots.create({
+        projectId: project.id,
+        pagesLimit: 10,
+        startedAt: minutes(20),
+      });
+
+      const response = await app.inject('/projects');
+
+      expect(response.json<{ latestRun: unknown }[]>()[0]?.latestRun).toEqual({
+        id,
+        status: 'running',
+        startedAt: minutes(20).toISOString(),
+      });
     });
   });
 
@@ -170,6 +190,7 @@ describe('read-only HTTP API', () => {
       expect(body).toMatchObject({
         snapshot: {
           id,
+          rootUrl: 'https://e.com/',
           status: 'finished',
           startedAt: minutes(10).toISOString(),
           finishedAt: minutes(11).toISOString(),

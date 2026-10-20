@@ -1,4 +1,8 @@
-import { fetch } from 'undici';
+import { lookup, type LookupAddress, type LookupOptions } from 'node:dns';
+import { isIP } from 'node:net';
+import { Agent, fetch } from 'undici';
+import { PrivateAddressRejected } from '../domain/errors.js';
+import { isPublicAddress, normalizeIpLiteral } from '../domain/network-address.js';
 import type { Clock } from '../application/ports/clock.js';
 import type {
   HttpClient,
@@ -22,7 +26,52 @@ export interface UndiciHttpClientOptions {
   userAgent: string;
   timeoutMs?: number;
   maxBodyBytes?: number;
+  /** Refuse hosts that are, or resolve to, non-public addresses (SSRF guard). */
+  blockPrivateAddresses?: boolean;
+  /** Name resolution used by the guard; injected in tests to avoid the network. */
+  resolver?: Resolver;
 }
+
+type Resolver = (hostname: string) => Promise<LookupAddress[]>;
+
+type LookupCallback = (
+  error: NodeJS.ErrnoException | null,
+  address: string | LookupAddress[],
+  family?: number,
+) => void;
+
+const systemResolver: Resolver = (hostname) =>
+  new Promise((resolve, reject) => {
+    lookup(hostname, { all: true }, (error, addresses) => {
+      if (error) reject(error);
+      else resolve(addresses);
+    });
+  });
+
+/**
+ * Node's connect() may ask for every address (`all: true`, autoSelectFamily) or for a
+ * single one; both forms must return only public addresses.
+ */
+export const createPublicLookup =
+  (resolve: Resolver) =>
+  (hostname: string, options: LookupOptions, callback: LookupCallback): void => {
+    resolve(hostname).then(
+      (addresses) => {
+        const publicAddresses = addresses.filter(({ address }) => isPublicAddress(address));
+        const [first] = publicAddresses;
+        if (first === undefined) {
+          callback(new PrivateAddressRejected(hostname, addresses[0]?.address ?? 'none'), []);
+        } else if (options.all === true) {
+          callback(null, publicAddresses);
+        } else {
+          callback(null, first.address, first.family);
+        }
+      },
+      (error: unknown) => {
+        callback(error instanceof Error ? error : new Error(String(error)), []);
+      },
+    );
+  };
 
 const errorCode = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null) return undefined;
@@ -31,7 +80,18 @@ const errorCode = (error: unknown): string | undefined => {
   return errorCode(cause);
 };
 
+const isBlocked = (error: unknown): boolean => {
+  if (error instanceof PrivateAddressRejected) return true;
+  return error instanceof Error && error.cause !== undefined && isBlocked(error.cause);
+};
+
+const isNonPublicLiteral = (url: string): boolean => {
+  const host = normalizeIpLiteral(new URL(url).hostname);
+  return isIP(host) !== 0 && !isPublicAddress(host);
+};
+
 const classify = (error: unknown): NetworkFailureKind => {
+  if (isBlocked(error)) return 'blocked';
   if (error instanceof Error && error.name === 'TimeoutError') return 'timeout';
   const code = errorCode(error);
   if (code !== undefined && DNS_ERROR_CODES.has(code)) return 'dns';
@@ -42,16 +102,24 @@ const classify = (error: unknown): NetworkFailureKind => {
 export class UndiciHttpClient implements HttpClient {
   private readonly timeoutMs: number;
   private readonly maxBodyBytes: number;
+  private readonly guardedAgent: Agent | undefined;
 
   constructor(private readonly options: UndiciHttpClientOptions) {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
+    this.guardedAgent = options.blockPrivateAddresses
+      ? new Agent({ connect: { lookup: createPublicLookup(options.resolver ?? systemResolver) } })
+      : undefined;
   }
 
   async get(url: string): Promise<HttpResponse | NetworkFailure> {
     const startedAt = this.options.clock.now();
     try {
+      if (this.guardedAgent && isNonPublicLiteral(url)) {
+        throw new PrivateAddressRejected(new URL(url).hostname, new URL(url).hostname);
+      }
       const response = await fetch(url, {
+        ...(this.guardedAgent && { dispatcher: this.guardedAgent }),
         redirect: 'manual',
         headers: { 'user-agent': this.options.userAgent },
         signal: AbortSignal.timeout(this.timeoutMs),

@@ -53,3 +53,34 @@ export class UnknownCheck extends DomainError {
     this.name = 'UnknownCheck';
   }
 }
+
+export class PrivateAddressRejected extends DomainError {
+  constructor(
+    readonly host: string,
+    readonly address: string,
+  ) {
+    super(`Host ${host} resolves to a non-public address (${address})`);
+    this.name = 'PrivateAddressRejected';
+  }
+}
+
+export class AuditAlreadyRunning extends DomainError {
+  constructor(readonly startedAt: Date) {
+    super(`An audit is already running since ${startedAt.toISOString()}`);
+    this.name = 'AuditAlreadyRunning';
+  }
+}
+
+export class HostNotResolved extends DomainError {
+  constructor(readonly host: string) {
+    super(`Host ${host} does not resolve`);
+    this.name = 'HostNotResolved';
+  }
+}
+
+export class InvalidAuditUrl extends DomainError {
+  constructor(readonly url: string) {
+    super('Audit URL is not a complete http(s) address');
+    this.name = 'InvalidAuditUrl';
+  }
+}

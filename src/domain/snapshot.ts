@@ -1,5 +1,8 @@
 import { SnapshotImmutable } from './errors.js';
 
+/** A `running` snapshot older than this is an orphan of a killed process, not a live audit. */
+export const ORPHAN_AUDIT_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+
 export type SnapshotStatus = 'running' | 'finished' | 'failed';
 
 export interface SnapshotProps {

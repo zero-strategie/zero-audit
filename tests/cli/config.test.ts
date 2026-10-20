@@ -118,7 +118,32 @@ describe('parseCommand subcommands', () => {
       dbPath: './.zero-audit/audit.db',
       store: 'sqlite',
       databaseUrl: null,
+      allowPrivateTargets: false,
+      delayMs: 1000,
     });
+  });
+
+  it.each([
+    ['true', true],
+    ['TRUE', false],
+    ['1', false],
+    ['yes', false],
+    ['', false],
+  ])('reads ZERO_AUDIT_ALLOW_PRIVATE_TARGETS="%s" as allowPrivateTargets %s', (value, expected) => {
+    const command = parseCommand(['serve'], { ZERO_AUDIT_ALLOW_PRIVATE_TARGETS: value });
+
+    expect(command).toMatchObject({ kind: 'serve', allowPrivateTargets: expected });
+  });
+
+  it('reads the serve delay from ZERO_AUDIT_DELAY_MS', () => {
+    expect(parseCommand(['serve'], { ZERO_AUDIT_DELAY_MS: '250' })).toMatchObject({
+      kind: 'serve',
+      delayMs: 250,
+    });
+  });
+
+  it('rejects an invalid ZERO_AUDIT_DELAY_MS for serve', () => {
+    expect(parseCommand(['serve'], { ZERO_AUDIT_DELAY_MS: 'x' }).kind).toBe('usage-error');
   });
 
   it('reads the serve host and port from HOST and PORT', () => {

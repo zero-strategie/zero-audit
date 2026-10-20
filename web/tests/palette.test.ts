@@ -34,6 +34,8 @@ const TEXT_PAIRS = [
   ['--color-notice-text', '--color-notice-bg'],
   ['--color-error-text', '--color-bg'],
   ['--color-success-text', '--color-bg'],
+  ['--color-input-text', '--color-input-bg'],
+  ['--color-button-text', '--color-button-bg'],
 ] as const;
 
 const ratioIn = (
@@ -54,6 +56,17 @@ it.each(TEXT_PAIRS)(
     expect(ratioIn(dark, [foreground, background])).toBeGreaterThanOrEqual(MIN_RATIO);
   },
 );
+
+const MIN_GRAPHIC_RATIO = 3;
+
+it.each([
+  ['light', light],
+  ['dark', dark],
+])('%s mode: the progress bar stands out from its track by at least 3', (_, palette) => {
+  expect(
+    ratioIn(palette, ['--color-progress-fill', '--color-progress-track']),
+  ).toBeGreaterThanOrEqual(MIN_GRAPHIC_RATIO);
+});
 
 it('redefines every light color token in dark mode', () => {
   expect(light.size).toBeGreaterThan(0);

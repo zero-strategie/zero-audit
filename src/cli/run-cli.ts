@@ -1,22 +1,16 @@
-import { BfsCrawler } from '../application/bfs-crawler.js';
+import { AuditRunner } from '../application/audit-runner.js';
+import { FailOrphanedAudits } from '../application/fail-orphaned-audits.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetSnapshotReport } from '../application/get-snapshot-report.js';
-import { RunAudit } from '../application/run-audit.js';
-import { CheckRegistry } from '../domain/check.js';
 import {
   SnapshotNotFinished,
   SnapshotNotFound,
   SnapshotsFromDifferentProjects,
 } from '../domain/errors.js';
 import { allChecks } from '../domain/checks/index.js';
-import { CheerioHtmlParser } from '../infrastructure/cheerio-html-parser.js';
-import { FastXmlSitemapReader } from '../infrastructure/fast-xml-sitemap-reader.js';
 import { JsonLinesAuditEvents } from '../infrastructure/json-lines-audit-events.js';
-import { RealSleeper } from '../infrastructure/real-sleeper.js';
-import { RobotsParserAdapter } from '../infrastructure/robots-parser-adapter.js';
+import { DnsHostResolver } from '../infrastructure/dns-host-resolver.js';
 import { SystemClock } from '../infrastructure/system-clock.js';
-import { UndiciHttpClient } from '../infrastructure/undici-http-client.js';
-import { buildUserAgent } from '../infrastructure/user-agent.js';
 import { buildServer, type HttpServer, type ServerDependencies } from '../http/server.js';
 import {
   parseCommand,
@@ -25,6 +19,7 @@ import {
   type MigrateConfig,
   type ServeConfig,
 } from './config.js';
+import { createRunAudit } from './audit-factory.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
 import { renderComparison } from './render-compare.js';
@@ -52,6 +47,8 @@ export interface CliHooks {
   onStorageOpened?(storage: Storage): void;
   /** Lets the process entry point mark the snapshot failed on SIGINT. */
   onAuditStarted?(snapshotId: string, rootUrl: string): void;
+  /** Lets the process entry point stop the background audit on SIGINT / SIGTERM. */
+  onAuditRunnerStarted?(runner: AuditRunner): void;
   /** Lets the process entry point stop the server on SIGINT. */
   onServerStarted?(server: HttpServer): void;
   /** Builds the HTTP server; defaults to the Fastify API. */
@@ -65,34 +62,6 @@ export interface CliHooks {
 const labelsById = (): ReadonlyMap<number, string> =>
   new Map(allChecks.map((check) => [check.id, check.label]));
 
-const buildRunAudit = (storage: Storage, io: CliIo): RunAudit => {
-  const clock = new SystemClock();
-  const http = new UndiciHttpClient({ clock, userAgent: buildUserAgent() });
-  const crawler = new BfsCrawler({
-    http,
-    robotsFactory: new RobotsParserAdapter(),
-    sitemapReader: new FastXmlSitemapReader(),
-    htmlParser: new CheerioHtmlParser(),
-    clock,
-    sleeper: new RealSleeper(),
-  });
-  return new RunAudit({
-    crawler,
-    repository: storage.snapshots,
-    projects: storage.projects,
-    registry: new CheckRegistry(allChecks),
-    clock,
-    events: new JsonLinesAuditEvents(
-      {
-        write: (text) => {
-          io.stdout(text);
-        },
-      },
-      clock,
-    ),
-  });
-};
-
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -105,7 +74,20 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
     const opened = await (hooks.storageFactory ?? createStorage)(config);
     storage = opened;
     hooks.onStorageOpened?.(opened);
-    const details = await buildRunAudit(opened, io).execute({
+    const clock = new SystemClock();
+    const runAudit = createRunAudit({
+      storage: opened,
+      events: new JsonLinesAuditEvents(
+        {
+          write: (text) => {
+            io.stdout(text);
+          },
+        },
+        clock,
+      ),
+      blockPrivateAddresses: false,
+    });
+    const details = await runAudit.execute({
       rootUrl: config.rootUrl,
       limit: config.limit,
       delayMs: config.delayMs,
@@ -117,7 +99,9 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
       },
     });
     progress.finish();
-    const report = await new GetSnapshotReport(opened.snapshots).execute(details.snapshot.id);
+    const report = await new GetSnapshotReport(opened.snapshots, opened.projects).execute(
+      details.snapshot.id,
+    );
     io.stdout(renderSummary(report, labelsById()));
     if (config.jsonPath !== null) writeJsonExport(config.jsonPath, report);
     return EXIT_SUCCESS;
@@ -144,13 +128,41 @@ const migrate = async (config: MigrateConfig, io: CliIo): Promise<number> => {
 const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<number> => {
   let storage: Storage | null = null;
   let server: HttpServer | null = null;
+  let runner: AuditRunner | null = null;
   try {
-    storage = await (hooks.storageFactory ?? createStorage)(config);
-    hooks.onStorageOpened?.(storage);
+    const opened = await (hooks.storageFactory ?? createStorage)(config);
+    storage = opened;
+    hooks.onStorageOpened?.(opened);
+    const clock = new SystemClock();
+    await new FailOrphanedAudits(opened.snapshots, clock).execute();
+    runner = new AuditRunner({
+      createRunAudit: (events) =>
+        createRunAudit({
+          storage: opened,
+          events,
+          blockPrivateAddresses: !config.allowPrivateTargets,
+        }),
+      snapshots: opened.snapshots,
+      projects: opened.projects,
+      clock,
+      logger: {
+        info: (message) => {
+          io.stderr(`${message}\n`);
+        },
+        error: (message) => {
+          io.stderr(`${message}\n`);
+        },
+      },
+      delayMs: config.delayMs,
+    });
+    hooks.onAuditRunnerStarted?.(runner);
     server = (hooks.createServer ?? buildServer)({
       projects: storage.projects,
       snapshots: storage.snapshots,
       health: storage.health,
+      auditRunner: runner,
+      hostResolver: new DnsHostResolver(),
+      allowPrivateTargets: config.allowPrivateTargets,
     });
     hooks.onServerStarted?.(server);
     await server.listen({ host: config.host, port: config.port });
@@ -162,6 +174,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
     return EXIT_CRAWL_FAILED;
   } finally {
     await server?.close();
+    await runner?.stop();
     await storage?.close();
   }
 };

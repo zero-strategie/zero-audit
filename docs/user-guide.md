@@ -5,7 +5,7 @@ zero-audit is a technical SEO audit tool. It crawls a website the way a search e
 It has three parts:
 
 - a **command line** (`zero-audit`) that runs audits and compares them;
-- a read-only **HTTP API** (`zero-audit serve`);
+- an **HTTP API** (`zero-audit serve`);
 - a **web dashboard** that reads the API.
 
 Every audit is stored as an immutable **snapshot**, in SQLite (the default) or in Postgres.
@@ -160,14 +160,25 @@ For a production build of the dashboard, run `pnpm --filter web build`, then `pn
 
 | Screen | What it shows |
 |---|---|
-| Projects | Every audited site, with its latest health score and date. |
-| Overview | Health gauge, theme cards, counts per severity, page groups, top 5 issues, status of robots.txt, sitemap and llms.txt. An audit selector opens older audits. |
+| Projects | Every audited site, with its latest health score, date and status, a **New audit** button and a **Relancer** (relaunch) button per site. |
+| Overview | A **Relancer l'audit** button, health gauge, theme cards, counts per severity, page groups, top 5 issues, status of robots.txt, sitemap and llms.txt. An audit selector opens older audits. |
 | Issues | All checks grouped by severity, passed ones included, with an optional severity filter. |
 | Issue detail | The occurrences of one check, paginated. |
 | Crawled pages | Every page with its status, depth, group, issue count and response time. Sortable and paginated. |
 | Compare | Pick two audits of the same site and see scores and differences side by side. |
 
 The dashboard works on mobile and follows your system's dark mode.
+
+### Launch an audit from the dashboard
+
+Click **Nouvel audit** on the projects page, enter the site address (with `https://`) and choose the maximum number of pages: 50, 100 (default), 250 or 500. The page then follows the audit and refreshes itself until it ends.
+
+- **Relaunch**: the projects page relaunches a site with 100 pages. The overview relaunches with the page limit of the audit you are viewing, if it is one of the four choices, otherwise with 100.
+- **Internal addresses are refused.** The server rejects addresses that resolve to a private, loopback or link-local network, so the dashboard cannot be used to reach your internal services. Developers can lift this guard on a trusted machine with `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true`.
+- **One audit at a time.** While an audit started from the dashboard is running, any other launch is refused with a message giving the start date of the running audit.
+- **Manual unlock after a crash.** If the server stops during an audit, that audit stays `running` and blocks new launches. Either wait 6 hours, after which it is ignored, or set the snapshot status to `failed` in the database.
+- **Weekly audit.** The command line, and so a cron job or systemd timer, is not blocked by this rule. A weekly audit and an audit started from the dashboard can run at the same time and double the load on the audited site. While an audit run by another process is in progress, the dashboard shows "en cours" with no page count.
+- **Third-party content.** You can audit any public site. The pages' metadata and links are stored, and they may contain third-party content, including personal data. The crawler honours robots.txt and identifies itself, but audit only sites you are entitled to crawl.
 
 ## Store audits in Postgres
 
@@ -221,6 +232,8 @@ audit.example.com {
 }
 ```
 
+The dashboard can start audits, so the machine now makes outgoing requests to any public site you type in. Keep the authentication on, and know that the weekly timer below can run while an audit started from the dashboard is in progress.
+
 Only expose the dashboard. It calls the API from the server side, so the API never needs to be reachable from outside.
 
 To audit the site on a schedule, run `zero-audit <url>` from cron or a systemd timer, for example `docker compose run --rm migrate audit https://example.com`. The dashboard then shows the trend.
@@ -246,7 +259,7 @@ Each audit writes JSON lines to stdout (`audit.started`, `audit.finished` with t
 ```text
 zero-audit [audit] <url> [options]   run an audit (the word "audit" is optional)
 zero-audit compare <A> <B>           compare two finished audits of the same site
-zero-audit serve                     start the read-only HTTP API
+zero-audit serve                     start the HTTP API
 zero-audit migrate                   apply storage migrations and exit
 ```
 
