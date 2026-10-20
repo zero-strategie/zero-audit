@@ -1,11 +1,13 @@
 import type { CheckRegistry } from '../domain/check.js';
 import { SnapshotNotFound } from '../domain/errors.js';
 import { normalizeUrl } from '../domain/url.js';
+import type { AuditEvents } from './ports/audit-events.js';
 import type { Clock } from './ports/clock.js';
 import type { Crawler } from './ports/crawler.js';
 import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotDetails, SnapshotRepository } from './ports/snapshot-repository.js';
 import { runChecks } from './run-checks.js';
+import { healthOf } from './snapshot-health.js';
 
 export interface RunAuditDependencies {
   crawler: Crawler;
@@ -13,6 +15,7 @@ export interface RunAuditDependencies {
   projects: ProjectRepository;
   registry: CheckRegistry;
   clock: Clock;
+  events: AuditEvents;
 }
 
 export interface AuditRequest {
@@ -27,7 +30,7 @@ export class RunAudit {
   constructor(private readonly dependencies: RunAuditDependencies) {}
 
   async execute(request: AuditRequest): Promise<SnapshotDetails> {
-    const { repository, projects, clock } = this.dependencies;
+    const { repository, projects, clock, events } = this.dependencies;
     const startedAt = new Date(clock.now());
     const project = await projects.findOrCreateByRootUrl({
       rootUrl: normalizeUrl(request.rootUrl),
@@ -39,10 +42,19 @@ export class RunAudit {
       startedAt,
     });
     request.onSnapshotCreated?.(snapshot.id);
+    const identity = { snapshotId: snapshot.id, rootUrl: request.rootUrl };
+    events.started(identity);
     try {
-      return await this.crawlAndPersist(snapshot.id, request);
+      const details = await this.crawlAndPersist(snapshot.id, request);
+      events.finished({
+        ...identity,
+        pagesCount: details.snapshot.pagesCrawled,
+        health: await healthOf(repository, details.snapshot),
+      });
+      return details;
     } catch (error) {
       await repository.fail(snapshot.id, new Date(clock.now()));
+      events.failed(identity);
       throw error;
     }
   }

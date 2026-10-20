@@ -132,7 +132,7 @@ describe('runCli storage wiring', () => {
         controller.onStorageOpened(storage);
       },
       onAuditStarted: (id) => {
-        controller.onAuditStarted(id);
+        controller.onAuditStarted(id, server.baseUrl);
         pending = controller.interrupt();
       },
     });

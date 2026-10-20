@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AuditEvents } from '../../src/application/ports/audit-events.js';
 import type { Crawler, CrawlerRequest } from '../../src/application/ports/crawler.js';
 import { RunAudit } from '../../src/application/run-audit.js';
 import { CheckRegistry } from '../../src/domain/check.js';
@@ -51,7 +52,24 @@ class FakeCrawler implements Crawler {
   }
 }
 
-const build = (crawler: Crawler) => {
+class RecordingEvents implements AuditEvents {
+  readonly calls: string[] = [];
+  readonly payloads: unknown[] = [];
+  started(event: unknown): void {
+    this.calls.push('started');
+    this.payloads.push(event);
+  }
+  finished(event: unknown): void {
+    this.calls.push('finished');
+    this.payloads.push(event);
+  }
+  failed(event: unknown): void {
+    this.calls.push('failed');
+    this.payloads.push(event);
+  }
+}
+
+const build = (crawler: Crawler, events: AuditEvents = new RecordingEvents()) => {
   const repository = new InMemorySnapshotRepository();
   const projects = new InMemoryProjectRepository();
   const useCase = new RunAudit({
@@ -60,6 +78,7 @@ const build = (crawler: Crawler) => {
     projects,
     registry: new CheckRegistry(allChecks),
     clock,
+    events,
   });
   return { repository, projects, useCase };
 };
@@ -68,6 +87,37 @@ const blocked = makePage('https://exemple.com/private/a', {
   blockedByRobots: true,
   status: null,
   isHtml: false,
+});
+
+describe('RunAudit events', () => {
+  it('emits started then finished with the page count and the health', async () => {
+    const events = new RecordingEvents();
+    const { useCase } = build(new FakeCrawler(), events);
+
+    const details = await useCase.execute({ rootUrl: ROOT, limit: 10, delayMs: 0 });
+
+    expect(events.calls).toEqual(['started', 'finished']);
+    expect(events.payloads).toEqual([
+      { snapshotId: details.snapshot.id, rootUrl: ROOT },
+      {
+        snapshotId: details.snapshot.id,
+        rootUrl: ROOT,
+        pagesCount: 2,
+        health: expect.any(Number) as number,
+      },
+    ]);
+  });
+
+  it('emits started then failed when the crawler throws', async () => {
+    const events = new RecordingEvents();
+    const failing: Crawler = { crawl: () => Promise.reject(new Error('boom')) };
+    const { useCase } = build(failing, events);
+
+    await expect(useCase.execute({ rootUrl: ROOT, limit: 10, delayMs: 0 })).rejects.toThrow('boom');
+
+    expect(events.calls).toEqual(['started', 'failed']);
+    expect(events.payloads[1]).toEqual({ snapshotId: expect.any(String) as string, rootUrl: ROOT });
+  });
 });
 
 describe('RunAudit', () => {

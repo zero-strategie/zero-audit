@@ -169,7 +169,12 @@ describe('runCli', () => {
 
     expect(code).toBe(1);
     expect(run.err).toContain('unreachable');
-    expect(run.out).toBe('');
+    expect(
+      run.out
+        .trimEnd()
+        .split('\n')
+        .map((line) => (JSON.parse(line) as { event: string }).event),
+    ).toEqual(['audit.started', 'audit.failed']);
     const db = new Database(dbPath, { readonly: true });
     expect(db.prepare('SELECT status FROM snapshots').all()).toEqual([{ status: 'failed' }]);
     db.close();

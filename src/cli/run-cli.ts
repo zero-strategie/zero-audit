@@ -11,6 +11,7 @@ import {
 import { allChecks } from '../domain/checks/index.js';
 import { CheerioHtmlParser } from '../infrastructure/cheerio-html-parser.js';
 import { FastXmlSitemapReader } from '../infrastructure/fast-xml-sitemap-reader.js';
+import { JsonLinesAuditEvents } from '../infrastructure/json-lines-audit-events.js';
 import { RealSleeper } from '../infrastructure/real-sleeper.js';
 import { RobotsParserAdapter } from '../infrastructure/robots-parser-adapter.js';
 import { SystemClock } from '../infrastructure/system-clock.js';
@@ -39,7 +40,7 @@ export interface CliHooks {
   /** Lets the process entry point release the storage on SIGINT. */
   onStorageOpened?(storage: Storage): void;
   /** Lets the process entry point mark the snapshot failed on SIGINT. */
-  onAuditStarted?(snapshotId: string): void;
+  onAuditStarted?(snapshotId: string, rootUrl: string): void;
   /** Lets the process entry point stop the server on SIGINT. */
   onServerStarted?(server: HttpServer): void;
   /** Builds the HTTP server; defaults to the Fastify API. */
@@ -53,7 +54,7 @@ export interface CliHooks {
 const labelsById = (): ReadonlyMap<number, string> =>
   new Map(allChecks.map((check) => [check.id, check.label]));
 
-const buildRunAudit = (storage: Storage): RunAudit => {
+const buildRunAudit = (storage: Storage, io: CliIo): RunAudit => {
   const clock = new SystemClock();
   const http = new UndiciHttpClient({ clock, userAgent: buildUserAgent() });
   const crawler = new BfsCrawler({
@@ -70,6 +71,14 @@ const buildRunAudit = (storage: Storage): RunAudit => {
     projects: storage.projects,
     registry: new CheckRegistry(allChecks),
     clock,
+    events: new JsonLinesAuditEvents(
+      {
+        write: (text) => {
+          io.stdout(text);
+        },
+      },
+      clock,
+    ),
   });
 };
 
@@ -85,7 +94,7 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
     const opened = await (hooks.storageFactory ?? createStorage)(config);
     storage = opened;
     hooks.onStorageOpened?.(opened);
-    const details = await buildRunAudit(opened).execute({
+    const details = await buildRunAudit(opened, io).execute({
       rootUrl: config.rootUrl,
       limit: config.limit,
       delayMs: config.delayMs,
@@ -93,7 +102,7 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
         progress.update(crawled, limit);
       },
       onSnapshotCreated: (id) => {
-        hooks.onAuditStarted?.(id);
+        hooks.onAuditStarted?.(id, config.rootUrl);
       },
     });
     progress.finish();
