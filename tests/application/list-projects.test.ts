@@ -63,10 +63,25 @@ describe('ListProjects', () => {
 
     const [listed] = await new ListProjects(projects, snapshots).execute();
 
-    expect(listed).toEqual({
-      project,
-      latestSnapshot: { id: latest, finishedAt: minutes(11), health: 80 },
-    });
+    expect(listed?.latestSnapshot).toEqual({ id: latest, finishedAt: minutes(11), health: 80 });
+  });
+
+  it('gives the most recent snapshot as latest run, whatever its status', async () => {
+    const { projects, snapshots, record } = await build();
+    await record(0, 'finished', 1);
+    const running = await record(30, 'running');
+
+    const [listed] = await new ListProjects(projects, snapshots).execute();
+
+    expect(listed?.latestRun).toEqual({ id: running, status: 'running', startedAt: minutes(30) });
+  });
+
+  it('has no latest run for a project without snapshot', async () => {
+    const { projects, snapshots, project } = await build();
+
+    const [listed] = await new ListProjects(projects, snapshots).execute();
+
+    expect(listed).toEqual({ project, latestSnapshot: null, latestRun: null });
   });
 
   it('has no latest snapshot for a project without finished snapshot', async () => {
@@ -75,7 +90,7 @@ describe('ListProjects', () => {
 
     const [listed] = await new ListProjects(projects, snapshots).execute();
 
-    expect(listed).toEqual({ project, latestSnapshot: null });
+    expect(listed?.latestSnapshot).toBeNull();
   });
 });
 
