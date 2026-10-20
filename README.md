@@ -139,3 +139,23 @@ curl http://127.0.0.1:4321/health   # web (reflects the API health)
 The Postgres volume is `postgres-16-data`: a volume created by the former Postgres 17 setup cannot be opened by version 16 and is left untouched.
 
 Docker is not required to develop or to run the local test suite (`pnpm test`); the CI builds both images, without pushing them, in the `verify` job.
+
+## Publishing and deployment
+
+`.github/workflows/ci.yml` runs three jobs. `verify` (lint, typecheck, tests, image builds and `actionlint` on the workflows) runs on every push and pull request. The two others run only on a push to `main`:
+
+- `build-and-push` publishes `ghcr.io/zero-strategie/zero-audit-api` and `ghcr.io/zero-strategie/zero-audit-web`, both tagged with the same 12-character commit SHA and `latest`, using `GITHUB_TOKEN`.
+- `deploy` connects over SSH, runs `/opt/zero-audit/deploy.sh <tag>` (pull, migrate, health check, rollback on failure), then polls `https://audit.zero-strategie.dev/health` (10 attempts, 6 seconds apart) and fails unless it gets 200. Deployments never cancel each other.
+
+`deploy` is **disabled** until the repository variable `DEPLOY_ENABLED` is `true`.
+
+| Name | Kind | Content |
+| --- | --- | --- |
+| `DEPLOY_SSH_KEY` | secret | private SSH key of the deployment user |
+| `DEPLOY_HOST` | secret | server host name |
+| `DEPLOY_USER` | secret | SSH user |
+| `DEPLOY_PORT` | secret | SSH port |
+| `DEPLOY_KNOWN_HOSTS` | secret | server host key line(s), from `ssh-keyscan -p <port> <host>` |
+| `DEPLOY_ENABLED` | repository variable | `true` to enable the job |
+
+Activation: create the GitHub environment `production`, add the five secrets (environment or repository level), check that zero-infra has installed `/opt/zero-audit/deploy.sh` and exempted `/health` from basic auth, then set `DEPLOY_ENABLED` to `true`. To check on first merge: the organisation must allow `GITHUB_TOKEN` to publish packages to GHCR (risk R14).
