@@ -5,9 +5,9 @@ const read = (name: string): string =>
   readFileSync(new URL(`../../${name}`, import.meta.url), 'utf8');
 
 describe('local Postgres setup files', () => {
-  it('defines a postgres:17 service with a volume, a loopback port and no committed password', () => {
+  it('defines a postgres:16 service with a volume, a loopback port and no committed password', () => {
     const compose = read('docker-compose.yml');
-    expect(compose).toContain('image: postgres:17');
+    expect(compose).toContain('image: postgres:16');
     expect(compose).toMatch(/^volumes:/m);
     expect(compose).toContain("'127.0.0.1:5432:5432'");
     expect(compose).toContain('POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?');
@@ -19,10 +19,27 @@ describe('local Postgres setup files', () => {
     expect(example).toMatch(/^DATABASE_URL=postgresql:\/\//m);
   });
 
-  it('documents the storage settings in the README', () => {
-    const readme = read('README.md');
+  it('documents the storage settings in the guides', () => {
+    const readme = read('README.md') + read('docs/user-guide.md') + read('docs/developer-guide.md');
     for (const term of ['--store', 'ZERO_AUDIT_STORE', 'DATABASE_URL', 'docker compose up']) {
       expect(readme).toContain(term);
     }
+  });
+
+  it('documents HOST and PORT for the API and the web image in .env.example', () => {
+    const example = read('.env.example');
+    for (const variable of ['HOST', 'PORT', 'ZERO_AUDIT_API_URL']) {
+      expect(example).toMatch(new RegExp(`^#? ?${variable}=`, 'm'));
+    }
+    expect(example).toMatch(/API image/i);
+    expect(example).toMatch(/web image/i);
+  });
+
+  it('documents HOST and the exposure warning in the guides', () => {
+    const readme = read('README.md') + read('docs/user-guide.md') + read('docs/developer-guide.md');
+    expect(readme).not.toContain('no host option');
+    expect(readme).toContain('`HOST`');
+    expect(readme).toContain('SIGTERM');
+    expect(readme).toMatch(/only be published on `127\.0\.0\.1`/);
   });
 });

@@ -1,5 +1,6 @@
 ---
 import ErrorView from '../../../../components/ErrorView.astro';
+import SeverityBadge from '../../../../components/SeverityBadge.astro';
 import Layout from '../../../../layouts/Layout.astro';
 import type { IssueRow } from '../../../../lib/api/types';
 import { toFailure } from '../../../../lib/failure';
@@ -27,13 +28,13 @@ const groups = groupBySeverity(rows);
   failure ? (
     <ErrorView failure={failure} />
   ) : (
-    <Layout title="Problèmes – zero-audit">
+    <Layout title="Problèmes – zero-audit" snapshotId={snapshotId}>
       <h1>Problèmes</h1>
       <p><a href={`/snapshots/${snapshotId}`}>Retour à la vue d'ensemble</a></p>
       <p><a href={`/snapshots/${snapshotId}/pages`}>Pages explorées</a></p>
 
       {filter.kind === 'invalid' && (
-        <p data-testid="invalid-filter">
+        <p class="alert" data-testid="invalid-filter">
           Le filtre de sévérité « {filter.raw} » est invalide : tous les problèmes sont affichés.
         </p>
       )}
@@ -44,11 +45,13 @@ const groups = groupBySeverity(rows);
           <ul>
             {groupRows.map((row) => (
               <li data-testid={`issue-${String(row.checkId)}`}>
+                <SeverityBadge severity={row.severity} />{' '}
                 {row.count > 0 ? (
                   <a href={`/snapshots/${snapshotId}/issues/${String(row.checkId)}`}>{row.label}</a>
                 ) : (
                   <>
-                    {row.label} <span>Réussi</span>
+                    {row.label}{' '}
+                    <span class="passed">Réussi</span>
                   </>
                 )}
                 {row.count > 0 && (

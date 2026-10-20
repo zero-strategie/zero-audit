@@ -51,6 +51,7 @@ const spyOnFactory = (): SpiedFactory => {
     return {
       projects: real.projects,
       snapshots: real.snapshots,
+      health: real.health,
       close: async () => {
         closes += 1;
         if (closes === 1) effective += 1;
@@ -131,7 +132,7 @@ describe('runCli storage wiring', () => {
         controller.onStorageOpened(storage);
       },
       onAuditStarted: (id) => {
-        controller.onAuditStarted(id);
+        controller.onAuditStarted(id, server.baseUrl);
         pending = controller.interrupt();
       },
     });

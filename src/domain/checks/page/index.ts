@@ -6,7 +6,9 @@ import { check101 } from './check-101-title-too-short.js';
 import { check102 } from './check-102-title-too-long.js';
 import { check103 } from './check-103-h1-missing.js';
 import { check104 } from './check-104-h1-multiple.js';
+import { check105 } from './check-105-h1-equals-title.js';
 import { check106 } from './check-106-meta-description-missing.js';
+import { check112 } from './check-112-low-text-ratio.js';
 import { check117 } from './check-117-low-word-count.js';
 
 export const pageChecks: readonly PageCheck[] = [
@@ -17,6 +19,8 @@ export const pageChecks: readonly PageCheck[] = [
   check102,
   check103,
   check104,
+  check105,
   check106,
+  check112,
   check117,
 ];

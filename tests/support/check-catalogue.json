@@ -1,0 +1,409 @@
+{
+  "note": "Check ids and severity levels of the reference catalogue, used to keep zero-audit ids comparable. Facts only: no titles or descriptions.",
+  "checks": [
+    {
+      "id": 1,
+      "severity": "error"
+    },
+    {
+      "id": 2,
+      "severity": "error"
+    },
+    {
+      "id": 3,
+      "severity": "error"
+    },
+    {
+      "id": 4,
+      "severity": "notice"
+    },
+    {
+      "id": 6,
+      "severity": "error"
+    },
+    {
+      "id": 7,
+      "severity": "error"
+    },
+    {
+      "id": 8,
+      "severity": "error"
+    },
+    {
+      "id": 9,
+      "severity": "error"
+    },
+    {
+      "id": 10,
+      "severity": "error"
+    },
+    {
+      "id": 11,
+      "severity": "error"
+    },
+    {
+      "id": 12,
+      "severity": "warning"
+    },
+    {
+      "id": 13,
+      "severity": "error"
+    },
+    {
+      "id": 14,
+      "severity": "warning"
+    },
+    {
+      "id": 15,
+      "severity": "error"
+    },
+    {
+      "id": 16,
+      "severity": "error"
+    },
+    {
+      "id": 17,
+      "severity": "error"
+    },
+    {
+      "id": 18,
+      "severity": "error"
+    },
+    {
+      "id": 19,
+      "severity": "error"
+    },
+    {
+      "id": 20,
+      "severity": "error"
+    },
+    {
+      "id": 21,
+      "severity": "error"
+    },
+    {
+      "id": 22,
+      "severity": "error"
+    },
+    {
+      "id": 23,
+      "severity": "error"
+    },
+    {
+      "id": 24,
+      "severity": "error"
+    },
+    {
+      "id": 25,
+      "severity": "error"
+    },
+    {
+      "id": 26,
+      "severity": "error"
+    },
+    {
+      "id": 27,
+      "severity": "error"
+    },
+    {
+      "id": 28,
+      "severity": "error"
+    },
+    {
+      "id": 29,
+      "severity": "error"
+    },
+    {
+      "id": 30,
+      "severity": "error"
+    },
+    {
+      "id": 31,
+      "severity": "warning"
+    },
+    {
+      "id": 32,
+      "severity": "error"
+    },
+    {
+      "id": 33,
+      "severity": "error"
+    },
+    {
+      "id": 34,
+      "severity": "unknown (not in snapshot)"
+    },
+    {
+      "id": 35,
+      "severity": "unknown (not in snapshot)"
+    },
+    {
+      "id": 36,
+      "severity": "unknown (not in snapshot)"
+    },
+    {
+      "id": 38,
+      "severity": "error"
+    },
+    {
+      "id": 39,
+      "severity": "error"
+    },
+    {
+      "id": 40,
+      "severity": "error"
+    },
+    {
+      "id": 41,
+      "severity": "error"
+    },
+    {
+      "id": 42,
+      "severity": "error"
+    },
+    {
+      "id": 43,
+      "severity": "error"
+    },
+    {
+      "id": 44,
+      "severity": "error"
+    },
+    {
+      "id": 45,
+      "severity": "error"
+    },
+    {
+      "id": 46,
+      "severity": "error"
+    },
+    {
+      "id": 101,
+      "severity": "warning"
+    },
+    {
+      "id": 102,
+      "severity": "warning"
+    },
+    {
+      "id": 103,
+      "severity": "warning"
+    },
+    {
+      "id": 104,
+      "severity": "notice"
+    },
+    {
+      "id": 105,
+      "severity": "warning"
+    },
+    {
+      "id": 106,
+      "severity": "warning"
+    },
+    {
+      "id": 108,
+      "severity": "warning"
+    },
+    {
+      "id": 109,
+      "severity": "warning"
+    },
+    {
+      "id": 110,
+      "severity": "warning"
+    },
+    {
+      "id": 111,
+      "severity": "error"
+    },
+    {
+      "id": 112,
+      "severity": "warning"
+    },
+    {
+      "id": 113,
+      "severity": "warning"
+    },
+    {
+      "id": 114,
+      "severity": "warning"
+    },
+    {
+      "id": 115,
+      "severity": "warning"
+    },
+    {
+      "id": 116,
+      "severity": "warning"
+    },
+    {
+      "id": 117,
+      "severity": "warning"
+    },
+    {
+      "id": 120,
+      "severity": "warning"
+    },
+    {
+      "id": 121,
+      "severity": "warning"
+    },
+    {
+      "id": 122,
+      "severity": "warning"
+    },
+    {
+      "id": 123,
+      "severity": "warning"
+    },
+    {
+      "id": 124,
+      "severity": "warning"
+    },
+    {
+      "id": 125,
+      "severity": "warning"
+    },
+    {
+      "id": 126,
+      "severity": "warning"
+    },
+    {
+      "id": 127,
+      "severity": "warning"
+    },
+    {
+      "id": 128,
+      "severity": "warning"
+    },
+    {
+      "id": 129,
+      "severity": "warning"
+    },
+    {
+      "id": 130,
+      "severity": "warning"
+    },
+    {
+      "id": 131,
+      "severity": "warning"
+    },
+    {
+      "id": 132,
+      "severity": "warning"
+    },
+    {
+      "id": 133,
+      "severity": "warning"
+    },
+    {
+      "id": 134,
+      "severity": "warning"
+    },
+    {
+      "id": 135,
+      "severity": "warning"
+    },
+    {
+      "id": 136,
+      "severity": "warning"
+    },
+    {
+      "id": 137,
+      "severity": "notice"
+    },
+    {
+      "id": 201,
+      "severity": "notice"
+    },
+    {
+      "id": 202,
+      "severity": "notice"
+    },
+    {
+      "id": 203,
+      "severity": "notice"
+    },
+    {
+      "id": 204,
+      "severity": "notice"
+    },
+    {
+      "id": 205,
+      "severity": "notice"
+    },
+    {
+      "id": 206,
+      "severity": "notice"
+    },
+    {
+      "id": 207,
+      "severity": "notice"
+    },
+    {
+      "id": 208,
+      "severity": "unknown (not in snapshot)"
+    },
+    {
+      "id": 209,
+      "severity": "notice"
+    },
+    {
+      "id": 210,
+      "severity": "notice"
+    },
+    {
+      "id": 211,
+      "severity": "notice"
+    },
+    {
+      "id": 212,
+      "severity": "notice"
+    },
+    {
+      "id": 213,
+      "severity": "notice"
+    },
+    {
+      "id": 214,
+      "severity": "notice"
+    },
+    {
+      "id": 215,
+      "severity": "notice"
+    },
+    {
+      "id": 216,
+      "severity": "notice"
+    },
+    {
+      "id": 217,
+      "severity": "notice"
+    },
+    {
+      "id": 218,
+      "severity": "notice"
+    },
+    {
+      "id": 219,
+      "severity": "notice"
+    },
+    {
+      "id": 220,
+      "severity": "notice"
+    },
+    {
+      "id": 221,
+      "severity": "notice"
+    },
+    {
+      "id": 222,
+      "severity": "notice"
+    },
+    {
+      "id": 223,
+      "severity": "notice"
+    }
+  ]
+}

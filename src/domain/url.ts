@@ -37,3 +37,15 @@ export const alternateHostUrl = (rootUrl: string): string | null => {
   parsed.hash = '';
   return parsed.href;
 };
+
+const ROOT_PATH = '/';
+
+/** Same URL with the trailing slash added or removed (query kept); null for a site root. */
+export const toggleTrailingSlash = (url: string): string | null => {
+  const parsed = new URL(url);
+  if (parsed.pathname === ROOT_PATH) return null;
+  parsed.pathname = parsed.pathname.endsWith(ROOT_PATH)
+    ? parsed.pathname.slice(0, -ROOT_PATH.length)
+    : `${parsed.pathname}${ROOT_PATH}`;
+  return parsed.href;
+};

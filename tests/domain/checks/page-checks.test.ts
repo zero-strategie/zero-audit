@@ -113,6 +113,29 @@ describe('check 104 (multiple H1)', () => {
   });
 });
 
+describe('check 105 (H1 equals title)', () => {
+  it('flags a page whose H1 equals the title once normalized', () => {
+    const result = run(105, [makePage(u('a'), { title: 'Accueil  Zero', h1: ['accueil zero'] })]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('flags a page once even when several H1 equal the title', () => {
+    const result = run(105, [makePage(u('a'), { title: 'Zero', h1: ['Autre', 'zero', ' ZERO '] })]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('ignores pages without title, without H1 or with different H1', () => {
+    const result = run(105, [
+      makePage(u('no-title'), { title: null, h1: ['Zero'] }),
+      makePage(u('no-h1'), { title: 'Zero', h1: [] }),
+      makePage(u('different'), { title: 'Zero', h1: ['Autre'] }),
+      makePage(u('non-html'), { isHtml: false, title: 'Zero', h1: ['Zero'] }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(3);
+  });
+});
+
 describe('check 106 (meta description missing)', () => {
   it('flags null and empty descriptions', () => {
     const result = run(106, [
@@ -136,6 +159,26 @@ describe('check 117 (low word count)', () => {
   });
 });
 
+describe('check 112 (low text ratio)', () => {
+  it('flags a ratio of 0.09 but not exactly 0.10, with the ratio', () => {
+    const result = run(112, [
+      makePage(u('low'), { textRatio: 0.09 }),
+      makePage(u('limit'), { textRatio: 0.1 }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('low')]);
+    expect(result.occurrences[0]?.info).toEqual({ textRatio: 0.09 });
+  });
+
+  it('ignores non-HTML pages, 404 pages and unknown ratios', () => {
+    const result = run(112, [
+      makePage(u('img'), { isHtml: false, textRatio: null }),
+      makePage(u('notfound'), { status: 404, textRatio: 0.01 }),
+      makePage(u('old'), { textRatio: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+});
+
 describe('non-HTML resources', () => {
   it('are counted by no content check', () => {
     const image = makePage(u('logo.png'), {
@@ -145,8 +188,9 @@ describe('non-HTML resources', () => {
       h1: [],
       metaDescription: null,
       wordCount: null,
+      textRatio: null,
     });
-    for (const id of [3, 101, 102, 103, 104, 106, 117]) {
+    for (const id of [3, 101, 102, 103, 104, 106, 112, 117]) {
       expect(run(id, [image]).examined).toBe(0);
     }
   });
@@ -162,8 +206,10 @@ describe('registry metadata', () => {
       102: 'warning',
       103: 'warning',
       106: 'warning',
+      112: 'warning',
       117: 'warning',
       104: 'notice',
+      105: 'warning',
     });
   });
 

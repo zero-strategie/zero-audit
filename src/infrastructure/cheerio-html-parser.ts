@@ -12,6 +12,7 @@ const orNull = (text: string): string | null => (text === '' ? null : text);
 export class CheerioHtmlParser implements HtmlParser {
   parse(html: string, pageUrl: string): ParsedHtml {
     const $ = load(html);
+    const visibleText = this.extractVisibleText($);
     return {
       links: this.extractLinks($, this.baseUrlOf($, pageUrl)),
       title: this.extractTitle($),
@@ -20,7 +21,8 @@ export class CheerioHtmlParser implements HtmlParser {
       h1: $('h1')
         .toArray()
         .map((element) => normalizeSpaces($(element).text())),
-      wordCount: this.countWords($),
+      wordCount: this.countWords(visibleText),
+      textRatio: this.measureTextRatio(visibleText, html),
       contentHash: createHash('sha256').update(html).digest('hex'),
     };
   }
@@ -67,16 +69,25 @@ export class CheerioHtmlParser implements HtmlParser {
     return title.length === 0 ? null : normalizeSpaces(title.text());
   }
 
-  private countWords($: CheerioAPI): number {
+  private extractVisibleText($: CheerioAPI): string {
     const body = $('body').clone();
     body.find(NON_VISIBLE_SELECTOR).remove();
-    const text = body
+    return body
       .find('*')
       .addBack()
       .contents()
       .toArray()
       .flatMap((node) => (node.nodeType === TEXT_NODE_TYPE ? [node.data] : []))
       .join(' ');
-    return text.split(/\s+/u).filter((word) => word !== '').length;
+  }
+
+  private countWords(visibleText: string): number {
+    return visibleText.split(/\s+/u).filter((word) => word !== '').length;
+  }
+
+  private measureTextRatio(visibleText: string, html: string): number {
+    const htmlBytes = Buffer.byteLength(html, 'utf8');
+    if (htmlBytes === 0) return 0;
+    return Buffer.byteLength(normalizeSpaces(visibleText), 'utf8') / htmlBytes;
   }
 }

@@ -1,0 +1,12 @@
+**/node_modules
+.zero-audit
+.env
+.env.*
+!.env.example
+.git
+.github
+**/.astro
+**/dist
+coverage
+*.sqlite
+docs

@@ -31,6 +31,8 @@ const SEPARATOR = ' · ';
 
 type Info = Record<string, unknown>;
 
+const PERCENT = 100;
+
 const FIELD_FORMATTERS: [string, (value: unknown, info: Info) => string][] = [
   ['targetUrl', (value) => `Lien vers : ${String(value)}`],
   ['sourceUrl', (value) => `Page source : ${String(value)}`],
@@ -45,6 +47,10 @@ const FIELD_FORMATTERS: [string, (value: unknown, info: Info) => string][] = [
   ['error', (value) => `Erreur : ${String(value)}`],
   ['length', (value) => `Longueur : ${String(value)} caractères`],
   ['wordCount', (value) => `Nombre de mots : ${String(value)}`],
+  [
+    'textRatio',
+    (value) => `Ratio texte/HTML : ${(Number(value) * PERCENT).toFixed(1).replace('.', ',')} %`,
+  ],
   ['h1Count', (value) => `Nombre de balises H1 : ${String(value)}`],
   [
     'duplicates',

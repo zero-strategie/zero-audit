@@ -1,0 +1,25 @@
+---
+interface Props {
+  projectId?: string | undefined;
+  snapshotId?: string | undefined;
+}
+const { projectId, snapshotId } = Astro.props;
+const compareHref = projectId
+  ? `/projects/${projectId}/compare`
+  : snapshotId && `/snapshots/${snapshotId}/compare`;
+---
+
+<nav class="main-nav" aria-label="Navigation principale" data-testid="main-nav">
+  <a class="brand" href="/">zero-audit</a>
+  <a href="/">Projets</a>
+  {
+    snapshotId && (
+      <>
+        <a href={`/snapshots/${snapshotId}`}>Vue d'ensemble</a>
+        <a href={`/snapshots/${snapshotId}/issues`}>Problèmes</a>
+        <a href={`/snapshots/${snapshotId}/pages`}>Pages explorées</a>
+      </>
+    )
+  }
+  {compareHref && <a href={compareHref}>Comparaison</a>}
+</nav>

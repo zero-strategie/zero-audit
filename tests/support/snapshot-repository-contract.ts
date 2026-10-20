@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import type { ProjectRepository } from '../../src/application/ports/project-repository.js';
 import type { SnapshotRepository } from '../../src/application/ports/snapshot-repository.js';
 import type { CheckResult } from '../../src/domain/check.js';
-import type { HostProbe, Link, Page, SiteFile } from '../../src/domain/crawl.js';
-import { SnapshotImmutable } from '../../src/domain/errors.js';
+import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../../src/domain/crawl.js';
+import { check1000 } from '../../src/domain/checks/site/check-1000-url-variants.js';
+import { crawlOf } from './check-fixtures.js';
+import { SnapshotImmutable, SnapshotNotFound } from '../../src/domain/errors.js';
 
 const startedAt = new Date('2026-01-01T10:00:00.000Z');
 const finishedAt = new Date('2026-01-01T10:05:00.000Z');
@@ -24,6 +26,7 @@ const page = (overrides: Partial<Page> = {}): Page => ({
   canonical: 'https://example.test/home',
   h1: ['Home'],
   wordCount: 250,
+  textRatio: 0.0734,
   contentHash: 'abc123',
   blockedByRobots: false,
   ...overrides,
@@ -44,6 +47,16 @@ const checkResult = (overrides: Partial<CheckResult> = {}): CheckResult => ({
   count: 1,
   examined: 5,
   occurrences: [{ checkId: 3, pageUrl: 'https://example.test/', info: { length: 12 } }],
+  ...overrides,
+});
+
+const slashProbe = (overrides: Partial<SlashVariantProbe> = {}): SlashVariantProbe => ({
+  url: 'https://example.test/about/',
+  sourcePageUrl: 'https://example.test/about',
+  status: 200,
+  error: null,
+  isHtml: true,
+  canonical: null,
   ...overrides,
 });
 
@@ -117,6 +130,7 @@ export const describeSnapshotRepositoryContract = (
           metaDescription: null,
           h1: [],
           wordCount: null,
+          textRatio: null,
           contentHash: null,
         }),
         page({
@@ -208,6 +222,55 @@ export const describeSnapshotRepositoryContract = (
       expect((await repo.getById(id))?.hostProbe).toEqual(probe);
     });
 
+    it('reads back no slash probe when none was written', async () => {
+      const { repo, id } = await createRunning();
+      expect((await repo.getById(id))?.slashProbes).toEqual([]);
+    });
+
+    it('reads back slash probes unchanged, ordered by source page then url', async () => {
+      const { repo, id } = await createRunning();
+      const failed = slashProbe({
+        url: 'https://example.test/blog',
+        sourcePageUrl: 'https://example.test/blog/',
+        status: null,
+        error: 'timeout',
+        isHtml: false,
+      });
+      const ok = slashProbe({ canonical: 'https://example.test/about' });
+      await repo.addSlashProbes(id, [failed, ok]);
+      expect((await repo.getById(id))?.slashProbes).toEqual([ok, failed]);
+    });
+
+    it('refuses slash probes for an unknown snapshot', async () => {
+      const { repo } = await createRunning();
+      await expect(repo.addSlashProbes('missing', [slashProbe()])).rejects.toThrow(
+        SnapshotNotFound,
+      );
+    });
+
+    it('lets check 1000 give the same occurrences from the snapshot read back', async () => {
+      const { repo, id } = await createRunning();
+      const about = page({ url: 'https://example.test/about', canonical: null });
+      const probes = [slashProbe()];
+      await repo.addPages(id, [about]);
+      await repo.addSlashProbes(id, probes);
+      const details = await repo.getById(id);
+      if (!details) throw new Error('snapshot missing');
+
+      const original = check1000.run({
+        crawl: { ...crawlOf([about]), internalHost: 'example.test', slashProbes: probes },
+      });
+      const replayed = check1000.run({
+        crawl: {
+          ...crawlOf([...details.pages]),
+          internalHost: 'example.test',
+          slashProbes: details.slashProbes,
+        },
+      });
+      expect(original).toHaveLength(1);
+      expect(replayed).toEqual(original);
+    });
+
     it('keeps a check result whose count is zero', async () => {
       const { repo, id } = await createRunning();
       const clean = checkResult({ count: 0, examined: 7, occurrences: [] });
@@ -236,6 +299,7 @@ export const describeSnapshotRepositoryContract = (
       await expect(repo.addLinks(id, [link])).rejects.toThrow(SnapshotImmutable);
       await expect(repo.addCheckResults(id, [checkResult()])).rejects.toThrow(SnapshotImmutable);
       await expect(repo.addSiteFiles(id, [])).rejects.toThrow(SnapshotImmutable);
+      await expect(repo.addSlashProbes(id, [slashProbe()])).rejects.toThrow(SnapshotImmutable);
       await expect(
         repo.addHostProbe(id, {
           url: 'https://www.example.test/',

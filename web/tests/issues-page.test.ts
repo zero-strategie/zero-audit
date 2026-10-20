@@ -72,6 +72,12 @@ it('shows a check with no occurrence as passed, without a detail link', async ()
   expect(html).not.toContain('/issues/101');
 });
 
+it('renders the passed marker as a separate, styled element', async () => {
+  const html = await (await render(rows)).text();
+
+  expect(html).toMatch(/data-testid="issue-101"[^]*?<span class="passed"[^>]*>Réussi<\/span>/);
+});
+
 it('asks the API for the severity given in the URL', async () => {
   const calls: (Severity | undefined)[] = [];
   await render([rows[0] as IssueRow], '?severity=error', calls);
@@ -98,4 +104,10 @@ it('links to the crawled pages screen', async () => {
   const html = await (await render(rows)).text();
 
   expect(html).toContain('href="/snapshots/s1/pages"');
+});
+
+it('shows the severity badge of each issue', async () => {
+  const html = await (await render(rows)).text();
+
+  expect(html).toMatch(/data-testid="issue-15"[^]*?severity-badge severity-warning/);
 });

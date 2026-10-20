@@ -1,11 +1,13 @@
 ---
 import ErrorView from '../../../components/ErrorView.astro';
+import HealthGauge from '../../../components/HealthGauge.astro';
+import ThemeCard from '../../../components/ThemeCard.astro';
 import Layout from '../../../layouts/Layout.astro';
 import { InvalidRequest } from '../../../lib/api/errors';
-import type { Comparison, SnapshotListing } from '../../../lib/api/types';
+import type { Comparison, SnapshotListing, Theme } from '../../../lib/api/types';
 import { changedChecks, defaultComparisonPair } from '../../../lib/compare';
 import { toFailure } from '../../../lib/failure';
-import { SNAPSHOT_STATUS_LABELS, THEME_LABELS } from '../../../lib/labels';
+import { SNAPSHOT_STATUS_LABELS } from '../../../lib/labels';
 import { formatDateFr, formatScoreWithVariation, formatVariation } from '../../../lib/presentation';
 
 const HTTP_BAD_REQUEST = 400;
@@ -32,6 +34,7 @@ try {
     Astro.response.status = failure.status;
   }
 }
+const healthA = snapshots.find(({ id }) => id === pair?.a)?.health ?? null;
 const rows = comparison ? changedChecks(comparison.checks) : [];
 ---
 
@@ -39,18 +42,8 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
   failure ? (
     <ErrorView failure={failure} />
   ) : (
-    <Layout title="Comparaison – zero-audit">
+    <Layout title="Comparaison – zero-audit" projectId={projectId} snapshotId={pair?.b}>
       <h1>Comparaison</h1>
-      <nav>
-        <a href="/">Projets</a>
-        {pair && (
-          <>
-            {' '}· <a href={`/snapshots/${pair.b}`}>Vue d'ensemble</a> ·
-            <a href={`/snapshots/${pair.b}/issues`}>Problèmes</a> ·
-            <a href={`/snapshots/${pair.b}/pages`}>Pages explorées</a>
-          </>
-        )}
-      </nav>
 
       <form method="get">
         {(['a', 'b'] as const).map((name) => (
@@ -68,10 +61,10 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
         <button type="submit">Comparer</button>
       </form>
 
-      {compareError !== null && <p data-testid="compare-error">{compareError}</p>}
+      {compareError !== null && <p class="alert alert-error" data-testid="compare-error">{compareError}</p>}
 
       {!pair && (
-        <p data-testid="not-enough-snapshots">
+        <p class="alert" data-testid="not-enough-snapshots">
           Il faut au moins deux audits terminés pour comparer.
         </p>
       )}
@@ -81,13 +74,12 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
           <section>
             <h2>Santé du site</h2>
             <p>
-              <strong data-testid="health-score">{formatScoreWithVariation(comparison.health.score, comparison.health.variation)}</strong>
+              Audit A : <strong data-testid="health-score-a">{formatScoreWithVariation(healthA, null)}</strong>
             </p>
-            <ul>
+            <HealthGauge score={comparison.health.score} variation={comparison.health.variation} />
+            <ul class="theme-cards">
               {Object.entries(comparison.themes).map(([theme, { score, variation }]) => (
-                <li data-testid={`theme-${theme}`}>
-                  {THEME_LABELS[theme as keyof typeof THEME_LABELS]} : {formatScoreWithVariation(score, variation)}
-                </li>
+                <ThemeCard theme={theme as Theme} score={score} variation={variation} />
               ))}
             </ul>
           </section>
@@ -97,6 +89,7 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
             {rows.length === 0 ? (
               <p data-testid="no-difference">Aucune différence n'a été trouvée entre ces deux audits.</p>
             ) : (
+              <div class="table-scroll">
               <table>
                 <thead>
                   <tr>
@@ -121,6 +114,7 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </section>
         </>

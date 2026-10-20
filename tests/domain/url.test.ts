@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { alternateHostUrl, isInternal, normalizeUrl, resolveUrl } from '../../src/domain/url.js';
+import {
+  alternateHostUrl,
+  isInternal,
+  normalizeUrl,
+  resolveUrl,
+  toggleTrailingSlash,
+} from '../../src/domain/url.js';
 
 describe('normalizeUrl', () => {
   it('lowercases scheme and host and drops default port and fragment', () => {
@@ -48,4 +54,19 @@ describe('alternateHostUrl', () => {
       expect(alternateHostUrl(root)).toBeNull();
     },
   );
+});
+
+describe('toggleTrailingSlash', () => {
+  it.each([
+    ['https://e.com/about', 'https://e.com/about/'],
+    ['https://e.com/about/', 'https://e.com/about'],
+    ['https://e.com/a?x=1', 'https://e.com/a/?x=1'],
+    ['https://e.com/a/?x=1', 'https://e.com/a?x=1'],
+  ])('turns %s into %s', (url, expected) => {
+    expect(toggleTrailingSlash(url)).toBe(expected);
+  });
+
+  it('returns null for a site root', () => {
+    expect(toggleTrailingSlash('https://e.com/')).toBeNull();
+  });
 });

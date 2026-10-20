@@ -20,6 +20,7 @@ const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   canonical: null,
   h1: [],
   wordCount: null,
+  textRatio: null,
   contentHash: null,
   blockedByRobots: false,
   ...overrides,
@@ -37,6 +38,7 @@ const crawl: CrawlResult = {
   links: [],
   siteFiles: [],
   hostProbe: null,
+  slashProbes: [],
   site: { robotsFound: false, sitemapFound: false },
 };
 

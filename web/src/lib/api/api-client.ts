@@ -19,4 +19,6 @@ export interface ApiClient {
   listProjectSnapshots(projectId: string): Promise<SnapshotListing[]>;
   /** `baseId` is audit A, `targetId` audit B. */
   compare(baseId: string, targetId: string): Promise<Comparison>;
+  /** True only when the API answers `/health` with 200 in time; never throws. */
+  checkHealth(): Promise<boolean>;
 }

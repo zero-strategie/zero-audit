@@ -4,12 +4,18 @@ on:
   push:
   pull_request:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_API: ghcr.io/zero-strategie/zero-audit-api
+  IMAGE_WEB: ghcr.io/zero-strategie/zero-audit-web
+  HEALTH_URL: https://audit.zero-strategie.dev/health
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: postgres:16
         env:
           POSTGRES_USER: zero_audit
           POSTGRES_PASSWORD: zero_audit
@@ -25,6 +31,10 @@ jobs:
       TEST_DATABASE_URL: postgresql://zero_audit:zero_audit@localhost:5432/zero_audit_test
     steps:
       - uses: actions/checkout@v4
+      - name: Lint the workflows
+        run: |
+          bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -36,3 +46,127 @@ jobs:
       - run: pnpm test
       - name: Postgres tests must run, not be skipped
         run: pnpm vitest run tests/infrastructure/postgres-snapshot-repository.test.ts --reporter=verbose --allowOnly=false | tee postgres.log && ! grep -q skipped postgres.log
+      - uses: docker/setup-buildx-action@v3
+      - name: Build the api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          push: false
+          load: true
+          tags: zero-audit-api:ci
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Build the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          push: false
+          tags: zero-audit-web:ci
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+      - name: Smoke-test the api image
+        run: |
+          docker run --rm zero-audit-api:ci --help
+          docker run --rm zero-audit-api:ci migrate
+          docker run --rm --entrypoint sh zero-audit-api:ci -c "find dist -name '*.sql'" | tee migrations.log
+          grep -q 'dist/infrastructure/sqlite/migrations/' migrations.log
+          grep -q 'dist/infrastructure/postgres/migrations/' migrations.log
+
+  build-and-push:
+    name: Build and push images
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Lets the built-in GITHUB_TOKEN push to GHCR, no PAT needed.
+      packages: write
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compute the image tag
+        id: meta
+        # The commit SHA makes rollback possible; `latest` alone does not.
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - name: Build and push the api image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: api
+          push: true
+          tags: |
+            ${{ env.IMAGE_API }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE_API }}:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      - name: Build and push the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: web
+          push: true
+          tags: |
+            ${{ env.IMAGE_WEB }}:${{ steps.meta.outputs.tag }}
+            ${{ env.IMAGE_WEB }}:latest
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  deploy:
+    name: Deploy to production
+    needs: build-and-push
+    # Off until the repository variable DEPLOY_ENABLED is set to "true".
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    # A GitHub Environment, so a required reviewer can be added later.
+    environment:
+      name: production
+      url: https://audit.zero-strategie.dev
+    # Never cancel a deployment in progress: it could leave the server half-updated.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Configure SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          umask 077
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          # Pinned host key rather than StrictHostKeyChecking=no.
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Deploy
+        env:
+          TAG: ${{ needs.build-and-push.outputs.tag }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          # The server owns the deployment logic, including rollback.
+          ssh -o BatchMode=yes -p "$DEPLOY_PORT" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "/opt/zero-audit/deploy.sh ${TAG}"
+      - name: Verify the site is up
+        run: |
+          for attempt in $(seq 1 10); do
+            code="$(curl -sS -o /dev/null -w '%{http_code}' "$HEALTH_URL" || true)"
+            if [ "$code" = "200" ]; then
+              echo "Deployed ${{ needs.build-and-push.outputs.tag }}"
+              exit 0
+            fi
+            echo "Attempt ${attempt}: /health returned ${code}"
+            sleep 6
+          done
+          echo "::error::/health did not return 200"
+          exit 1

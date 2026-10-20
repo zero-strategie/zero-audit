@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Link } from '../../src/domain/crawl.js';
 import { SnapshotImmutable } from '../../src/domain/errors.js';
+import { createPool } from '../../src/infrastructure/postgres/pool.js';
 import { migrate } from '../../src/infrastructure/postgres/migrate.js';
 import { PostgresSnapshotRepository } from '../../src/infrastructure/postgres/postgres-snapshot-repository.js';
 import { describeProjectRepositoryContract } from '../support/project-repository-contract.js';
@@ -13,7 +16,13 @@ import { describeSnapshotRepositoryContract } from '../support/snapshot-reposito
 
 const startedAt = new Date('2026-01-01T10:00:00.123Z');
 const CONTENT_TABLES =
-  'pages, links, site_files, host_probes, check_results, issue_occurrences, snapshots, projects';
+  'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects';
+
+const readMigration = (file: string): string =>
+  readFileSync(
+    join(import.meta.dirname, '../../src/infrastructure/postgres/migrations', file),
+    'utf8',
+  );
 
 const canonical = (value: unknown): string =>
   JSON.stringify(value, (_key, nested: unknown) =>
@@ -47,6 +56,19 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     projects: repository.projects,
   }));
   describeProjectRepositoryContract(() => repository.projects);
+
+  describe('ping', () => {
+    it('resolves when the database answers', async () => {
+      await expect(repository.ping()).resolves.toBeUndefined();
+    });
+
+    it('rejects when the pool is closed', async () => {
+      const closedPool = createPool(TEST_DATABASE_URL ?? '');
+      await closedPool.end();
+
+      await expect(new PostgresSnapshotRepository(closedPool).ping()).rejects.toThrow();
+    });
+  });
 
   const createRunning = async (): Promise<string> => {
     const project = await repository.projects.findOrCreateByRootUrl({
@@ -117,6 +139,74 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       expect(second.rows).toEqual(first.rows);
     } finally {
       await empty.dispose();
+    }
+  });
+
+  it('adds slash_probes to a database at migration 001 without touching existing tables', async () => {
+    const legacy = await createTestDatabase(TEST_DATABASE_URL ?? '');
+    try {
+      const init = readFileSync(
+        join(import.meta.dirname, '../../src/infrastructure/postgres/migrations/001_init.sql'),
+        'utf8',
+      );
+      await legacy.pool.query(init);
+      await legacy.pool.query(
+        'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+      );
+      await legacy.pool.query('INSERT INTO schema_migrations (version) VALUES (1)');
+      const columnsOf = async (): Promise<unknown[]> => {
+        const { rows } = await legacy.pool.query<Record<string, string>>(
+          `SELECT table_name, column_name, data_type FROM information_schema.columns
+           WHERE table_schema = current_schema() AND table_name <> 'slash_probes' AND column_name <> 'text_ratio'
+           ORDER BY table_name, column_name`,
+        );
+        return rows;
+      };
+      const before = await columnsOf();
+
+      await migrate(legacy.pool);
+
+      expect(await columnsOf()).toEqual(before);
+      const versions = await legacy.pool.query('SELECT version FROM schema_migrations ORDER BY 1');
+      expect(versions.rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      await expect(legacy.pool.query('SELECT * FROM slash_probes')).resolves.toBeDefined();
+    } finally {
+      await legacy.dispose();
+    }
+  });
+
+  it('adds a nullable text_ratio column to a database at migration 002 without touching existing columns', async () => {
+    const legacy = await createTestDatabase(TEST_DATABASE_URL ?? '');
+    try {
+      await legacy.pool.query(readMigration('001_init.sql'));
+      await legacy.pool.query(readMigration('002_slash_probes.sql'));
+      await legacy.pool.query(
+        'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+      );
+      await legacy.pool.query('INSERT INTO schema_migrations (version) VALUES (1), (2)');
+      const pageColumns = async (): Promise<Record<string, string>[]> => {
+        const { rows } = await legacy.pool.query<Record<string, string>>(
+          `SELECT column_name, data_type, is_nullable FROM information_schema.columns
+           WHERE table_schema = current_schema() AND table_name = 'pages' ORDER BY column_name`,
+        );
+        return rows;
+      };
+      const before = await pageColumns();
+
+      await migrate(legacy.pool);
+      await migrate(legacy.pool);
+
+      const after = await pageColumns();
+      expect(after.filter((column) => column['column_name'] !== 'text_ratio')).toEqual(before);
+      expect(after.find((column) => column['column_name'] === 'text_ratio')).toEqual({
+        column_name: 'text_ratio',
+        data_type: 'double precision',
+        is_nullable: 'YES',
+      });
+      const versions = await legacy.pool.query('SELECT version FROM schema_migrations ORDER BY 1');
+      expect(versions.rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+    } finally {
+      await legacy.dispose();
     }
   });
 });

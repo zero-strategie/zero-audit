@@ -1,7 +1,5 @@
-import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
+import type { Database as SqliteDatabase } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
 import type {
   SnapshotDetails,
   SnapshotRepository,
@@ -14,14 +12,14 @@ import type {
   Page,
   SiteFile,
   SiteFileKind,
+  SlashVariantProbe,
 } from '../../domain/crawl.js';
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
 import { migrate } from './migrate.js';
-
-const IN_MEMORY_PATH = ':memory:';
+import { openDatabase } from './open-database.js';
 
 interface SnapshotRow {
   id: string;
@@ -49,6 +47,7 @@ interface PageRow {
   canonical: string | null;
   h1: string;
   word_count: number | null;
+  text_ratio: number | null;
   content_hash: string | null;
   blocked_by_robots: number;
 }
@@ -74,6 +73,10 @@ interface HostProbeRow {
   error: string | null;
   is_html: number;
   canonical: string | null;
+}
+
+interface SlashProbeRow extends HostProbeRow {
+  source_page_url: string;
 }
 
 interface CheckResultRow {
@@ -117,6 +120,7 @@ const toPage = (row: PageRow): Page => ({
   canonical: row.canonical,
   h1: JSON.parse(row.h1) as string[],
   wordCount: row.word_count,
+  textRatio: row.text_ratio,
   contentHash: row.content_hash,
   blockedByRobots: row.blocked_by_robots === 1,
 });
@@ -144,6 +148,11 @@ const toHostProbe = (row: HostProbeRow): HostProbe => ({
   canonical: row.canonical,
 });
 
+const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
+  ...toHostProbe(row),
+  sourcePageUrl: row.source_page_url,
+});
+
 export class SqliteSnapshotRepository implements SnapshotRepository {
   readonly projects: SqliteProjectRepository;
 
@@ -152,16 +161,19 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
   }
 
   static open(path: string): SqliteSnapshotRepository {
-    if (path !== IN_MEMORY_PATH) mkdirSync(dirname(path), { recursive: true });
-    const db = new Database(path);
-    db.pragma('foreign_keys = ON');
-    db.pragma('journal_mode = WAL');
+    const db = openDatabase(path);
     migrate(db);
     return new SqliteSnapshotRepository(db);
   }
 
   close(): void {
     this.db.close();
+  }
+
+  ping(): Promise<void> {
+    return this.run(() => {
+      this.db.prepare('SELECT 1').get();
+    });
   }
 
   create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
@@ -188,8 +200,8 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
       const insert = this.db.prepare(
         `INSERT INTO pages (snapshot_id, url, depth, status, error, redirect_target, redirect_chain, headers,
            response_time_ms, content_type, is_html, title, meta_description, canonical, h1, word_count,
-           content_hash, blocked_by_robots)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           text_ratio, content_hash, blocked_by_robots)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const page of pages) {
         insert.run(
@@ -209,6 +221,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
           page.canonical,
           JSON.stringify(page.h1),
           page.wordCount,
+          page.textRatio,
           page.contentHash,
           page.blockedByRobots ? 1 : 0,
         );
@@ -243,6 +256,25 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
           'INSERT INTO host_probes (snapshot_id, url, status, error, is_html, canonical) VALUES (?, ?, ?, ?, ?, ?)',
         )
         .run(id, probe.url, probe.status, probe.error, probe.isHtml ? 1 : 0, probe.canonical);
+    });
+  }
+
+  addSlashProbes(id: string, probes: readonly SlashVariantProbe[]): Promise<void> {
+    return this.writeToRunning(id, () => {
+      const insert = this.db.prepare(
+        'INSERT INTO slash_probes (snapshot_id, url, source_page_url, status, error, is_html, canonical) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      );
+      for (const probe of probes) {
+        insert.run(
+          id,
+          probe.url,
+          probe.sourcePageUrl,
+          probe.status,
+          probe.error,
+          probe.isHtml ? 1 : 0,
+          probe.canonical,
+        );
+      }
     });
   }
 
@@ -317,6 +349,13 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
             .all(id) as SiteFileRow[]
         ).map(toSiteFile),
         hostProbe: this.readHostProbe(id),
+        slashProbes: (
+          this.db
+            .prepare(
+              'SELECT * FROM slash_probes WHERE snapshot_id = ? ORDER BY source_page_url, url, id',
+            )
+            .all(id) as SlashProbeRow[]
+        ).map(toSlashProbe),
       };
     });
   }

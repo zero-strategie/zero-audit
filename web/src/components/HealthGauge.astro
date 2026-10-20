@@ -1,0 +1,28 @@
+---
+import { formatScoreWithVariation } from '../lib/presentation';
+
+interface Props {
+  score: number | null;
+  variation: number | null;
+}
+
+const { score, variation } = Astro.props;
+const label = formatScoreWithVariation(score, variation);
+const arc = score ?? 0;
+const trend = variation === null || variation === 0 ? '' : variation > 0 ? 'variation-positive' : 'variation-negative';
+---
+
+<div class="health-gauge">
+  <svg viewBox="0 0 120 120" role="img" aria-label={`Santé du site : ${label}`}>
+    <circle class="gauge-track" cx="60" cy="60" r="52" pathLength="100"></circle>
+    <circle
+      class="gauge-arc"
+      cx="60"
+      cy="60"
+      r="52"
+      pathLength="100"
+      stroke-dasharray={`${String(arc)} 100`}
+      transform="rotate(-90 60 60)"></circle>
+  </svg>
+  <strong class:list={['gauge-label', trend]} data-testid="health-score">{label}</strong>
+</div>

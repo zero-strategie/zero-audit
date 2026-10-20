@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseCommand, type AuditConfig } from '../../src/cli/config.js';
+import { USAGE } from '../../src/cli/usage.js';
 
 const URL_ARG = 'https://exemple.com/';
 
@@ -112,11 +113,32 @@ describe('parseCommand subcommands', () => {
   it('parses `serve` as a serve command, never as a URL', () => {
     expect(parseCommand(['serve'], {})).toEqual({
       kind: 'serve',
+      host: '127.0.0.1',
       port: 3000,
       dbPath: './.zero-audit/audit.db',
       store: 'sqlite',
       databaseUrl: null,
     });
+  });
+
+  it('reads the serve host and port from HOST and PORT', () => {
+    expect(parseCommand(['serve'], { HOST: '0.0.0.0', PORT: '8080' })).toMatchObject({
+      host: '0.0.0.0',
+      port: 8080,
+    });
+  });
+
+  it('lets --port win over PORT', () => {
+    expect(parseCommand(['serve', '--port', '9000'], { PORT: '8080' })).toMatchObject({
+      port: 9000,
+    });
+  });
+
+  it.each(['abc', '70000'])('rejects PORT="%s" with an explicit message', (port) => {
+    const command = parseCommand(['serve'], { PORT: port });
+
+    expect(command.kind).toBe('usage-error');
+    expect(command).toMatchObject({ message: expect.stringContaining('PORT') as string });
   });
 
   it('reads the serve port from --port', () => {
@@ -162,5 +184,38 @@ describe('parseCommand subcommands', () => {
     ['audit without url', ['audit']],
   ])('rejects compare/audit with %s', (_name, argv) => {
     expect(parseCommand(argv, {}).kind).toBe('usage-error');
+  });
+});
+
+describe('parseCommand migrate', () => {
+  it('parses `migrate` with the SQLite defaults', () => {
+    expect(parseCommand(['migrate'], {})).toEqual({
+      kind: 'migrate',
+      dbPath: './.zero-audit/audit.db',
+      store: 'sqlite',
+      databaseUrl: null,
+    });
+  });
+
+  it('reads --store and --db', () => {
+    expect(parseCommand(['migrate', '--store', 'sqlite', '--db', 'x.db'], {})).toMatchObject({
+      kind: 'migrate',
+      dbPath: 'x.db',
+    });
+  });
+
+  it('requires DATABASE_URL for postgres', () => {
+    expect(parseCommand(['migrate', '--store', 'postgres'], {})).toMatchObject({
+      kind: 'usage-error',
+      message: expect.stringContaining('DATABASE_URL') as string,
+    });
+  });
+
+  it('rejects an unknown option', () => {
+    expect(parseCommand(['migrate', '--foo'], {}).kind).toBe('usage-error');
+  });
+
+  it('is listed in the usage', () => {
+    expect(USAGE).toContain('migrate');
   });
 });

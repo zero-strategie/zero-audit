@@ -12,6 +12,7 @@ import type {
   Page,
   SiteFile,
   SiteFileKind,
+  SlashVariantProbe,
 } from '../../domain/crawl.js';
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
@@ -47,6 +48,7 @@ type PageRow = {
   canonical: string | null;
   h1: string[];
   word_count: number | null;
+  text_ratio: number | null;
   content_hash: string | null;
   blocked_by_robots: boolean;
 };
@@ -73,6 +75,8 @@ type HostProbeRow = {
   is_html: boolean;
   canonical: string | null;
 };
+
+type SlashProbeRow = HostProbeRow & { source_page_url: string };
 
 type CheckResultRow = {
   check_id: number;
@@ -115,6 +119,7 @@ const toPage = (row: PageRow): Page => ({
   canonical: row.canonical,
   h1: row.h1,
   wordCount: row.word_count,
+  textRatio: row.text_ratio,
   contentHash: row.content_hash,
   blockedByRobots: row.blocked_by_robots,
 });
@@ -142,11 +147,20 @@ const toHostProbe = (row: HostProbeRow): HostProbe => ({
   canonical: row.canonical,
 });
 
+const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
+  ...toHostProbe(row),
+  sourcePageUrl: row.source_page_url,
+});
+
 export class PostgresSnapshotRepository implements SnapshotRepository {
   readonly projects: PostgresProjectRepository;
 
   constructor(private readonly pool: pg.Pool) {
     this.projects = new PostgresProjectRepository(pool);
+  }
+
+  async ping(): Promise<void> {
+    await this.pool.query('SELECT 1');
   }
 
   async create(input: {
@@ -169,8 +183,8 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
         await db.query(
           `INSERT INTO pages (snapshot_id, url, depth, status, error, redirect_target, redirect_chain,
              headers, response_time_ms, content_type, is_html, title, meta_description, canonical, h1,
-             word_count, content_hash, blocked_by_robots)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`,
+             word_count, text_ratio, content_hash, blocked_by_robots)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
           [
             id,
             page.url,
@@ -188,6 +202,7 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
             page.canonical,
             JSON.stringify(page.h1),
             page.wordCount,
+            page.textRatio,
             page.contentHash,
             page.blockedByRobots,
           ],
@@ -224,6 +239,25 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
         'INSERT INTO host_probes (snapshot_id, url, status, error, is_html, canonical) VALUES ($1, $2, $3, $4, $5, $6)',
         [id, probe.url, probe.status, probe.error, probe.isHtml, probe.canonical],
       );
+    });
+  }
+
+  addSlashProbes(id: string, probes: readonly SlashVariantProbe[]): Promise<void> {
+    return this.writeToRunning(id, async (db) => {
+      for (const probe of probes) {
+        await db.query(
+          'INSERT INTO slash_probes (snapshot_id, url, source_page_url, status, error, is_html, canonical) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [
+            id,
+            probe.url,
+            probe.sourcePageUrl,
+            probe.status,
+            probe.error,
+            probe.isHtml,
+            probe.canonical,
+          ],
+        );
+      }
     });
   }
 
@@ -271,7 +305,7 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
     ]);
     const row = rows[0];
     if (!row) return null;
-    const [pages, links, siteFiles, hostProbes, checkResults] = await Promise.all([
+    const [pages, links, siteFiles, hostProbes, slashProbes, checkResults] = await Promise.all([
       this.pool.query<PageRow>('SELECT * FROM pages WHERE snapshot_id = $1 ORDER BY id', [id]),
       this.pool.query<LinkRow>('SELECT * FROM links WHERE snapshot_id = $1 ORDER BY id', [id]),
       this.pool.query<SiteFileRow>(
@@ -279,6 +313,10 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
         [id],
       ),
       this.pool.query<HostProbeRow>('SELECT * FROM host_probes WHERE snapshot_id = $1', [id]),
+      this.pool.query<SlashProbeRow>(
+        'SELECT * FROM slash_probes WHERE snapshot_id = $1 ORDER BY source_page_url, url, id',
+        [id],
+      ),
       this.readCheckResults(this.pool, id),
     ]);
     return {
@@ -287,6 +325,7 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
       links: links.rows.map(toLink),
       checkResults,
       siteFiles: siteFiles.rows.map(toSiteFile),
+      slashProbes: slashProbes.rows.map(toSlashProbe),
       hostProbe: hostProbes.rows[0] ? toHostProbe(hostProbes.rows[0]) : null,
     };
   }

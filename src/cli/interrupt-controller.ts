@@ -1,6 +1,9 @@
+import type { AuditEvents } from '../application/ports/audit-events.js';
 import type { Storage } from './storage-factory.js';
 
+const EXIT_SUCCESS = 0;
 export const EXIT_INTERRUPTED = 130;
+export const EXIT_TERMINATED = 143;
 
 export interface ClosableServer {
   close(): Promise<void>;
@@ -9,15 +12,35 @@ export interface ClosableServer {
 export interface InterruptController {
   onStorageOpened(storage: Storage): void;
   onServerStarted(server: ClosableServer): void;
-  onAuditStarted(snapshotId: string): void;
+  onAuditStarted(snapshotId: string, rootUrl: string): void;
   /** Meant for SIGINT: stops the server, fails the running snapshot if any, releases the storage, then exits. */
   interrupt(): Promise<void>;
+  /** Meant for SIGTERM (`docker stop`): same cleanup; a stopped server is a clean exit, an aborted audit is not. */
+  terminate(): Promise<void>;
 }
 
-export const createInterruptController = (exit: (code: number) => void): InterruptController => {
+export const createInterruptController = (
+  exit: (code: number) => void,
+  events?: AuditEvents,
+): InterruptController => {
   let storage: Storage | null = null;
-  let snapshotId: string | null = null;
+  let audit: { snapshotId: string; rootUrl: string } | null = null;
   let server: ClosableServer | null = null;
+  const shutDown = async (exitCode: number): Promise<void> => {
+    try {
+      try {
+        await server?.close();
+        if (storage !== null && audit !== null) {
+          await storage.snapshots.fail(audit.snapshotId, new Date());
+          events?.failed(audit);
+        }
+      } finally {
+        await storage?.close();
+      }
+    } finally {
+      exit(exitCode);
+    }
+  };
   return {
     onStorageOpened: (opened) => {
       storage = opened;
@@ -25,22 +48,10 @@ export const createInterruptController = (exit: (code: number) => void): Interru
     onServerStarted: (started) => {
       server = started;
     },
-    onAuditStarted: (id) => {
-      snapshotId = id;
+    onAuditStarted: (snapshotId, rootUrl) => {
+      audit = { snapshotId, rootUrl };
     },
-    interrupt: async () => {
-      try {
-        try {
-          await server?.close();
-          if (storage !== null && snapshotId !== null) {
-            await storage.snapshots.fail(snapshotId, new Date());
-          }
-        } finally {
-          await storage?.close();
-        }
-      } finally {
-        exit(EXIT_INTERRUPTED);
-      }
-    },
+    interrupt: () => shutDown(EXIT_INTERRUPTED),
+    terminate: () => shutDown(server === null ? EXIT_TERMINATED : EXIT_SUCCESS),
   };
 };

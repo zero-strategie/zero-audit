@@ -1,5 +1,5 @@
 import type { IssueOccurrence, PageCheck } from '../../check.js';
-import type { CrawlResult, HostProbe, Page } from '../../crawl.js';
+import type { CrawlResult, HostProbe, Page, SlashVariantProbe } from '../../crawl.js';
 import { isHtml2xx } from '../page/page-predicates.js';
 
 const TRAILING_SLASH = '/';
@@ -21,7 +21,7 @@ const isHomePage = (page: Page, internalHost: string): boolean => {
   return hostname === internalHost && pathname === TRAILING_SLASH && search === '';
 };
 
-const isHtml2xxProbe = (probe: HostProbe): boolean =>
+const isHtml2xxProbe = (probe: HostProbe | SlashVariantProbe): boolean =>
   probe.isHtml &&
   probe.status !== null &&
   probe.status >= HTTP_OK_MIN &&
@@ -32,6 +32,18 @@ const hostOccurrences = ({ pages, internalHost, hostProbe }: CrawlResult): Issue
   if (hostProbe === null || home === undefined || !isHtml2xxProbe(hostProbe)) return [];
   if (hostProbe.canonical !== null && hostProbe.canonical === home.canonical) return [];
   return [{ checkId: 1000, pageUrl: home.url, info: { variantUrl: hostProbe.url, kind: 'host' } }];
+};
+
+const probeOccurrences = ({ pages, slashProbes }: CrawlResult): IssueOccurrence[] => {
+  const pagesByUrl = new Map(pages.map((page) => [page.url, page]));
+  return slashProbes.flatMap((probe) => {
+    const page = pagesByUrl.get(probe.sourcePageUrl);
+    if (page === undefined || !isHtml2xxProbe(probe)) return [];
+    if (probe.canonical !== null && probe.canonical === page.canonical) return [];
+    return [
+      { checkId: 1000, pageUrl: page.url, info: { variantUrl: probe.url, kind: 'trailing-slash' } },
+    ];
+  });
 };
 
 const slashOccurrences = ({ pages }: CrawlResult): IssueOccurrence[] => {
@@ -53,5 +65,9 @@ export const check1000: PageCheck = {
   scope: 'page',
   label: 'Même page accessible avec et sans slash final',
   applies: isHtml2xx,
-  run: ({ crawl }) => [...slashOccurrences(crawl), ...hostOccurrences(crawl)],
+  run: ({ crawl }) => [
+    ...slashOccurrences(crawl),
+    ...probeOccurrences(crawl),
+    ...hostOccurrences(crawl),
+  ],
 };

@@ -58,6 +58,7 @@ describe('formatOccurrenceInfo', () => {
   it('describes lengths and counts', () => {
     expect(formatOccurrenceInfo({ length: 12 })).toBe('Longueur : 12 caractères');
     expect(formatOccurrenceInfo({ wordCount: 80 })).toBe('Nombre de mots : 80');
+    expect(formatOccurrenceInfo({ textRatio: 0.0734 })).toBe('Ratio texte/HTML : 7,3 %');
     expect(formatOccurrenceInfo({ h1Count: 2 })).toBe('Nombre de balises H1 : 2');
   });
   it('describes a URL variant by kind', () => {

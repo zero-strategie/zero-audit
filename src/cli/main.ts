@@ -1,11 +1,20 @@
 #!/usr/bin/env node
+import { JsonLinesAuditEvents } from '../infrastructure/json-lines-audit-events.js';
+import { SystemClock } from '../infrastructure/system-clock.js';
 import { createInterruptController } from './interrupt-controller.js';
 import { runCli } from './run-cli.js';
 
-const interrupts = createInterruptController((code) => process.exit(code));
+const interrupts = createInterruptController(
+  (code) => process.exit(code),
+  new JsonLinesAuditEvents(process.stdout, new SystemClock()),
+);
 
 process.once('SIGINT', () => {
   void interrupts.interrupt();
+});
+
+process.once('SIGTERM', () => {
+  void interrupts.terminate();
 });
 
 const exitCode = await runCli(
@@ -23,8 +32,8 @@ const exitCode = await runCli(
     onServerStarted: (server) => {
       interrupts.onServerStarted(server);
     },
-    onAuditStarted: (snapshotId) => {
-      interrupts.onAuditStarted(snapshotId);
+    onAuditStarted: (snapshotId, rootUrl) => {
+      interrupts.onAuditStarted(snapshotId, rootUrl);
     },
   },
 );

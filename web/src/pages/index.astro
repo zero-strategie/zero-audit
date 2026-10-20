@@ -26,6 +26,7 @@ try {
           Aucun audit n'a encore été lancé. Lancez-en un avec <code>pnpm zero-audit &lt;url&gt;</code>.
         </p>
       ) : (
+        <div class="table-scroll">
         <table>
           <thead>
             <tr><th>Site</th><th>Santé</th><th>Dernier audit</th></tr>
@@ -46,6 +47,7 @@ try {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </Layout>
   )

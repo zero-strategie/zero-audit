@@ -1,92 +1,64 @@
 # zero-audit
 
-Technical SEO audit tool (crawler, checks, scoring) for Zero Stratégie.
+Open-source technical SEO audit tool. zero-audit crawls a website, runs [20 checks](docs/checks.md), scores the site's health and tracks every change between two audits. You can use it from the command line, through a read-only HTTP API, or in a web dashboard.
 
-- Team conventions: `.claude/equipe.md`
-- Reference analysis: `docs/reference/`
-- Current mission: `docs/missions/m1-crawler/`
+- **Crawler**:
+  - honours robots.txt and sitemaps;
+  - runs breadth-first with a politeness delay;
+  - follows redirects;
+  - probes URL variants.
+- **Checks**:
+  - HTTP errors;
+  - titles, meta descriptions, headings;
+  - thin content and text ratio;
+  - internal linking;
+  - robots.txt, sitemap, llms.txt, HSTS;
+  - duplicate URL variants.
+- **Scores**:
+  - site health and per-theme scores (crawlability, https, linking, on-page);
+  - variation since the previous audit.
+- **History**: every audit is an immutable snapshot, with new and fixed issues and a `compare` command.
+- **Storage**: SQLite out of the box, or Postgres.
+- **Dashboard**: built with Astro, responsive, with a dark mode. The interface is in French.
 
-## Development
+## Quick start
 
-Requires Node 22 and pnpm.
+Requires Node.js 22 and pnpm.
 
-```
+```sh
 pnpm install
-pnpm lint
-pnpm typecheck
-pnpm test        # no test may reach the Internet (global network guard)
+pnpm zero-audit https://example.com          # run an audit
+pnpm zero-audit serve                        # API on http://127.0.0.1:3000
+pnpm --filter web dev                        # dashboard on http://127.0.0.1:4321
 ```
 
-The repository is a pnpm workspace (`pnpm-workspace.yaml`): the root package holds the core, the CLI and the API; `web/` is the Astro dashboard. `pnpm install` at the root installs both. The root `lint`, `typecheck` (including `astro check`) and `test` (including web/'s Vitest project, which renders components with Astro's Container API) cover `web/`, and CI runs them without a browser. `web/` must not import `src/` (enforced by ESLint): it only talks to the HTTP API.
+Or, with Docker:
 
-```
-pnpm --filter web dev      # dev server on http://127.0.0.1:4321
-pnpm --filter web build
-pnpm --filter web start    # serves the build on http://127.0.0.1:4321
+```sh
+POSTGRES_PASSWORD=change-me docker compose up --build
 ```
 
-Tests start a local HTTP fixture server (`tests/support/fixture-server.ts`). Production code must use undici's global dispatcher so the guard applies.
+Only audit sites you own or are allowed to crawl.
 
-## Running an audit
+## Documentation
 
-```
-pnpm zero-audit https://exemple.com --limit 50 --delay 500 --json audit.json
-pnpm run audit https://exemple.com
-```
+- [User guide](docs/user-guide.md): install, run audits, read scores, the dashboard, self-hosting.
+- [Checks reference](docs/checks.md): what each check flags and how to fix it.
+- [Developer guide](docs/developer-guide.md): architecture, adding a check, storage, API, tests, CI.
+- [Contributing](CONTRIBUTING.md)
 
-`pnpm zero-audit audit <url>` is the explicit form of `pnpm zero-audit <url>`; `audit`, `compare` and `serve` are reserved words and are never read as URLs.
+## About
 
-Use `pnpm run audit`, not `pnpm audit`: `pnpm audit` is pnpm's built-in vulnerability audit and never reaches the `audit` script. `pnpm zero-audit` is an alias without that conflict. After `pnpm build`, the `zero-audit` bin (`dist/cli/main.js`) can also be linked and run directly.
+zero-audit is built by [Zero Stratégie](https://zero-strategie.dev). Its feature set is inspired by commercial site-audit tools such as Semrush's Site Audit. It is an independent project, not affiliated with or endorsed by Semrush, and it contains no Semrush code, data or text.
 
-Options (an option wins over its environment variable, which wins over the default):
+## Licence
 
-| Option | Environment variable | Default | Meaning |
-|---|---|---|---|
-| `<url>` | | required | start URL (http or https) |
-| `--limit <n>` | | 100 | maximum number of pages crawled |
-| `--delay <ms>` | `ZERO_AUDIT_DELAY_MS` | 1000 | delay between two requests |
-| `--db <path>` | `ZERO_AUDIT_DB_PATH` | `./.zero-audit/audit.db` | SQLite database file |
-| `--store <sqlite\|postgres>` | `ZERO_AUDIT_STORE` | `sqlite` | storage backend (audit and compare) |
-| | `DATABASE_URL` | | Postgres connection URL, required with `--store postgres` |
-| `--json <file>` | | none | writes the full snapshot (pages, links, all check results) as JSON |
-| `--help` | | | prints the usage |
+zero-audit is free software, released under the [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`).
 
-### Choosing the storage
+You can use it freely, including inside a company, and you can modify it. If you offer a modified version to users over a network, for example as a hosted service, you must make your modified source code available to them under the same licence. The dashboard footer links to the source, and `ZERO_AUDIT_SOURCE_URL` changes where it points.
 
-SQLite stays the default. To use Postgres, start the local database and point `DATABASE_URL` at it (see `.env.example`; the schema is migrated automatically on first use):
+Copyright © 2026 Zero Stratégie. See [COPYRIGHT](COPYRIGHT).
 
-```
-POSTGRES_PASSWORD=<your password> docker compose up -d
-DATABASE_URL=postgresql://zero_audit:<your password>@127.0.0.1:5432/zero_audit \
-  pnpm zero-audit https://exemple.com --store postgres
-```
+## Commercial licence
 
-The connection is closed at the end of the command and on Ctrl+C. Passwords are masked in error messages. `--db` only applies to SQLite.
-
-The summary goes to stdout; the progress line (`crawled/limit`) goes to stderr, so stdout stays clean.
-
-### Comparing two audits
-
-```
-pnpm zero-audit compare <A> <B> [--db <path>]
-```
-
-`A` is the base and `B` the target (snapshot ids are printed by the audit summary). For each check the output gives the counts in A and B, the delta, the new and fixed occurrences, then the occurrences added and removed. Both snapshots must be `finished` and belong to the same site. Exit codes: 0 success, 1 unknown, unfinished or cross-site snapshots, 2 invalid usage.
-
-Exit codes: 0 success, 1 crawl failure (snapshot marked `failed`), 2 invalid usage (nothing is requested or stored), 130 interrupted with Ctrl+C (snapshot marked `failed`).
-
-### Serving the API
-
-```
-pnpm zero-audit serve [--port <n>] [--db <path>] [--store <sqlite|postgres>]
-```
-
-Starts a read-only HTTP API on `127.0.0.1` (port 3000 by default, `--port` to change it; there is no host option). There is no authentication and no CORS: the API is meant to be read by the dashboard's server on the same machine, so do not expose the port. `--db`, `--store` and `DATABASE_URL` behave as for an audit. Ctrl+C stops the server and releases the storage.
-
-| Route | Answer |
-| --- | --- |
-| `GET /projects` | projects with their latest finished snapshot (`id`, `finishedAt`, rounded `health`, or `null`) |
-| `GET /projects/:id/snapshots` | snapshots of a project (UUID), most recent first, with `status` and `health` (`null` unless finished) |
-| `GET /snapshots/:id` | summary: health and themes with variation, counters, page groups, site files, top 5 checks |
-
-Errors share one format: `{ "error": { "code": "not_found" | "invalid_request", "message": "…" } }` (404 unknown id or route, 400 malformed id). Any non-GET method answers 404. An unexpected failure answers 500 with the code `internal_error` and a generic message.
+To embed zero-audit in a proprietary product, or to host a modified version without publishing your changes, a commercial licence is available from [Zero Stratégie](https://zero-strategie.dev). Contributions are accepted under the [CLA](CLA.md), which keeps this dual licensing possible.

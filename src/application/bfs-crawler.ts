@@ -1,7 +1,13 @@
-import type { CrawlResult, HostProbe, Link, Page } from '../domain/crawl.js';
+import type { CrawlResult, HostProbe, Link, Page, SlashVariantProbe } from '../domain/crawl.js';
 import { RootUnreachable } from '../domain/errors.js';
 import { computeRedirectChain, MAX_REDIRECT_HOPS } from '../domain/redirect-chain.js';
-import { alternateHostUrl, isInternal, normalizeUrl, resolveUrl } from '../domain/url.js';
+import {
+  alternateHostUrl,
+  isInternal,
+  normalizeUrl,
+  resolveUrl,
+  toggleTrailingSlash,
+} from '../domain/url.js';
 import { DiscoverSite } from './discover-site.js';
 import { PoliteHttpClient } from './polite-http-client.js';
 import type { Clock } from './ports/clock.js';
@@ -106,6 +112,7 @@ class CrawlRun {
     for (const url of discovery.sitemapUrls) this.enqueue(url, 1);
     for (const fetched of rootChain) this.record(fetched);
     await this.crawlQueue(discovery.robotsPolicy);
+    const slashProbes = await this.probeSlashVariants(discovery.robotsPolicy);
     const hostProbe = await this.probeAlternateHost(finalRoot.url);
 
     return {
@@ -116,6 +123,7 @@ class CrawlRun {
       links: this.links,
       siteFiles: discovery.siteFiles,
       hostProbe,
+      slashProbes,
       site: { robotsFound: discovery.robotsFound, sitemapFound: discovery.sitemapFound },
     };
   }
@@ -153,6 +161,44 @@ class CrawlRun {
       if (this.pages.length >= this.request.limit) continue;
       this.record(await this.fetch(item));
     }
+  }
+
+  /**
+   * At most one request per explored HTML page, outside the crawl (never recorded nor counted).
+   * A variant already seen (explored or queued) is not probed, nor is one robots.txt forbids.
+   */
+  private async probeSlashVariants(robots: RobotsPolicy): Promise<SlashVariantProbe[]> {
+    const probes: SlashVariantProbe[] = [];
+    for (const { url: sourcePageUrl, isHtml, status } of this.pages) {
+      const url =
+        isHtml && status !== null && isSuccess(status) ? toggleTrailingSlash(sourcePageUrl) : null;
+      if (url === null || this.seen.has(url) || !robots.isAllowed(url)) continue;
+      this.seen.add(url);
+      probes.push(await this.probe(url, sourcePageUrl));
+    }
+    return probes;
+  }
+
+  private async probe(url: string, sourcePageUrl: string): Promise<SlashVariantProbe> {
+    const response = await this.http.get(url);
+    if (isNetworkFailure(response)) {
+      return {
+        url,
+        sourcePageUrl,
+        status: null,
+        error: response.kind,
+        isHtml: false,
+        canonical: null,
+      };
+    }
+    return {
+      url,
+      sourcePageUrl,
+      status: response.status,
+      error: null,
+      isHtml: isHtmlContentType(response.headers['content-type']),
+      canonical: this.parseSuccessfulHtml({ url, response })?.canonical ?? null,
+    };
   }
 
   /** One request, outside the crawl: its page is never recorded nor counted. */
@@ -215,6 +261,7 @@ class CrawlRun {
       canonical: parsed?.canonical ?? null,
       h1: parsed?.h1 ?? [],
       wordCount: parsed?.wordCount ?? null,
+      textRatio: parsed?.textRatio ?? null,
       contentHash: parsed?.contentHash ?? null,
       blockedByRobots: false,
     };
@@ -258,6 +305,7 @@ class CrawlRun {
       canonical: null,
       h1: [],
       wordCount: null,
+      textRatio: null,
       contentHash: null,
       blockedByRobots: true,
     };

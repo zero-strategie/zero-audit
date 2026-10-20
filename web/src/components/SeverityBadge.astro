@@ -1,0 +1,14 @@
+---
+import { SEVERITY_LABELS } from '../lib/labels';
+
+interface Props {
+  severity: string;
+}
+
+const { severity } = Astro.props;
+const known = Object.hasOwn(SEVERITY_LABELS, severity) ? (severity as keyof typeof SEVERITY_LABELS) : null;
+---
+
+<span class:list={['severity-badge', known ? `severity-${known}` : 'severity-unknown']}>
+  {known ? SEVERITY_LABELS[known] : severity}
+</span>

@@ -1,18 +1,32 @@
 ---
+import MainNav from '../components/MainNav.astro';
+import { resolveSourceUrl } from '../lib/source';
+import globalStylesheet from '../styles/global.css?url';
+
 interface Props {
   title: string;
+  projectId?: string | undefined;
+  snapshotId?: string | undefined;
 }
-const { title } = Astro.props;
+const { title, projectId, snapshotId } = Astro.props;
+const sourceUrl = resolveSourceUrl(process.env);
 ---
 
 <!doctype html>
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="stylesheet" href={globalStylesheet} />
     <title>{title}</title>
   </head>
   <body>
-    <header><a href="/">zero-audit</a></header>
+    <header class="site-header"><MainNav projectId={projectId} snapshotId={snapshotId} /></header>
     <main><slot /></main>
+    <footer class="site-footer" data-testid="site-footer">
+      zero-audit · licence AGPL-3.0 ·
+      <a href={sourceUrl}>Code source</a>
+    </footer>
   </body>
 </html>

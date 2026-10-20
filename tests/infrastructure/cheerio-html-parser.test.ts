@@ -81,6 +81,27 @@ describe('CheerioHtmlParser metadata', () => {
     expect(parse(html).wordCount).toBe(4);
   });
 
+  it('measures the text ratio as visible body bytes over received html bytes', () => {
+    const text = 'a'.repeat(50);
+    const prefix = `<body><p>${text}</p>`;
+    const html = `${prefix}${'<!---->'.repeat(100)}`.padEnd(1000, ' ');
+
+    expect(Buffer.byteLength(html)).toBe(1000);
+    expect(parse(html).textRatio).toBe(0.05);
+  });
+
+  it('measures the text ratio in utf-8 bytes, not characters', () => {
+    const html = '<body>éé</body>';
+
+    expect(parse(html).textRatio).toBe(4 / Buffer.byteLength(html));
+  });
+
+  it('ignores script, style, noscript and template text in the text ratio', () => {
+    const html = `<body>ab<script>${'x'.repeat(40)}</script><style>${'x'.repeat(40)}</style><noscript>${'x'.repeat(40)}</noscript><template>${'x'.repeat(40)}</template></body>`;
+
+    expect(parse(html).textRatio).toBe(2 / Buffer.byteLength(html));
+  });
+
   it('ignores a title that is not in the head', () => {
     expect(parse('<body><svg><title>Icon</title></svg></body>').title).toBeNull();
   });
