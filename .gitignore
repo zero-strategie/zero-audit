@@ -13,3 +13,8 @@ docs/missions/*/S[0-9]*-verdict.json
 docs/missions/*/S[0-9]*-pr.md
 .zero-audit/
 .astro/
+
+# Internal working material, kept out of the public repository
+.claude/
+docs/missions/
+docs/reference/

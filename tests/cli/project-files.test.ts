@@ -19,8 +19,8 @@ describe('local Postgres setup files', () => {
     expect(example).toMatch(/^DATABASE_URL=postgresql:\/\//m);
   });
 
-  it('documents the storage settings in the README', () => {
-    const readme = read('README.md');
+  it('documents the storage settings in the guides', () => {
+    const readme = read('README.md') + read('docs/user-guide.md') + read('docs/developer-guide.md');
     for (const term of ['--store', 'ZERO_AUDIT_STORE', 'DATABASE_URL', 'docker compose up']) {
       expect(readme).toContain(term);
     }
@@ -35,8 +35,8 @@ describe('local Postgres setup files', () => {
     expect(example).toMatch(/web image/i);
   });
 
-  it('documents HOST and the exposure warning in the README', () => {
-    const readme = read('README.md');
+  it('documents HOST and the exposure warning in the guides', () => {
+    const readme = read('README.md') + read('docs/user-guide.md') + read('docs/developer-guide.md');
     expect(readme).not.toContain('no host option');
     expect(readme).toContain('`HOST`');
     expect(readme).toContain('SIGTERM');

@@ -1,161 +1,56 @@
 # zero-audit
 
-Technical SEO audit tool (crawler, checks, scoring) for Zero Stratégie.
+Open-source technical SEO audit tool. zero-audit crawls a website, runs [20 checks](docs/checks.md), scores the site's health and tracks every change between two audits. You can use it from the command line, through a read-only HTTP API, or in a web dashboard.
 
-- Team conventions: `.claude/equipe.md`
-- Reference analysis: `docs/reference/`
-- Current mission: `docs/missions/m1-crawler/`
+- **Crawler**:
+  - honours robots.txt and sitemaps;
+  - runs breadth-first with a politeness delay;
+  - follows redirects;
+  - probes URL variants.
+- **Checks**:
+  - HTTP errors;
+  - titles, meta descriptions, headings;
+  - thin content and text ratio;
+  - internal linking;
+  - robots.txt, sitemap, llms.txt, HSTS;
+  - duplicate URL variants.
+- **Scores**:
+  - site health and per-theme scores (crawlability, https, linking, on-page);
+  - variation since the previous audit.
+- **History**: every audit is an immutable snapshot, with new and fixed issues and a `compare` command.
+- **Storage**: SQLite out of the box, or Postgres.
+- **Dashboard**: built with Astro, responsive, with a dark mode. The interface is in French.
 
-## Development
+## Quick start
 
-Requires Node 22 and pnpm.
+Requires Node.js 22 and pnpm.
 
-```
+```sh
 pnpm install
-pnpm lint
-pnpm typecheck
-pnpm test        # no test may reach the Internet (global network guard)
+pnpm zero-audit https://example.com          # run an audit
+pnpm zero-audit serve                        # API on http://127.0.0.1:3000
+pnpm --filter web dev                        # dashboard on http://127.0.0.1:4321
 ```
 
-The repository is a pnpm workspace (`pnpm-workspace.yaml`): the root package holds the core, the CLI and the API; `web/` is the Astro dashboard. `pnpm install` at the root installs both. The root `lint`, `typecheck` (including `astro check`) and `test` (including web/'s Vitest project, which renders components with Astro's Container API) cover `web/`, and CI runs them without a browser. `web/` must not import `src/` (enforced by ESLint): it only talks to the HTTP API.
+Or, with Docker:
 
-```
-pnpm --filter web dev      # dev server on http://127.0.0.1:4321
-pnpm --filter web build
-pnpm --filter web start    # serves the build on http://127.0.0.1:4321
+```sh
+POSTGRES_PASSWORD=change-me docker compose up --build
 ```
 
-Tests start a local HTTP fixture server (`tests/support/fixture-server.ts`). Production code must use undici's global dispatcher so the guard applies.
+Only audit sites you own or are allowed to crawl.
 
-## Running an audit
+## Documentation
 
-```
-pnpm zero-audit https://exemple.com --limit 50 --delay 500 --json audit.json
-pnpm run audit https://exemple.com
-```
+- [User guide](docs/user-guide.md): install, run audits, read scores, the dashboard, self-hosting.
+- [Checks reference](docs/checks.md): what each check flags and how to fix it.
+- [Developer guide](docs/developer-guide.md): architecture, adding a check, storage, API, tests, CI.
+- [Contributing](CONTRIBUTING.md)
 
-`pnpm zero-audit audit <url>` is the explicit form of `pnpm zero-audit <url>`; `audit`, `compare` and `serve` are reserved words and are never read as URLs.
+## About
 
-Use `pnpm run audit`, not `pnpm audit`: `pnpm audit` is pnpm's built-in vulnerability audit and never reaches the `audit` script. `pnpm zero-audit` is an alias without that conflict. After `pnpm build`, the `zero-audit` bin (`dist/cli/main.js`) can also be linked and run directly.
+zero-audit is built by [Zero Stratégie](https://zero-strategie.dev). Its feature set is inspired by commercial site-audit tools such as Semrush's Site Audit. It is an independent project, not affiliated with or endorsed by Semrush, and it contains no Semrush code, data or text.
 
-Options (an option wins over its environment variable, which wins over the default):
+## Licence
 
-| Option | Environment variable | Default | Meaning |
-|---|---|---|---|
-| `<url>` | | required | start URL (http or https) |
-| `--limit <n>` | | 100 | maximum number of pages crawled |
-| `--delay <ms>` | `ZERO_AUDIT_DELAY_MS` | 1000 | delay between two requests |
-| `--db <path>` | `ZERO_AUDIT_DB_PATH` | `./.zero-audit/audit.db` | SQLite database file |
-| `--store <sqlite\|postgres>` | `ZERO_AUDIT_STORE` | `sqlite` | storage backend (audit and compare) |
-| | `DATABASE_URL` | | Postgres connection URL, required with `--store postgres` |
-| `--json <file>` | | none | writes the full snapshot (pages, links, all check results) as JSON |
-| `--help` | | | prints the usage |
-
-### Choosing the storage
-
-SQLite stays the default. To use Postgres, start the local database and point `DATABASE_URL` at it (see `.env.example`; the schema is migrated automatically on first use):
-
-```
-POSTGRES_PASSWORD=<your password> docker compose up -d postgres
-DATABASE_URL=postgresql://zero_audit:<your password>@127.0.0.1:5432/zero_audit \
-  pnpm zero-audit https://exemple.com --store postgres
-```
-
-The connection is closed at the end of the command and on Ctrl+C. Passwords are masked in error messages. `--db` only applies to SQLite.
-
-The summary goes to stdout; the progress line (`crawled/limit`) goes to stderr, so stdout stays clean.
-
-Each audit also writes one JSON line per event on stdout, for `docker logs`: `audit.started`, then `audit.finished` (with `pagesCount` and `health`) or `audit.failed` (also on SIGINT/SIGTERM). Every line carries `timestamp`, `snapshotId` and `rootUrl`, never a stack trace.
-
-### `migrate`
-
-`zero-audit migrate [--store sqlite|postgres] [--db <path>]` applies the pending migrations and exits (0 on success, 1 on failure, 2 on a usage error). It opens no server. Opening the storage still migrates automatically; `migrate` is meant for `deploy.sh`, before the health check. Postgres migrations are serialized by an advisory lock.
-
-### Comparing two audits
-
-```
-pnpm zero-audit compare <A> <B> [--db <path>]
-```
-
-`A` is the base and `B` the target (snapshot ids are printed by the audit summary). For each check the output gives the counts in A and B, the delta, the new and fixed occurrences, then the occurrences added and removed. Both snapshots must be `finished` and belong to the same site. Exit codes: 0 success, 1 unknown, unfinished or cross-site snapshots, 2 invalid usage.
-
-Exit codes: 0 success, 1 crawl failure (snapshot marked `failed`), 2 invalid usage (nothing is requested or stored), 130 interrupted with Ctrl+C (snapshot marked `failed`).
-
-### Serving the API
-
-```
-pnpm zero-audit serve [--port <n>] [--db <path>] [--store <sqlite|postgres>]
-```
-
-Starts a read-only HTTP API. It listens on `HOST` (default `127.0.0.1`) and on `--port`, else `PORT`, else 3000. An invalid port (not an integer between 1 and 65535) makes the command fail with a message and a non-zero exit code. Set `HOST=0.0.0.0` only inside a container. There is no authentication and no CORS: the API must only be published on `127.0.0.1` (for example `127.0.0.1:3000:3000` in Docker), the dashboard's server reading it from the same machine. `--db`, `--store` and `DATABASE_URL` behave as for an audit. Ctrl+C (SIGINT) and `SIGTERM` (`docker stop`) release the storage: an audit in progress is marked `failed`; a stopped `serve` closes the server, then the storage, and exits 0.
-
-The web server (`web/`, Astro standalone) reads `HOST`, `PORT` and `ZERO_AUDIT_API_URL` at runtime; they take precedence over `server.host` and `server.port` in `web/astro.config.mjs`, which only apply to `astro dev`. `.env.example` lists the variables of each image.
-
-| Route | Answer |
-| --- | --- |
-| `GET /projects` | projects with their latest finished snapshot (`id`, `finishedAt`, rounded `health`, or `null`) |
-| `GET /projects/:id/snapshots` | snapshots of a project (UUID), most recent first, with `status` and `health` (`null` unless finished) |
-| `GET /snapshots/:id` | summary: health and themes with variation, counters, page groups, site files, top 5 checks |
-
-### Health checks
-
-Both servers expose `GET /health` for `deploy.sh` and the deployment job. The body is a short JSON object that never contains an internal URL or an error detail.
-
-| Server | Check | 200 | 503 |
-| --- | --- | --- | --- |
-| API | the storage (SQLite or Postgres) answers a trivial query | `{"status":"ok"}` | `{"status":"unavailable"}` |
-| Web | the API answers `GET /health` with 200 within 2 seconds | `{"status":"ok"}` | `{"status":"unavailable"}` (API down, slow or unhealthy) |
-
-Any other method on the API's `/health` answers 404. **Requirement for zero-infra:** Caddy protects the application with basic auth, so `/health` must be exempted from it on both hosts; otherwise the health check of `deploy.sh` and of the deployment job gets a 401.
-
-Errors share one format: `{ "error": { "code": "not_found" | "invalid_request", "message": "…" } }` (404 unknown id or route, 400 malformed id). Any non-GET method answers 404. An unexpected failure answers 500 with the code `internal_error` and a generic message.
-
-## Docker
-
-One `Dockerfile` builds two images (Node 22 `bookworm-slim`, amd64, non-root user):
-
-```
-docker build --target api -t zero-audit-api .   # core, CLI, API and SQL migrations
-docker build --target web -t zero-audit-web .   # Astro standalone server
-```
-
-The api image uses `node dist/cli/main.js` as its entry point and `serve` (with `HOST=0.0.0.0`, port 3000) as its default command, so the same image runs the other commands:
-
-```
-docker run --rm zero-audit-api migrate --store postgres      # with DATABASE_URL
-docker run --rm zero-audit-api audit https://exemple.com
-```
-
-The web image runs `node dist/server/entry.mjs` on port 4321 and reads `ZERO_AUDIT_API_URL`. Both images carry the `org.opencontainers.image.source` label pointing to this repository.
-
-`docker-compose.yml` starts the whole stack locally: `postgres` (16), `migrate` (runs once), then `api` and `web`, which wait for `migrate` to finish successfully. Every port is published on `127.0.0.1` only.
-
-```
-POSTGRES_PASSWORD=<your password> docker compose up --build
-curl http://127.0.0.1:3000/health   # API
-curl http://127.0.0.1:4321/health   # web (reflects the API health)
-```
-
-The Postgres volume is `postgres-16-data`: a volume created by the former Postgres 17 setup cannot be opened by version 16 and is left untouched.
-
-Docker is not required to develop or to run the local test suite (`pnpm test`); the CI builds both images, without pushing them, in the `verify` job.
-
-## Publishing and deployment
-
-`.github/workflows/ci.yml` runs three jobs. `verify` (lint, typecheck, tests, image builds and `actionlint` on the workflows) runs on every push and pull request. The two others run only on a push to `main`:
-
-- `build-and-push` publishes `ghcr.io/zero-strategie/zero-audit-api` and `ghcr.io/zero-strategie/zero-audit-web`, both tagged with the same 12-character commit SHA and `latest`, using `GITHUB_TOKEN`.
-- `deploy` connects over SSH, runs `/opt/zero-audit/deploy.sh <tag>` (pull, migrate, health check, rollback on failure), then polls `https://audit.zero-strategie.dev/health` (10 attempts, 6 seconds apart) and fails unless it gets 200. Deployments never cancel each other.
-
-`deploy` is **disabled** until the repository variable `DEPLOY_ENABLED` is `true`.
-
-| Name | Kind | Content |
-| --- | --- | --- |
-| `DEPLOY_SSH_KEY` | secret | private SSH key of the deployment user |
-| `DEPLOY_HOST` | secret | server host name |
-| `DEPLOY_USER` | secret | SSH user |
-| `DEPLOY_PORT` | secret | SSH port |
-| `DEPLOY_KNOWN_HOSTS` | secret | server host key line(s), from `ssh-keyscan -p <port> <host>` |
-| `DEPLOY_ENABLED` | repository variable | `true` to enable the job |
-
-Activation: create the GitHub environment `production`, add the five secrets (environment or repository level), check that zero-infra has installed `/opt/zero-audit/deploy.sh` and exempted `/health` from basic auth, then set `DEPLOY_ENABLED` to `true`. To check on first merge: the organisation must allow `GITHUB_TOKEN` to publish packages to GHCR (risk R14).
+[MIT](LICENSE) © 2026 Zero Stratégie

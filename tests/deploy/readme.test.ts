@@ -1,9 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const readme = readFileSync(new URL('../../README.md', import.meta.url), 'utf8');
+const docs = ['README.md', 'docs/user-guide.md', 'docs/developer-guide.md']
+  .map((file) => readFileSync(new URL(`../../${file}`, import.meta.url), 'utf8'))
+  .join('\n');
 
-describe('README Docker section', () => {
+describe('Docker documentation', () => {
   it.each([
     'docker build --target api',
     'docker build --target web',
@@ -12,6 +14,6 @@ describe('README Docker section', () => {
     'http://127.0.0.1:4321/health',
     'Docker is not required',
   ])('documents %s', (text) => {
-    expect(readme).toContain(text);
+    expect(docs).toContain(text);
   });
 });

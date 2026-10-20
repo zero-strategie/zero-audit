@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { expect } from 'vitest';
 import { runChecks } from '../../src/application/run-checks.js';
@@ -82,12 +83,28 @@ export const flaggedUrls = (result: CheckResult): (string | null)[] =>
 export const u = (name: string): string => `https://exemple.com/${name}`;
 
 interface Catalogue {
-  issues: { id: number; severity: string; title_fr: string | null; title_en: string | null }[];
+  checks: { id: number; severity: string }[];
+}
+
+interface TitleHashes {
+  sha256: string[];
 }
 
 const catalogue = JSON.parse(
-  readFileSync(new URL('../../docs/reference/site-audit-issues.json', import.meta.url), 'utf8'),
+  readFileSync(new URL('./check-catalogue.json', import.meta.url), 'utf8'),
 ) as Catalogue;
+
+const titleHashes = new Set(
+  (
+    JSON.parse(
+      readFileSync(new URL('./catalogue-title-hashes.json', import.meta.url), 'utf8'),
+    ) as TitleHashes
+  ).sha256,
+);
+
+/** True when the text, lower-cased and trimmed, is one of the reference catalogue titles. */
+export const isCatalogueTitle = (text: string): boolean =>
+  titleHashes.has(createHash('sha256').update(text.trim().toLowerCase()).digest('hex'));
 
 export const expectCatalogueMetadata = (
   checks: readonly Check[],
@@ -99,19 +116,14 @@ export const expectCatalogueMetadata = (
       .sort((a, b) => a - b),
   );
   for (const check of checks) {
-    const entry = catalogue.issues.find((i) => i.id === check.id);
+    const entry = catalogue.checks.find((i) => i.id === check.id);
     expect(entry?.severity).toBe(check.severity);
     expect(check.severity).toBe(expectedSeverities[check.id]);
   }
 };
 
 export const expectNoCatalogueTitleCopied = (checks: readonly Check[]): void => {
-  const titles = new Set(
-    catalogue.issues.flatMap((i) =>
-      [i.title_fr, i.title_en].flatMap((t) => (t === null ? [] : [t.toLowerCase()])),
-    ),
-  );
   for (const check of checks) {
-    expect(titles.has(check.label.toLowerCase())).toBe(false);
+    expect(isCatalogueTitle(check.label)).toBe(false);
   }
 };
