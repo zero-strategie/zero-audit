@@ -259,7 +259,7 @@ Each audit writes JSON lines to stdout (`audit.started`, `audit.finished` with t
 ```text
 zero-audit [audit] <url> [options]   run an audit (the word "audit" is optional)
 zero-audit compare <A> <B>           compare two finished audits of the same site
-zero-audit serve                     start the read-only HTTP API
+zero-audit serve                     start the HTTP API
 zero-audit migrate                   apply storage migrations and exit
 ```
 
