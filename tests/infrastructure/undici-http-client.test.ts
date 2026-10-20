@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { PrivateAddressRejected } from '../../src/domain/errors.js';
 import { isNetworkFailure, type HttpResponse } from '../../src/application/ports/http-client.js';
 import { SystemClock } from '../../src/infrastructure/system-clock.js';
 import {
+  createPublicLookup,
   UndiciHttpClient,
   type UndiciHttpClientOptions,
 } from '../../src/infrastructure/undici-http-client.js';
@@ -119,5 +121,66 @@ describe('UndiciHttpClient', () => {
       expect(result).toMatchObject({ kind: 'blocked' });
       expect(server.requests).toEqual([]);
     });
+
+    type Resolver = NonNullable<UndiciHttpClientOptions['resolver']>;
+    type LookupOutcome =
+      { address: string; family: number } | { address: string; family: number }[];
+
+    const runLookup = (resolver: Resolver, options: { all?: boolean }) =>
+      new Promise<LookupOutcome>((resolve, reject) => {
+        createPublicLookup(resolver)('site.test', options, (error, address, family) => {
+          if (error) reject(error);
+          else if (typeof address === 'string') resolve({ address, family: family ?? 0 });
+          else resolve(address);
+        });
+      });
+
+    it('keeps only public addresses when lookup is asked for all of them', async () => {
+      const addresses = await runLookup(resolvingTo('10.0.0.1', '93.184.216.34'), { all: true });
+
+      expect(addresses).toEqual([{ address: '93.184.216.34', family: 4 }]);
+    });
+
+    it('returns a single public address, with its family, in the simple lookup form', async () => {
+      const result = await runLookup(resolvingTo('10.0.0.1', '93.184.216.34'), {});
+
+      expect(result).toEqual({ address: '93.184.216.34', family: 4 });
+    });
+
+    it.each([{ all: true }, {}])(
+      'rejects with a blocked error when no address is public (%o)',
+      async (options) => {
+        const resolver = resolvingTo('10.0.0.1', 'fd00::1');
+
+        const outcome = await runLookup(resolver, options).catch((error: unknown) => error);
+
+        expect(outcome).toBeInstanceOf(PrivateAddressRejected);
+      },
+    );
+
+    it.each(['127.0.0.1', '[::1]', '0x7f.1', '[::ffff:7f00:1]'])(
+      'blocks the literal address %s before any fetch',
+      async (host) => {
+        server = await startFixtureServer({ '/': { status: 200, body: 'secret' } });
+        const port = new URL(server.baseUrl).port;
+        const client = clientWith({
+          blockPrivateAddresses: true,
+          resolver: resolvingTo('1.1.1.1'),
+        });
+
+        const result = await client.get(`http://${host}:${port}/`);
+
+        expect(result).toMatchObject({ kind: 'blocked' });
+        expect(server.requests).toEqual([]);
+      },
+    );
+  });
+
+  it('still reaches a loopback server when the guard is off', async () => {
+    server = await startFixtureServer({ '/': { status: 200, body: 'ok' } });
+
+    const response = expectResponse(await clientWith().get(`${server.baseUrl}/`));
+
+    expect(response.status).toBe(200);
   });
 });

@@ -29,8 +29,10 @@ export interface UndiciHttpClientOptions {
   /** Refuse hosts that are, or resolve to, non-public addresses (SSRF guard). */
   blockPrivateAddresses?: boolean;
   /** Name resolution used by the guard; injected in tests to avoid the network. */
-  resolver?: (hostname: string) => Promise<LookupAddress[]>;
+  resolver?: Resolver;
 }
+
+type Resolver = (hostname: string) => Promise<LookupAddress[]>;
 
 type LookupCallback = (
   error: NodeJS.ErrnoException | null,
@@ -38,13 +40,38 @@ type LookupCallback = (
   family?: number,
 ) => void;
 
-const systemResolver = (hostname: string): Promise<LookupAddress[]> =>
+const systemResolver: Resolver = (hostname) =>
   new Promise((resolve, reject) => {
     lookup(hostname, { all: true }, (error, addresses) => {
       if (error) reject(error);
       else resolve(addresses);
     });
   });
+
+/**
+ * Node's connect() may ask for every address (`all: true`, autoSelectFamily) or for a
+ * single one; both forms must return only public addresses.
+ */
+export const createPublicLookup =
+  (resolve: Resolver) =>
+  (hostname: string, options: LookupOptions, callback: LookupCallback): void => {
+    resolve(hostname).then(
+      (addresses) => {
+        const publicAddresses = addresses.filter(({ address }) => isPublicAddress(address));
+        const [first] = publicAddresses;
+        if (first === undefined) {
+          callback(new PrivateAddressRejected(hostname, addresses[0]?.address ?? 'none'), []);
+        } else if (options.all === true) {
+          callback(null, publicAddresses);
+        } else {
+          callback(null, first.address, first.family);
+        }
+      },
+      (error: unknown) => {
+        callback(error instanceof Error ? error : new Error(String(error)), []);
+      },
+    );
+  };
 
 const errorCode = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null) return undefined;
@@ -81,32 +108,8 @@ export class UndiciHttpClient implements HttpClient {
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     this.maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
     this.guardedAgent = options.blockPrivateAddresses
-      ? new Agent({ connect: { lookup: this.publicLookup.bind(this) } })
+      ? new Agent({ connect: { lookup: createPublicLookup(options.resolver ?? systemResolver) } })
       : undefined;
-  }
-
-  /**
-   * Node's connect() may ask for every address (`all: true`, autoSelectFamily) or for a
-   * single one; both forms must return only public addresses.
-   */
-  private publicLookup(hostname: string, options: LookupOptions, callback: LookupCallback) {
-    const resolve = this.options.resolver ?? systemResolver;
-    resolve(hostname).then(
-      (addresses) => {
-        const publicAddresses = addresses.filter(({ address }) => isPublicAddress(address));
-        const [first] = publicAddresses;
-        if (first === undefined) {
-          callback(new PrivateAddressRejected(hostname, addresses[0]?.address ?? 'none'), []);
-        } else if (options.all === true) {
-          callback(null, publicAddresses);
-        } else {
-          callback(null, first.address, first.family);
-        }
-      },
-      (error: unknown) => {
-        callback(error instanceof Error ? error : new Error(String(error)), []);
-      },
-    );
   }
 
   async get(url: string): Promise<HttpResponse | NetworkFailure> {
