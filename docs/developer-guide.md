@@ -236,6 +236,8 @@ Dashboard tests render pages and components with Astro's **Container API** and a
 
 The dashboard reads `HOST`, `PORT` and `ZERO_AUDIT_API_URL` at runtime. For the dev server, `pnpm --filter web dev` serves it on `127.0.0.1:4321`.
 
+Form posts are protected twice. Astro's `security.checkOrigin` stays on, and `isSameOrigin` (`web/src/lib/same-origin.ts`) is called by every page that handles a POST. Behind Caddy the server only sees `127.0.0.1:4321`, so `astro.config.mjs` sets `security.allowedDomains` from `ZERO_AUDIT_PUBLIC_HOSTS` (comma-separated host names, read at **build** time, for example `audit.zero-strategie.dev`). Astro then trusts `X-Forwarded-Host` and `X-Forwarded-Proto` for these hosts only, which is safe because the server listens on loopback and Caddy overwrites those headers. Without the variable, any host over https is accepted. A POST from another origin still gets a 403.
+
 ## Testing
 
 - **TDD.** Write the failing test first, watch it fail, then make it pass.
