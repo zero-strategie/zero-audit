@@ -53,3 +53,13 @@ export class UnknownCheck extends DomainError {
     this.name = 'UnknownCheck';
   }
 }
+
+export class PrivateAddressRejected extends DomainError {
+  constructor(
+    readonly host: string,
+    readonly address: string,
+  ) {
+    super(`Host ${host} resolves to a non-public address (${address})`);
+    this.name = 'PrivateAddressRejected';
+  }
+}
