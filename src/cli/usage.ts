@@ -1,10 +1,12 @@
 export const USAGE = `Usage : zero-audit [audit] <url> [options]
         zero-audit compare <A> <B> [--db <chemin>]
         zero-audit serve [--port <n>] [--db <chemin>] [--store <type>]
+        zero-audit migrate [--store <type>] [--db <chemin>]
 
 Commandes
   audit <url>       lance un audit (commande par défaut : « audit » est facultatif)
   compare <A> <B>   compare deux snapshots terminés du même site (A = base, B = cible)
+  migrate           applique les migrations du stockage puis rend la main
   serve             démarre l'API HTTP en lecture seule (HOST, défaut 127.0.0.1)
 
 Arguments

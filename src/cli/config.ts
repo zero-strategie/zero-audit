@@ -29,12 +29,17 @@ export interface ServeConfig extends StoreSelection {
   dbPath: string;
 }
 
+export interface MigrateConfig extends StoreSelection {
+  dbPath: string;
+}
+
 export type ParsedCommand =
   | { kind: 'help' }
   | { kind: 'usage-error'; message: string }
   | { kind: 'audit'; config: AuditConfig }
   | ({ kind: 'compare' } & CompareConfig)
-  | ({ kind: 'serve' } & ServeConfig);
+  | ({ kind: 'serve' } & ServeConfig)
+  | ({ kind: 'migrate' } & MigrateConfig);
 
 type Environment = Readonly<Record<string, string | undefined>>;
 
@@ -154,9 +159,18 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
   };
 };
 
+const buildMigrateConfig = (argv: readonly string[], env: Environment): MigrateConfig => {
+  const { values } = parseArgs({
+    args: [...argv],
+    options: { db: { type: 'string' }, store: { type: 'string' } },
+  });
+  return { dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH, ...parseStore(values.store, env) };
+};
+
 const buildCommand = (argv: readonly string[], env: Environment): ParsedCommand => {
   const [first, ...rest] = argv;
   if (first === 'serve') return { kind: 'serve', ...buildServeConfig(rest, env) };
+  if (first === 'migrate') return { kind: 'migrate', ...buildMigrateConfig(rest, env) };
   if (first === 'compare') return { kind: 'compare', ...buildCompareConfig(rest, env) };
   return { kind: 'audit', config: buildConfig(first === 'audit' ? rest : argv, env) };
 };

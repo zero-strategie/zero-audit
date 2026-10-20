@@ -18,12 +18,23 @@ import { SystemClock } from '../infrastructure/system-clock.js';
 import { UndiciHttpClient } from '../infrastructure/undici-http-client.js';
 import { buildUserAgent } from '../infrastructure/user-agent.js';
 import { buildServer, type HttpServer, type ServerDependencies } from '../http/server.js';
-import { parseCommand, type AuditConfig, type CompareConfig, type ServeConfig } from './config.js';
+import {
+  parseCommand,
+  type AuditConfig,
+  type CompareConfig,
+  type MigrateConfig,
+  type ServeConfig,
+} from './config.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
 import { renderComparison } from './render-compare.js';
 import { renderSummary } from './render-summary.js';
-import { createStorage, type Storage, type StorageFactory } from './storage-factory.js';
+import {
+  createStorage,
+  migrateStorage,
+  type Storage,
+  type StorageFactory,
+} from './storage-factory.js';
 import { USAGE } from './usage.js';
 
 export const EXIT_SUCCESS = 0;
@@ -119,6 +130,17 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
   }
 };
 
+const migrate = async (config: MigrateConfig, io: CliIo): Promise<number> => {
+  try {
+    await migrateStorage(config);
+    io.stdout('Migrations appliquées.\n');
+    return EXIT_SUCCESS;
+  } catch (error) {
+    io.stderr(`Migration échouée : ${errorMessage(error)}\n`);
+    return EXIT_CRAWL_FAILED;
+  }
+};
+
 const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<number> => {
   let storage: Storage | null = null;
   let server: HttpServer | null = null;
@@ -187,6 +209,7 @@ export const runCli = async (
     io.stderr(`Erreur : ${command.message}\n\n${USAGE}`);
     return EXIT_USAGE;
   }
+  if (command.kind === 'migrate') return migrate(command, io);
   if (command.kind === 'serve') return serve(command, io, hooks);
   if (command.kind === 'compare') return compare(command, io, hooks);
   return audit(command.config, io, hooks);

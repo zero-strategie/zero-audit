@@ -1,7 +1,5 @@
-import Database, { type Database as SqliteDatabase } from 'better-sqlite3';
+import type { Database as SqliteDatabase } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
 import type {
   SnapshotDetails,
   SnapshotRepository,
@@ -21,8 +19,7 @@ import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
 import { migrate } from './migrate.js';
-
-const IN_MEMORY_PATH = ':memory:';
+import { openDatabase } from './open-database.js';
 
 interface SnapshotRow {
   id: string;
@@ -164,10 +161,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
   }
 
   static open(path: string): SqliteSnapshotRepository {
-    if (path !== IN_MEMORY_PATH) mkdirSync(dirname(path), { recursive: true });
-    const db = new Database(path);
-    db.pragma('foreign_keys = ON');
-    db.pragma('journal_mode = WAL');
+    const db = openDatabase(path);
     migrate(db);
     return new SqliteSnapshotRepository(db);
   }

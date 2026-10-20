@@ -65,6 +65,12 @@ The connection is closed at the end of the command and on Ctrl+C. Passwords are 
 
 The summary goes to stdout; the progress line (`crawled/limit`) goes to stderr, so stdout stays clean.
 
+Each audit also writes one JSON line per event on stdout, for `docker logs`: `audit.started`, then `audit.finished` (with `pagesCount` and `health`) or `audit.failed` (also on SIGINT/SIGTERM). Every line carries `timestamp`, `snapshotId` and `rootUrl`, never a stack trace.
+
+### `migrate`
+
+`zero-audit migrate [--store sqlite|postgres] [--db <path>]` applies the pending migrations and exits (0 on success, 1 on failure, 2 on a usage error). It opens no server. Opening the storage still migrates automatically; `migrate` is meant for `deploy.sh`, before the health check. Postgres migrations are serialized by an advisory lock.
+
 ### Comparing two audits
 
 ```
