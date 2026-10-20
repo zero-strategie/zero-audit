@@ -1,8 +1,11 @@
-# Local Postgres for manual use. The password is never versioned:
-#   POSTGRES_PASSWORD=<your password> docker compose up -d
+# Full local stack: Postgres 16, one-shot migrations, api and web. The password is never versioned:
+#   POSTGRES_PASSWORD=<your password> docker compose up --build
+# Web on http://127.0.0.1:4321, API on http://127.0.0.1:3000. Every port is published on the loopback
+# only: the API has no authentication.
+# The data volume is named postgres-16-data because a Postgres 17 volume cannot be opened by 16.
 services:
   postgres:
-    image: postgres:17
+    image: postgres:16
     environment:
       POSTGRES_USER: zero_audit
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD to start the local database}
@@ -10,12 +13,61 @@ services:
     ports:
       - '127.0.0.1:5432:5432'
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-16-data:/var/lib/postgresql/data
     healthcheck:
       test: ['CMD', 'pg_isready', '-U', 'zero_audit', '-d', 'zero_audit']
       interval: 5s
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: .
+      target: api
+    command: ['migrate']
+    restart: 'no'
+    environment: &api-environment
+      ZERO_AUDIT_STORE: postgres
+      DATABASE_URL: postgresql://zero_audit:${POSTGRES_PASSWORD}@postgres:5432/zero_audit
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      target: api
+    environment: *api-environment
+    ports:
+      - '127.0.0.1:3000:3000'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:3000/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      target: web
+    environment:
+      ZERO_AUDIT_API_URL: http://api:3000
+    ports:
+      - '127.0.0.1:4321:4321'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_healthy
+
 volumes:
-  postgres-data:
+  postgres-16-data:
