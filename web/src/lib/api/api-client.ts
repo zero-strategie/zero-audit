@@ -1,4 +1,5 @@
 import type {
+  AuditProgress,
   Comparison,
   IssueRow,
   OccurrencePage,
@@ -7,6 +8,7 @@ import type {
   Severity,
   SnapshotListing,
   SnapshotReport,
+  StartedAudit,
 } from './types';
 import type { PageSort } from '../sorting';
 
@@ -19,6 +21,9 @@ export interface ApiClient {
   listProjectSnapshots(projectId: string): Promise<SnapshotListing[]>;
   /** `baseId` is audit A, `targetId` audit B. */
   compare(baseId: string, targetId: string): Promise<Comparison>;
+  /** Rejects with `InvalidRequest` (400) or `Conflict` (409), carrying the API message. */
+  startAudit(input: { url: string; limit: number }): Promise<StartedAudit>;
+  getAuditProgress(snapshotId: string): Promise<AuditProgress>;
   /** True only when the API answers `/health` with 200 in time; never throws. */
   checkHealth(): Promise<boolean>;
 }

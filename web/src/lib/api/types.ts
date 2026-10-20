@@ -9,6 +9,23 @@ export interface ProjectOverview {
   rootUrl: string;
   createdAt: string;
   latestSnapshot: { id: string; finishedAt: string | null; health: number | null } | null;
+  /** The most recent snapshot, whatever its status. */
+  latestRun: { id: string; status: SnapshotStatus; startedAt: string } | null;
+}
+
+export type SnapshotStatus = 'running' | 'finished' | 'failed';
+
+export interface StartedAudit {
+  snapshotId: string;
+  projectId: string;
+}
+
+export interface AuditProgress {
+  status: SnapshotStatus;
+  pagesCrawled: number;
+  pagesLimit: number;
+  startedAt: string;
+  rootUrl: string;
 }
 
 export interface Score {
@@ -20,6 +37,7 @@ export interface SnapshotReport {
   snapshot: {
     id: string;
     projectId: string;
+    rootUrl: string;
     status: string;
     startedAt: string;
     finishedAt: string | null;
@@ -84,7 +102,7 @@ export interface PageListing {
 
 export interface SnapshotListing {
   id: string;
-  status: 'running' | 'finished' | 'failed';
+  status: SnapshotStatus;
   startedAt: string;
   finishedAt: string | null;
   pagesCrawled: number;

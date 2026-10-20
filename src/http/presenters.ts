@@ -13,7 +13,11 @@ const checksById = new Map(allChecks.map((check) => [check.id, check]));
 
 const isoOrNull = (date: Date | null): string | null => date?.toISOString() ?? null;
 
-export const presentProjectOverview = ({ project, latestSnapshot, latestRun }: ProjectOverview) => ({
+export const presentProjectOverview = ({
+  project,
+  latestSnapshot,
+  latestRun,
+}: ProjectOverview) => ({
   id: project.id,
   rootUrl: project.rootUrl,
   createdAt: project.createdAt.toISOString(),

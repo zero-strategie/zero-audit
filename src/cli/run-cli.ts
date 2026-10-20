@@ -99,7 +99,9 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
       },
     });
     progress.finish();
-    const report = await new GetSnapshotReport(opened.snapshots, opened.projects).execute(details.snapshot.id);
+    const report = await new GetSnapshotReport(opened.snapshots, opened.projects).execute(
+      details.snapshot.id,
+    );
     io.stdout(renderSummary(report, labelsById()));
     if (config.jsonPath !== null) writeJsonExport(config.jsonPath, report);
     return EXIT_SUCCESS;

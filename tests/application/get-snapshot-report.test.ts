@@ -26,7 +26,10 @@ const check15 = (...paths: string[]): CheckResult => ({
 const build = async () => {
   const repository = new InMemorySnapshotRepository();
   const projects = new InMemoryProjectRepository();
-  const project = await projects.findOrCreateByRootUrl({ rootUrl: ROOT_URL, createdAt: minutes(0) });
+  const project = await projects.findOrCreateByRootUrl({
+    rootUrl: ROOT_URL,
+    createdAt: minutes(0),
+  });
   const record = async (
     startMinute: number,
     outcome: 'finished' | 'failed',

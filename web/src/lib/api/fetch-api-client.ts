@@ -1,8 +1,9 @@
 import type { ApiClient } from './api-client';
-import { ApiUnreachable, InvalidRequest, NotFound } from './errors';
+import { ApiUnreachable, Conflict, InvalidRequest, NotFound } from './errors';
 
 const HTTP_BAD_REQUEST = 400;
 const HTTP_NOT_FOUND = 404;
+const HTTP_CONFLICT = 409;
 const HTTP_OK = 200;
 const DEFAULT_HEALTH_TIMEOUT_MS = 2000;
 
@@ -25,19 +26,22 @@ export const fetchApiClient = (
   fetchImpl: typeof fetch,
   { healthTimeoutMs = DEFAULT_HEALTH_TIMEOUT_MS }: FetchApiClientOptions = {},
 ): ApiClient => {
-  const get = async <T>(path: string, resource: string): Promise<T> => {
+  const request = async <T>(path: string, resource: string, init?: RequestInit): Promise<T> => {
     let response: Response;
     try {
-      response = await fetchImpl(`${baseUrl}${path}`);
+      response = await fetchImpl(`${baseUrl}${path}`, init);
     } catch (error) {
       throw new ApiUnreachable(error instanceof Error ? error.message : String(error));
     }
     if (response.status === HTTP_NOT_FOUND) throw new NotFound(resource);
     if (response.status === HTTP_BAD_REQUEST)
       throw new InvalidRequest(await readErrorMessage(response));
+    if (response.status === HTTP_CONFLICT) throw new Conflict(await readErrorMessage(response));
     if (!response.ok) throw new ApiUnreachable(`HTTP ${String(response.status)}`);
     return (await response.json()) as T;
   };
+
+  const get = <T>(path: string, resource: string): Promise<T> => request(path, resource);
 
   const checkHealth = async (): Promise<boolean> => {
     try {
@@ -52,6 +56,14 @@ export const fetchApiClient = (
 
   return {
     checkHealth,
+    startAudit: (input) =>
+      request('/audits', 'Audit', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+    getAuditProgress: (snapshotId) =>
+      get(`/snapshots/${encodeURIComponent(snapshotId)}/progress`, 'Snapshot'),
     listProjects: () => get('/projects', 'Projects'),
     getSnapshotReport: (snapshotId) =>
       get(`/snapshots/${encodeURIComponent(snapshotId)}`, 'Snapshot'),
