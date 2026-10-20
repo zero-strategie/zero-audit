@@ -29,6 +29,8 @@ export interface SnapshotRepository {
   getById(id: string): Promise<SnapshotDetails | null>;
   /** Most recent first, by `startedAt`. */
   listByProject(projectId: string): Promise<readonly Snapshot[]>;
+  /** Snapshots still `running`, every project included, most recent first. */
+  listRunning(): Promise<readonly Snapshot[]>;
   /** Latest `finished` snapshot of the project whose `startedAt` is strictly before the given date. */
   findPreviousFinished(projectId: string, beforeStartedAt: Date): Promise<Snapshot | null>;
 }

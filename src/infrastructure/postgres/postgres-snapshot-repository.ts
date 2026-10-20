@@ -338,6 +338,13 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
     return rows.map(toSnapshot);
   }
 
+  async listRunning(): Promise<readonly Snapshot[]> {
+    const { rows } = await this.pool.query<SnapshotRow>(
+      "SELECT * FROM snapshots WHERE status = 'running' ORDER BY started_at DESC, id",
+    );
+    return rows.map(toSnapshot);
+  }
+
   async findPreviousFinished(projectId: string, beforeStartedAt: Date): Promise<Snapshot | null> {
     const { rows } = await this.pool.query<SnapshotRow>(
       `SELECT * FROM snapshots

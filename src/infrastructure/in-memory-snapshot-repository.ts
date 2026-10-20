@@ -110,6 +110,14 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
     return Promise.resolve(snapshots);
   }
 
+  listRunning(): Promise<readonly Snapshot[]> {
+    const snapshots = [...this.stored.values()]
+      .map(({ snapshot }) => snapshot)
+      .filter((snapshot) => snapshot.status === 'running')
+      .sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime());
+    return Promise.resolve(snapshots);
+  }
+
   async findPreviousFinished(projectId: string, beforeStartedAt: Date): Promise<Snapshot | null> {
     const snapshots = await this.listByProject(projectId);
     return (

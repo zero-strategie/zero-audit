@@ -370,6 +370,16 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     );
   }
 
+  listRunning(): Promise<readonly Snapshot[]> {
+    return this.run(() =>
+      (
+        this.db
+          .prepare("SELECT * FROM snapshots WHERE status = 'running' ORDER BY started_at DESC, id")
+          .all() as SnapshotRow[]
+      ).map(toSnapshot),
+    );
+  }
+
   findPreviousFinished(projectId: string, beforeStartedAt: Date): Promise<Snapshot | null> {
     return this.run(() => {
       const row = this.db

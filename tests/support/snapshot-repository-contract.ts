@@ -398,6 +398,46 @@ export const describeSnapshotRepositoryContract = (
       expect((await snapshots.findPreviousFinished(project.id, at(2)))?.id).toBe(s1);
     });
 
+    it('lists only the running snapshots, with their start date', async () => {
+      const { snapshots, project, start } = await setup();
+      const finished = await start(project.id, 1);
+      await snapshots.finish(finished, { finishedAt: at(100), pagesCrawled: 1 });
+      const running = await start(project.id, 2);
+
+      const listed = await snapshots.listRunning();
+
+      expect(listed.map(({ id, startedAt: began }) => ({ id, began }))).toEqual([
+        { id: running, began: at(2) },
+      ]);
+    });
+
+    it('lists the running snapshots of every project', async () => {
+      const { snapshots, projects, project, start } = await setup();
+      const other = await projects.findOrCreateByRootUrl({
+        rootUrl: 'https://other.test/',
+        createdAt: startedAt,
+      });
+      const mine = await start(project.id, 1);
+      const theirs = await start(other.id, 2);
+
+      const ids = (await snapshots.listRunning()).map(({ id }) => id);
+
+      expect([...ids].sort()).toEqual([mine, theirs].sort());
+    });
+
+    it('lists no running snapshot when none is running', async () => {
+      const { snapshots } = await setup();
+      expect(await snapshots.listRunning()).toEqual([]);
+    });
+
+    it('no longer lists a running snapshot once it has failed', async () => {
+      const { snapshots, project, start } = await setup();
+      const id = await start(project.id, 1);
+      await snapshots.fail(id, at(100));
+
+      expect(await snapshots.listRunning()).toEqual([]);
+    });
+
     it('returns null when the project has no earlier finished snapshot', async () => {
       const { snapshots, project, start } = await setup();
       const only = await start(project.id, 1);
