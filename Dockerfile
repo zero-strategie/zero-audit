@@ -18,6 +18,9 @@ RUN pnpm install --frozen-lockfile --ignore-scripts \
   && pnpm rebuild better-sqlite3 esbuild
 
 FROM deps AS build
+# Read by web/astro.config.mjs at build time; empty keeps the https-only fallback.
+ARG ZERO_AUDIT_PUBLIC_HOSTS=
+ENV ZERO_AUDIT_PUBLIC_HOSTS=$ZERO_AUDIT_PUBLIC_HOSTS
 COPY . .
 RUN pnpm --filter web exec astro sync \
   && pnpm build \
