@@ -99,7 +99,8 @@ describe('runCli', () => {
     expect(run.out).toContain('Pages par groupe');
     expect(exported.scores.health.score).toEqual(expect.any(Number));
     expect(exported.scores.themes.https).toEqual({ score: null, variation: null });
-    expect(run.out).toMatch(/Santé du site : \d+ \/ 100/);
+    expect(run.out).toMatch(/Santé du site : \d+\n/);
+    expect(run.out).not.toContain('/ 100');
     expect(run.out).toContain('https : non calculable');
     expect(exported.snapshot).toMatchObject({
       status: 'finished',
@@ -134,12 +135,17 @@ describe('runCli', () => {
 
     const exported = JSON.parse(readFileSync(jsonPath, 'utf8')) as {
       checkResults: { delta: number; newCount: number; fixedCount: number }[];
+      scores: { health: { score: number; variation: number | null } };
     };
+    expect(Number.isInteger(exported.scores.health.score)).toBe(true);
+    expect(exported.scores.health.variation).toBe(0);
     expect(exported.checkResults).toHaveLength(16);
     for (const result of exported.checkResults) {
       expect(result).toMatchObject({ delta: 0, newCount: 0, fixedCount: 0 });
     }
     expect(second.out).toMatch(/ – Δ 0 – nouvelles 0 – corrigées 0/);
+    expect(second.out).toMatch(/Santé du site : \d+ \(0\)\n/);
+    expect(second.out).not.toContain('/ 100');
     expect(second.out).not.toMatch(/nouvelles [1-9]/);
   });
 
@@ -219,8 +225,8 @@ describe('runCli', () => {
       expect(code).toBe(0);
       expect(run.out).toContain('Aucune différence');
       expect(run.out).toMatch(/Δ 0 – nouvelles 0 – corrigées 0/);
-      expect(run.out).toMatch(/Santé du site : A (\d+) → B \1 \(Δ 0\)/);
-      expect(run.out).toMatch(/on-page : A \d+ → B \d+ \(Δ 0\)/);
+      expect(run.out).toMatch(/Santé du site : A (\d+) → B \1 \(0\)/);
+      expect(run.out).toMatch(/on-page : A \d+ → B \d+ \(0\)/);
     });
 
     it('lists occurrences added between two audits', async () => {

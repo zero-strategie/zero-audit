@@ -28,14 +28,13 @@ const renderReport = async (report: SnapshotReport) =>
 it('shows the health score and its variation', async () => {
   const html = await renderReport(aReport());
 
-  expect(html).toMatch(/data-testid="health-score"[^>]*>\s*82\s*</);
-  expect(html).toMatch(/data-testid="health-variation"[^>]*>\s*\+2\s*</);
+  expect(html).toMatch(/data-testid="health-score"[^>]*>\s*82 \(\+2\)\s*</);
 });
 
-it('shows a dash when the health variation is null', async () => {
+it('shows the bare score when the health variation is null', async () => {
   const html = await renderReport(aReport({ health: { score: 82, variation: null } }));
 
-  expect(html).toMatch(/data-testid="health-variation"[^>]*>\s*—\s*</);
+  expect(html).toMatch(/data-testid="health-score"[^>]*>\s*82\s*</);
 });
 
 it('shows "Non calculable" for the https theme when its score is null', async () => {
@@ -59,6 +58,16 @@ it('shows the five page groups with their variation', async () => {
     expect(html).toContain(`data-testid="group-${group}"`);
   }
   expect(html).toMatch(/data-testid="group-healthy"[^]*?\+3/);
+});
+
+it('shows a dash for a page group whose variation is null', async () => {
+  const report = aReport();
+  const html = await renderReport({
+    ...report,
+    pageGroups: { ...report.pageGroups, healthy: { count: 20, variation: null } },
+  });
+
+  expect(html).toMatch(/data-testid="group-healthy"[^>]*>[^<]*20 \(—\)/);
 });
 
 it('lists the top issues with a link to their detail', async () => {
@@ -120,4 +129,19 @@ it('links to the pages screen and to the comparison of the project', async () =>
 
   expect(html).toContain('href="/snapshots/s1/pages"');
   expect(html).toContain('href="/projects/p1/compare"');
+});
+
+it('shows a zero health variation as "82 (0)" and not "820"', async () => {
+  const html = await renderReport(aReport({ health: { score: 82, variation: 0 } }));
+
+  expect(html).toMatch(/data-testid="health-score"[^>]*>\s*82 \(0\)\s*</);
+  expect(html).not.toContain('820');
+});
+
+it('formats the theme scores like the health score', async () => {
+  const html = await renderReport(
+    aReport({ themes: { ...aReport().themes, 'on-page': { score: 70, variation: -2 } } }),
+  );
+
+  expect(html).toMatch(/data-testid="theme-on-page"[^]*?70 \(−2\)/);
 });
