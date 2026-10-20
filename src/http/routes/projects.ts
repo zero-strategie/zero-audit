@@ -12,7 +12,7 @@ const projectListSchema = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['id', 'rootUrl', 'createdAt', 'latestSnapshot'],
+        required: ['id', 'rootUrl', 'createdAt', 'latestSnapshot', 'latestRun'],
         properties: {
           id: { type: 'string' },
           rootUrl: { type: 'string' },
@@ -24,6 +24,15 @@ const projectListSchema = {
               id: { type: 'string' },
               finishedAt: nullableDate,
               health: { type: ['integer', 'null'] },
+            },
+          },
+          latestRun: {
+            type: ['object', 'null'],
+            required: ['id', 'status', 'startedAt'],
+            properties: {
+              id: { type: 'string' },
+              status: { type: 'string', enum: ['running', 'finished', 'failed'] },
+              startedAt: { type: 'string' },
             },
           },
         },

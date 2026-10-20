@@ -89,14 +89,33 @@ describe('read-only HTTP API', () => {
           rootUrl: 'https://e.com/',
           createdAt: minutes(0).toISOString(),
           latestSnapshot: { id: latest, finishedAt: minutes(11).toISOString(), health: 90 },
+          latestRun: { id: latest, status: 'finished', startedAt: minutes(10).toISOString() },
         },
         {
           id: expect.any(String) as string,
           rootUrl: 'https://other.com/',
           createdAt: minutes(5).toISOString(),
           latestSnapshot: null,
+          latestRun: null,
         },
       ]);
+    });
+
+    it('gives a running snapshot as latest run of the project', async () => {
+      const project = await newProject('https://e.com/');
+      const { id } = await snapshots.create({
+        projectId: project.id,
+        pagesLimit: 10,
+        startedAt: minutes(20),
+      });
+
+      const response = await app.inject('/projects');
+
+      expect(response.json<{ latestRun: unknown }[]>()[0]?.latestRun).toEqual({
+        id,
+        status: 'running',
+        startedAt: minutes(20).toISOString(),
+      });
     });
   });
 
