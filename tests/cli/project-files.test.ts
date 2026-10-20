@@ -5,9 +5,9 @@ const read = (name: string): string =>
   readFileSync(new URL(`../../${name}`, import.meta.url), 'utf8');
 
 describe('local Postgres setup files', () => {
-  it('defines a postgres:17 service with a volume, a loopback port and no committed password', () => {
+  it('defines a postgres:16 service with a volume, a loopback port and no committed password', () => {
     const compose = read('docker-compose.yml');
-    expect(compose).toContain('image: postgres:17');
+    expect(compose).toContain('image: postgres:16');
     expect(compose).toMatch(/^volumes:/m);
     expect(compose).toContain("'127.0.0.1:5432:5432'");
     expect(compose).toContain('POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?');
