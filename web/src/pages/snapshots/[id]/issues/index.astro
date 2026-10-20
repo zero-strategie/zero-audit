@@ -50,7 +50,8 @@ const groups = groupBySeverity(rows);
                   <a href={`/snapshots/${snapshotId}/issues/${String(row.checkId)}`}>{row.label}</a>
                 ) : (
                   <>
-                    {row.label} <span>Réussi</span>
+                    {row.label}{' '}
+                    <span class="passed">Réussi</span>
                   </>
                 )}
                 {row.count > 0 && (

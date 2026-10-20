@@ -268,3 +268,10 @@ button {
   background: var(--color-notice-bg);
   color: var(--color-notice-text);
 }
+
+/* Passed checks */
+.passed {
+  margin-left: var(--space-1);
+  color: var(--color-success-text);
+  font-weight: 600;
+}
