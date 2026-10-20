@@ -138,4 +138,39 @@ describe('createInterruptController terminate (SIGTERM)', () => {
 
     expect(calls).toEqual(['server-close', 'close', 'exit:0']);
   });
+
+  it('stops the audit runner after the server and before releasing the storage', async () => {
+    const calls: string[] = [];
+    const controller = createInterruptController(() => undefined);
+    controller.onStorageOpened(fakeStorage(calls));
+    controller.onServerStarted({
+      close: () => {
+        calls.push('server-close');
+        return Promise.resolve();
+      },
+    });
+    controller.onAuditRunnerStarted({
+      stop: () => {
+        calls.push('runner-stop');
+        return Promise.resolve();
+      },
+    });
+
+    await controller.terminate();
+
+    expect(calls).toEqual(['server-close', 'runner-stop', 'close']);
+  });
+
+  it('still releases the storage when the runner cannot be stopped', async () => {
+    const calls: string[] = [];
+    const controller = createInterruptController((code) => {
+      calls.push(`exit:${String(code)}`);
+    });
+    controller.onStorageOpened(fakeStorage(calls));
+    controller.onAuditRunnerStarted({ stop: () => Promise.reject(new Error('boom')) });
+
+    await controller.interrupt().catch(() => undefined);
+
+    expect(calls).toEqual(['close', 'exit:130']);
+  });
 });
