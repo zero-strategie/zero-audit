@@ -13,6 +13,7 @@ This guide explains how zero-audit is built, how to run its tests, and how to ex
 - [Testing](#testing)
 - [Docker, CI and deployment](#docker-ci-and-deployment)
 - [Conventions](#conventions)
+- [Licensing](#licensing)
 - [Third-party licences](#third-party-licences)
 
 ## Setup
@@ -252,11 +253,21 @@ Server provisioning (reverse proxy, TLS, authentication, scheduled audits, backu
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the pull-request checklist.
 
+## Licensing
+
+zero-audit is released under the [GNU AGPL-3.0](../LICENSE) (`AGPL-3.0-only`, see [COPYRIGHT](../COPYRIGHT)). Zero Stratégie also sells it under a commercial licence (dual licensing). Keep these points in mind:
+
+- **Contributions require the [CLA](../CLA.md).** Without it, code from outside contributors could not be offered under the commercial licence. The pull-request template has the checkbox.
+- **Source offer (section 13).** Every dashboard page has a footer linking to the source code. The link comes from `ZERO_AUDIT_SOURCE_URL`, resolved in `web/src/lib/source.ts`, and defaults to the upstream repository. Do not remove the footer; `web/tests/layout.test.ts` checks it on every screen.
+- **No per-file headers.** The `LICENSE` and `COPYRIGHT` files at the root apply to the whole repository.
+- **New dependencies must be AGPL-compatible.** Permissive licences (MIT, ISC, BSD, Apache-2.0) are fine. Avoid GPL-incompatible licences, such as some "source-available" ones or the SSPL.
+
 ## Third-party licences
 
-zero-audit is released under the [MIT licence](../LICENSE). Its runtime dependencies are under permissive licences: MIT, ISC, Apache-2.0, BSD, BlueOak, CC0 and Python-2.0. There are two exceptions:
+Every runtime dependency is under a licence compatible with the AGPL-3.0:
 
-- **MPL-2.0**, a file-level copyleft. It is compatible as long as those files are used unmodified.
-- **LGPL-3.0** for the prebuilt `libvips` binary that `sharp` pulls in through Astro. It is dynamically linked and replaceable.
+- MIT, ISC, Apache-2.0, BSD-2/3-Clause, BlueOak, CC0 and Python-2.0 (PSF) are all permissive.
+- **MPL-2.0** is compatible through its section 3.3, as long as those files are used unmodified.
+- **LGPL-3.0** covers the prebuilt `libvips` binary that `sharp` pulls in through Astro. It is dynamically linked and replaceable.
 
 Run `pnpm licenses list --prod` for the full list.

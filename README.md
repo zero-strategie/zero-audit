@@ -53,4 +53,12 @@ zero-audit is built by [Zero Stratégie](https://zero-strategie.dev). Its featur
 
 ## Licence
 
-[MIT](LICENSE) © 2026 Zero Stratégie
+zero-audit is free software, released under the [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`).
+
+You can use it freely, including inside a company, and you can modify it. If you offer a modified version to users over a network, for example as a hosted service, you must make your modified source code available to them under the same licence. The dashboard footer links to the source, and `ZERO_AUDIT_SOURCE_URL` changes where it points.
+
+Copyright © 2026 Zero Stratégie. See [COPYRIGHT](COPYRIGHT).
+
+## Commercial licence
+
+To embed zero-audit in a proprietary product, or to host a modified version without publishing your changes, a commercial licence is available from [Zero Stratégie](https://zero-strategie.dev). Contributions are accepted under the [CLA](CLA.md), which keeps this dual licensing possible.

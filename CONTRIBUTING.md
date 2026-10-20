@@ -1,6 +1,8 @@
 # Contributing
 
-Thanks for your interest in zero-audit. Contributions are welcome. By contributing, you agree that your work is released under the [MIT licence](LICENSE).
+Thanks for your interest in zero-audit. Contributions are welcome.
+
+zero-audit is released under the [GNU AGPL-3.0](LICENSE) and is also offered under a commercial licence. By contributing, you accept the [Contributor Licence Agreement](CLA.md), which keeps that dual licensing possible. You accept it by ticking the box in the pull-request template.
 
 1. Read the [developer guide](docs/developer-guide.md). It covers the architecture, how to add a check, and the testing rules.
 2. Open an issue before a large change, so the approach can be agreed first.

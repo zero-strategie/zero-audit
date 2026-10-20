@@ -113,6 +113,14 @@ describe.each(SCREENS)('$name screen', (screen) => {
     expect(html).toMatch(/<nav[^>]*data-testid="main-nav"[^>]*>[\s\S]*?href="\/"/);
   });
 
+  it('offers the source code and states the licence in the footer (AGPL-3.0 section 13)', async () => {
+    const html = await render(screen);
+
+    expect(html).toMatch(
+      /<footer[^>]*data-testid="site-footer"[^>]*>[\s\S]*AGPL-3\.0[\s\S]*href="https:\/\/github\.com\/zero-strategie\/zero-audit"[\s\S]*<\/footer>/,
+    );
+  });
+
   it('ships no client-side script', async () => {
     expect(await render(screen)).not.toContain('<script');
   });

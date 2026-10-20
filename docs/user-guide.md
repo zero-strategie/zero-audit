@@ -237,6 +237,8 @@ curl http://127.0.0.1:3000/health   # API
 curl http://127.0.0.1:4321/health   # dashboard (reflects the API health)
 ```
 
+**Licence obligation.** If you run a *modified* version for other users, the AGPL-3.0 requires you to offer them your source code. Set `ZERO_AUDIT_SOURCE_URL` on the dashboard to your repository; the footer of every page links to it. An unmodified deployment can keep the default, which points to the upstream repository.
+
 Each audit writes JSON lines to stdout (`audit.started`, `audit.finished` with the health score, `audit.failed`), handy for `docker logs` and log collectors.
 
 ## Command reference
@@ -261,6 +263,7 @@ An option takes precedence over its environment variable, which takes precedence
 | `--port <n>` | `PORT` | 3000 | API port (`serve`) |
 | | `HOST` | `127.0.0.1` | listening address (`serve`, dashboard). Use `0.0.0.0` only inside a container. |
 | | `ZERO_AUDIT_API_URL` | `http://127.0.0.1:3000` | API address used by the dashboard |
+| | `ZERO_AUDIT_SOURCE_URL` | upstream repository | source-code link in the dashboard footer |
 | `--help` | | | print the usage |
 
 | Exit code | Meaning |

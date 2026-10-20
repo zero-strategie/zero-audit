@@ -1,5 +1,6 @@
 ---
 import MainNav from '../components/MainNav.astro';
+import { resolveSourceUrl } from '../lib/source';
 import globalStylesheet from '../styles/global.css?url';
 
 interface Props {
@@ -8,6 +9,7 @@ interface Props {
   snapshotId?: string | undefined;
 }
 const { title, projectId, snapshotId } = Astro.props;
+const sourceUrl = resolveSourceUrl(process.env);
 ---
 
 <!doctype html>
@@ -22,5 +24,9 @@ const { title, projectId, snapshotId } = Astro.props;
   <body>
     <header class="site-header"><MainNav projectId={projectId} snapshotId={snapshotId} /></header>
     <main><slot /></main>
+    <footer class="site-footer" data-testid="site-footer">
+      zero-audit · licence AGPL-3.0 ·
+      <a href={sourceUrl}>Code source</a>
+    </footer>
   </body>
 </html>

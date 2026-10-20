@@ -275,3 +275,13 @@ button {
   color: var(--color-success-text);
   font-weight: 600;
 }
+
+/* Footer: licence and source link (AGPL-3.0, section 13) */
+.site-footer {
+  max-width: var(--content-width);
+  margin: var(--space-4) auto 0;
+  padding: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
