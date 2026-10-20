@@ -1,0 +1,58 @@
+---
+import ErrorView from '../../components/ErrorView.astro';
+import RelaunchForm from '../../components/RelaunchForm.astro';
+import Layout from '../../layouts/Layout.astro';
+import type { AuditProgress } from '../../lib/api/types';
+import { relaunchLimit } from '../../lib/audit-limits';
+import { toFailure } from '../../lib/failure';
+
+const HTTP_SEE_OTHER = 303;
+const REFRESH_SECONDS = 3;
+const PERCENT = 100;
+
+const snapshotId = Astro.params.id ?? '';
+let progress: AuditProgress | null = null;
+let failure = null;
+try {
+  progress = await Astro.locals.apiClient.getAuditProgress(snapshotId);
+} catch (error) {
+  failure = toFailure(error);
+  Astro.response.status = failure.status;
+}
+
+if (progress?.status === 'finished') {
+  return Astro.redirect(`/snapshots/${encodeURIComponent(snapshotId)}`, HTTP_SEE_OTHER);
+}
+
+const host = progress ? new URL(progress.rootUrl).host : '';
+const hasCount = progress !== null && progress.pagesCrawled > 0;
+const percent = progress ? Math.min(PERCENT, Math.round((progress.pagesCrawled / progress.pagesLimit) * PERCENT)) : 0;
+const count = progress ? `${String(progress.pagesCrawled)} / ${String(progress.pagesLimit)} pages` : '';
+const summary = `Audit de ${host} en cours` + (hasCount ? ` — ${count}` : '');
+---
+
+{
+  failure || !progress ? (
+    <ErrorView failure={failure ?? { kind: 'not-found', status: 404 }} />
+  ) : (
+    <Layout title={`Audit de ${host} – zero-audit`}>
+      {progress.status === 'running' && <meta slot="head" http-equiv="refresh" content={String(REFRESH_SECONDS)} />}
+      <h1>Audit de {host}</h1>
+      {progress.status === 'running' ? (
+        <>
+          <p>{summary}</p>
+          {hasCount && (
+            <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percent}>
+              <div class="progress-bar" style={`width: ${String(percent)}%`}></div>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <p class="alert alert-error" role="alert">L'audit de {host} a échoué.</p>
+          <RelaunchForm url={progress.rootUrl} limit={relaunchLimit(progress.pagesLimit)} />
+        </>
+      )}
+    </Layout>
+  )
+}
