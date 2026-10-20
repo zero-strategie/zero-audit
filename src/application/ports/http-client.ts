@@ -7,7 +7,7 @@ export interface HttpResponse {
   responseTimeMs: number;
 }
 
-export type NetworkFailureKind = 'timeout' | 'connection' | 'dns' | 'other';
+export type NetworkFailureKind = 'timeout' | 'connection' | 'dns' | 'blocked' | 'other';
 
 export interface NetworkFailure {
   url: string;

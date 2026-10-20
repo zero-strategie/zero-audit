@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { isNetworkFailure, type HttpResponse } from '../../src/application/ports/http-client.js';
 import { SystemClock } from '../../src/infrastructure/system-clock.js';
-import { UndiciHttpClient } from '../../src/infrastructure/undici-http-client.js';
+import {
+  UndiciHttpClient,
+  type UndiciHttpClientOptions,
+} from '../../src/infrastructure/undici-http-client.js';
 import { buildUserAgent } from '../../src/infrastructure/user-agent.js';
 import { startFixtureServer, type FixtureServer } from '../support/fixture-server.js';
 import pkg from '../../package.json' with { type: 'json' };
@@ -13,8 +16,9 @@ afterEach(async () => {
   server = undefined;
 });
 
-const clientWith = (overrides: { timeoutMs?: number; maxBodyBytes?: number } = {}) =>
-  new UndiciHttpClient({ clock: new SystemClock(), userAgent: buildUserAgent(), ...overrides });
+const clientWith = (
+  overrides: Partial<Omit<UndiciHttpClientOptions, 'clock' | 'userAgent'>> = {},
+) => new UndiciHttpClient({ clock: new SystemClock(), userAgent: buildUserAgent(), ...overrides });
 
 const expectResponse = (result: Awaited<ReturnType<UndiciHttpClient['get']>>): HttpResponse => {
   if (isNetworkFailure(result)) throw new Error(`unexpected failure: ${result.message}`);
@@ -92,5 +96,28 @@ describe('UndiciHttpClient', () => {
     const response = expectResponse(await clientWith().get(`${server.baseUrl}/small`));
 
     expect(response).toMatchObject({ body: 'hello', truncated: false, status: 200 });
+  });
+
+  describe('with blockPrivateAddresses', () => {
+    const resolvingTo =
+      (...addresses: string[]) =>
+      () =>
+        Promise.resolve(
+          addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 })),
+        );
+
+    it('fails with "blocked" and opens no connection when the host resolves to a loopback address', async () => {
+      server = await startFixtureServer({ '/': { status: 200, body: 'secret' } });
+      const port = new URL(server.baseUrl).port;
+      const client = clientWith({
+        blockPrivateAddresses: true,
+        resolver: resolvingTo('127.0.0.1'),
+      });
+
+      const result = await client.get(`http://site.test:${port}/`);
+
+      expect(result).toMatchObject({ kind: 'blocked' });
+      expect(server.requests).toEqual([]);
+    });
   });
 });
