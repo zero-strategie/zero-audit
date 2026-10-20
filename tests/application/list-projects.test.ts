@@ -55,7 +55,7 @@ describe('ListProjects', () => {
   });
 
   it('gives the latest finished snapshot with its rounded health', async () => {
-    const { projects, snapshots, project, record } = await build();
+    const { projects, snapshots, record } = await build();
     await record(0, 'finished', 5);
     const latest = await record(10, 'finished', 1);
     await record(20, 'failed');
@@ -85,7 +85,7 @@ describe('ListProjects', () => {
   });
 
   it('has no latest snapshot for a project without finished snapshot', async () => {
-    const { projects, snapshots, project, record } = await build();
+    const { projects, snapshots, record } = await build();
     await record(0, 'failed');
 
     const [listed] = await new ListProjects(projects, snapshots).execute();

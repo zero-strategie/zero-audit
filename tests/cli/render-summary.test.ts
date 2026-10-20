@@ -78,6 +78,7 @@ const previousResults: CheckResult[] = [
 
 const report: SnapshotReport = {
   details,
+  rootUrl: 'https://e.com/',
   checkDiffs: diffChecks(previousResults, details.checkResults),
   scores: buildScoreCard(previousResults, details.checkResults),
   severityCounts: countBySeverity(details.checkResults),

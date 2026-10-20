@@ -57,7 +57,7 @@ export const buildServer = ({
     listProjectSnapshots: new ListProjectSnapshots(projects, snapshots),
   });
   registerSnapshotRoutes(app, {
-    getSnapshotReport: new GetSnapshotReport(snapshots),
+    getSnapshotReport: new GetSnapshotReport(snapshots, projects),
     getAuditProgress: new GetAuditProgress(auditRunner),
   });
   registerAuditRoutes(app, {

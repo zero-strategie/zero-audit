@@ -3,10 +3,11 @@ import { GetSnapshotReport } from '../../src/application/get-snapshot-report.js'
 import type { CheckResult } from '../../src/domain/check.js';
 import type { Page } from '../../src/domain/crawl.js';
 import { SnapshotNotFound } from '../../src/domain/errors.js';
+import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 import { makePage } from '../support/check-fixtures.js';
 
-const PROJECT = 'project-1';
+const ROOT_URL = 'https://e.com/';
 const minutes = (n: number): Date => new Date(Date.UTC(2026, 0, 1, 10, n));
 
 const check15 = (...paths: string[]): CheckResult => ({
@@ -22,8 +23,10 @@ const check15 = (...paths: string[]): CheckResult => ({
   })),
 });
 
-const build = () => {
+const build = async () => {
   const repository = new InMemorySnapshotRepository();
+  const projects = new InMemoryProjectRepository();
+  const project = await projects.findOrCreateByRootUrl({ rootUrl: ROOT_URL, createdAt: minutes(0) });
   const record = async (
     startMinute: number,
     outcome: 'finished' | 'failed',
@@ -31,7 +34,7 @@ const build = () => {
     pages: Page[] = [],
   ): Promise<string> => {
     const snapshot = await repository.create({
-      projectId: PROJECT,
+      projectId: project.id,
       pagesLimit: 10,
       startedAt: minutes(startMinute),
     });
@@ -47,12 +50,12 @@ const build = () => {
     }
     return snapshot.id;
   };
-  return { record, useCase: new GetSnapshotReport(repository) };
+  return { record, useCase: new GetSnapshotReport(repository, projects) };
 };
 
 describe('GetSnapshotReport', () => {
   it('counts pages per group with the variation against the previous snapshot', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     const healthy = (name: string) => makePage(`https://e.com/${name}`);
     await record(0, 'finished', [], [healthy('a'), healthy('b')]);
     const blocked = makePage('https://e.com/p', { blockedByRobots: true, status: null });
@@ -64,8 +67,17 @@ describe('GetSnapshotReport', () => {
     expect(pageGroups.variation).toMatchObject({ healthy: -1, blocked: 1 });
   });
 
+  it('gives the root URL of the project of the snapshot', async () => {
+    const { record, useCase } = await build();
+    const current = await record(0, 'finished', []);
+
+    const report = await useCase.execute(current);
+
+    expect(report.rootUrl).toBe(ROOT_URL);
+  });
+
   it('has no group variation without a previous finished snapshot', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     const current = await record(0, 'finished', [], [makePage('https://e.com/a')]);
 
     const { pageGroups } = await useCase.execute(current);
@@ -74,7 +86,7 @@ describe('GetSnapshotReport', () => {
   });
 
   it('compares the snapshot with the previous finished one', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     await record(0, 'finished', [check15('o1', 'o2')]);
     const current = await record(10, 'finished', [check15('o2', 'o3')]);
 
@@ -87,7 +99,7 @@ describe('GetSnapshotReport', () => {
   });
 
   it('treats every occurrence as new for the first snapshot of a project', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     const first = await record(0, 'finished', [check15('o1', 'o2')]);
 
     const report = await useCase.execute(first);
@@ -96,7 +108,7 @@ describe('GetSnapshotReport', () => {
   });
 
   it('skips a failed snapshot and compares with the older finished one', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     await record(0, 'finished', [check15('o1', 'o2', 'o3')]);
     await record(10, 'failed', [check15('o9')]);
     const current = await record(20, 'finished', [check15('o1')]);
@@ -107,7 +119,7 @@ describe('GetSnapshotReport', () => {
   });
 
   it('gives zero deltas for two identical audits', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     await record(0, 'finished', [check15('o1', 'o2')]);
     const current = await record(10, 'finished', [check15('o2', 'o1')]);
 
@@ -117,13 +129,13 @@ describe('GetSnapshotReport', () => {
   });
 
   it('throws SnapshotNotFound for an unknown snapshot id', async () => {
-    const { useCase } = build();
+    const { useCase } = await build();
 
     await expect(useCase.execute('missing')).rejects.toBeInstanceOf(SnapshotNotFound);
   });
 
   it('scores the snapshot and its variation since the previous finished one', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     await record(0, 'finished', [check15('o1', 'o2')]);
     const current = await record(10, 'finished', [check15('o1')]);
 
@@ -135,7 +147,7 @@ describe('GetSnapshotReport', () => {
   });
 
   it('has no score variation for the first snapshot of a project', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     const first = await record(0, 'finished', [check15('o1')]);
 
     const report = await useCase.execute(first);
@@ -144,7 +156,7 @@ describe('GetSnapshotReport', () => {
   });
 
   it('totals the occurrences per severity', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     const error: CheckResult = { ...check15('o1'), checkId: 2, severity: 'error', count: 4 };
     const id = await record(0, 'finished', [check15('o1', 'o2'), error]);
 
@@ -154,7 +166,7 @@ describe('GetSnapshotReport', () => {
   });
 
   it('lists the five most pressing checks', async () => {
-    const { record, useCase } = build();
+    const { record, useCase } = await build();
     const results = [1, 2, 3, 4, 5, 6].map((checkId): CheckResult => ({
       ...check15('o1'),
       checkId,

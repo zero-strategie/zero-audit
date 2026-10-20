@@ -1,5 +1,5 @@
 import type { CheckResult } from '../domain/check.js';
-import { SnapshotNotFound } from '../domain/errors.js';
+import { ProjectNotFound, SnapshotNotFound } from '../domain/errors.js';
 import {
   classifyPages,
   groupVariation,
@@ -9,12 +9,14 @@ import {
 import { buildScoreCard, type ScoreCard } from '../domain/scoring.js';
 import { diffChecks, type CheckDiff } from '../domain/snapshot-diff.js';
 import { countBySeverity, topIssues, type SeverityCounts } from '../domain/top-issues.js';
+import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotDetails, SnapshotRepository } from './ports/snapshot-repository.js';
 
 const TOP_ISSUES_LIMIT = 5;
 
 export interface SnapshotReport {
   readonly details: SnapshotDetails;
+  readonly rootUrl: string;
   readonly checkDiffs: readonly CheckDiff[];
   readonly scores: ScoreCard;
   readonly severityCounts: SeverityCounts;
@@ -26,12 +28,17 @@ export interface SnapshotReport {
 }
 
 export class GetSnapshotReport {
-  constructor(private readonly repository: SnapshotRepository) {}
+  constructor(
+    private readonly repository: SnapshotRepository,
+    private readonly projects: ProjectRepository,
+  ) {}
 
   async execute(snapshotId: string): Promise<SnapshotReport> {
     const details = await this.repository.getById(snapshotId);
     if (!details) throw new SnapshotNotFound(snapshotId);
     const { snapshot } = details;
+    const project = await this.projects.getById(snapshot.projectId);
+    if (!project) throw new ProjectNotFound(snapshot.projectId);
     const previous = await this.repository.findPreviousFinished(
       snapshot.projectId,
       snapshot.startedAt,
@@ -43,6 +50,7 @@ export class GetSnapshotReport {
       : null;
     return {
       details,
+      rootUrl: project.rootUrl,
       checkDiffs: diffChecks(previousDetails?.checkResults ?? null, details.checkResults),
       scores: buildScoreCard(previousDetails?.checkResults ?? null, details.checkResults),
       severityCounts: countBySeverity(details.checkResults),

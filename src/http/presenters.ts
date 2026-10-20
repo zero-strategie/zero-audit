@@ -49,6 +49,7 @@ export const presentSnapshotReport = (report: SnapshotReport) => {
     snapshot: {
       id: snapshot.id,
       projectId: snapshot.projectId,
+      rootUrl: report.rootUrl,
       status: snapshot.status,
       startedAt: snapshot.startedAt.toISOString(),
       finishedAt: isoOrNull(snapshot.finishedAt),

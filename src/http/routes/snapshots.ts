@@ -35,6 +35,7 @@ const reportSchema = {
           properties: {
             id: { type: 'string' },
             projectId: { type: 'string' },
+            rootUrl: { type: 'string' },
             status: { type: 'string' },
             startedAt: { type: 'string' },
             finishedAt: { type: ['string', 'null'] },
