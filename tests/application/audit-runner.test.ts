@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuditRunner } from '../../src/application/audit-runner.js';
 import type { Logger } from '../../src/application/ports/logger.js';
 import type { AuditRequest, RunAudit } from '../../src/application/run-audit.js';
@@ -71,7 +71,7 @@ class Harness {
       request.onSnapshotCreated?.(snapshot.id);
       try {
         await this.crawl.promise;
-        request.onProgress?.(0, request.limit);
+        request.onProgress?.(1, request.limit);
       } catch (error) {
         await this.snapshots.fail(snapshot.id, new Date(this.now));
         throw error;
@@ -143,5 +143,131 @@ describe('AuditRunner.start locking', () => {
     });
 
     await expect(harness.runner.start({ rootUrl: ROOT, limit: 100 })).resolves.toBeDefined();
+  });
+});
+
+describe('AuditRunner failures', () => {
+  it('rejects start with the error of an audit that fails before creating its snapshot, and frees the lock', async () => {
+    const harness = new Harness();
+    harness.failBeforeCreation = new Error('cannot reach database');
+
+    const rejection = await rejectionOf(harness.runner.start({ rootUrl: ROOT, limit: 100 }));
+
+    expect(rejection).toEqual(new Error('cannot reach database'));
+    harness.failBeforeCreation = null;
+    await expect(harness.runner.start({ rootUrl: ROOT, limit: 100 })).resolves.toBeDefined();
+  });
+
+  describe('after the snapshot is created', () => {
+    const unhandled: unknown[] = [];
+    const record = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+
+    afterEach(() => {
+      process.off('unhandledRejection', record);
+      unhandled.length = 0;
+    });
+
+    it('logs the error without any unhandled rejection and frees the lock', async () => {
+      process.on('unhandledRejection', record);
+      const harness = new Harness();
+      await harness.runner.start({ rootUrl: ROOT, limit: 100 });
+
+      harness.crawl.reject(new Error('boom'));
+      await vi.waitFor(() => {
+        expect(harness.errors).toEqual(['Background audit failed: boom']);
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(unhandled).toEqual([]);
+      harness.crawl = deferred();
+      await expect(harness.runner.start({ rootUrl: ROOT, limit: 100 })).resolves.toBeDefined();
+    });
+  });
+});
+
+describe('AuditRunner.progress', () => {
+  it('reads a running audit from memory', async () => {
+    const harness = new Harness();
+    const { snapshotId } = await harness.runner.start({ rootUrl: ROOT, limit: 100 });
+
+    harness.requests[0]?.onProgress?.(3, 100);
+
+    expect(await harness.runner.progress(snapshotId)).toEqual({
+      status: 'running',
+      pagesCrawled: 3,
+      pagesLimit: 100,
+      startedAt: new Date(NOW),
+      rootUrl: ROOT,
+    });
+  });
+
+  it('reads a finished audit from the database', async () => {
+    const harness = new Harness();
+    const { snapshotId } = await harness.runner.start({ rootUrl: ROOT, limit: 100 });
+
+    harness.crawl.resolve();
+
+    await vi.waitFor(async () => {
+      expect(await harness.runner.progress(snapshotId)).toMatchObject({
+        status: 'finished',
+        pagesCrawled: 2,
+      });
+    });
+  });
+
+  it('reports 0 pages for a running snapshot created by another process', async () => {
+    const harness = new Harness();
+    const project = await harness.projects.findOrCreateByRootUrl({
+      rootUrl: ROOT,
+      createdAt: new Date(NOW),
+    });
+    const snapshot = await harness.snapshots.create({
+      projectId: project.id,
+      pagesLimit: 250,
+      startedAt: new Date(NOW),
+    });
+
+    expect(await harness.runner.progress(snapshot.id)).toEqual({
+      status: 'running',
+      pagesCrawled: 0,
+      pagesLimit: 250,
+      startedAt: new Date(NOW),
+      rootUrl: ROOT,
+    });
+  });
+
+  it('returns null for an unknown snapshot', async () => {
+    expect(await new Harness().runner.progress('unknown')).toBeNull();
+  });
+});
+
+describe('AuditRunner.stop', () => {
+  it('fails the running snapshot and waits for the background audit', async () => {
+    const harness = new Harness();
+    const { snapshotId } = await harness.runner.start({ rootUrl: ROOT, limit: 100 });
+
+    const stopping = harness.runner.stop();
+    harness.crawl.resolve();
+    await stopping;
+
+    expect((await harness.snapshots.getById(snapshotId))?.snapshot.status).toBe('failed');
+    expect(harness.errors).toEqual([]);
+    await expect(harness.runner.start({ rootUrl: ROOT, limit: 100 })).resolves.toBeDefined();
+  });
+
+  it('ignores a snapshot that is already finished', async () => {
+    const harness = new Harness();
+    const { snapshotId } = await harness.runner.start({ rootUrl: ROOT, limit: 100 });
+    const stopping = harness.runner.stop();
+    await harness.snapshots.fail(snapshotId, new Date(NOW));
+    harness.crawl.reject(new Error('stopped'));
+
+    await expect(stopping).resolves.toBeUndefined();
+  });
+
+  it('does nothing when no audit runs', async () => {
+    await expect(new Harness().runner.stop()).resolves.toBeUndefined();
   });
 });
