@@ -70,3 +70,10 @@ export class AuditAlreadyRunning extends DomainError {
     this.name = 'AuditAlreadyRunning';
   }
 }
+
+export class HostNotResolved extends DomainError {
+  constructor(readonly host: string) {
+    super(`Host ${host} does not resolve`);
+    this.name = 'HostNotResolved';
+  }
+}

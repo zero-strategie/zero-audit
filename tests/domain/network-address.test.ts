@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { isPublicAddress, normalizeIpLiteral } from '../../src/domain/network-address.js';
+import {
+  isIpLiteral,
+  isPublicAddress,
+  normalizeIpLiteral,
+} from '../../src/domain/network-address.js';
 import { PrivateAddressRejected } from '../../src/domain/errors.js';
 
 const PRIVATE_IPV4 = [
@@ -75,5 +79,18 @@ describe('PrivateAddressRejected', () => {
     expect(error.host).toBe('intranet.example');
     expect(error.address).toBe('10.0.0.1');
     expect(error.name).toBe('PrivateAddressRejected');
+  });
+});
+
+describe('isIpLiteral', () => {
+  it('recognises IPv4 and bracketed or bare IPv6 literals', () => {
+    expect(isIpLiteral('127.0.0.1')).toBe(true);
+    expect(isIpLiteral('[::1]')).toBe(true);
+    expect(isIpLiteral('2001:db8::1')).toBe(true);
+  });
+
+  it('rejects domain names', () => {
+    expect(isIpLiteral('site.test')).toBe(false);
+    expect(isIpLiteral('1.2.3.test')).toBe(false);
   });
 });

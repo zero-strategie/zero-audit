@@ -78,3 +78,10 @@ export function isPublicAddress(ip: string): boolean {
   const ipv6 = literal.includes(':') ? parseIpv6(literal) : undefined;
   return ipv6 ? isPublicIpv6(ipv6) : false;
 }
+
+export function isIpLiteral(host: string): boolean {
+  const literal = normalizeIpLiteral(host);
+  return (
+    parseIpv4(literal) !== undefined || (literal.includes(':') && parseIpv6(literal) !== undefined)
+  );
+}
