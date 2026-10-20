@@ -139,6 +139,7 @@ label {
   font-weight: 600;
 }
 
+input,
 select,
 button {
   max-width: 100%;
@@ -150,8 +151,41 @@ button {
   font: inherit;
 }
 
+input {
+  min-width: min(100%, 24rem);
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+}
+
+select {
+  background: var(--color-input-bg);
+  color: var(--color-input-text);
+}
+
 button {
   cursor: pointer;
+}
+
+.button-primary {
+  border-color: var(--color-button-bg);
+  background: var(--color-button-bg);
+  color: var(--color-button-text);
+  font-weight: 600;
+}
+
+/* Audit progress bar: pure CSS, the page refreshes itself with a meta tag */
+.progress {
+  width: 100%;
+  max-width: 32rem;
+  height: 0.75rem;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: var(--color-progress-track);
+}
+
+.progress-bar {
+  height: 100%;
+  background: var(--color-progress-fill);
 }
 
 /* Messages */

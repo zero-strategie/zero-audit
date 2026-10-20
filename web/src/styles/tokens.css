@@ -15,6 +15,12 @@
   --color-notice-text: #1e40af;
   --color-success-text: #166534;
   --color-gauge-arc: #1d4ed8;
+  --color-input-bg: #ffffff;
+  --color-input-text: #1a1d21;
+  --color-button-bg: #1d4ed8;
+  --color-button-text: #ffffff;
+  --color-progress-track: #dfe3ea;
+  --color-progress-fill: #1d4ed8;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -41,5 +47,11 @@
     --color-notice-text: #bcd4ff;
     --color-success-text: #86efac;
     --color-gauge-arc: #8ab4ff;
+    --color-input-bg: #111418;
+    --color-input-text: #e8eaed;
+    --color-button-bg: #8ab4ff;
+    --color-button-text: #111418;
+    --color-progress-track: #3a424d;
+    --color-progress-fill: #8ab4ff;
   }
 }

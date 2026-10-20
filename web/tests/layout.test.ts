@@ -7,6 +7,8 @@ import IssuesPage from '../src/pages/snapshots/[id]/issues/index.astro';
 import IssueDetailPage from '../src/pages/snapshots/[id]/issues/[checkId].astro';
 import PagesPage from '../src/pages/snapshots/[id]/pages.astro';
 import ComparePage from '../src/pages/projects/[id]/compare.astro';
+import AuditPage from '../src/pages/audits/[id].astro';
+import NewAuditPage from '../src/pages/audits/new.astro';
 import {
   aCheckComparison,
   aComparison,
@@ -15,10 +17,12 @@ import {
   aProject,
   aReport,
   aSnapshotListing,
+  anAuditProgress,
   fakeApiClient,
 } from './fake-api-client';
 
 const apiClient = fakeApiClient({
+  getAuditProgress: () => Promise.resolve(anAuditProgress()),
   listProjects: () => Promise.resolve([aProject()]),
   getSnapshotReport: () => Promise.resolve(aReport()),
   listProjectSnapshots: () =>
@@ -74,6 +78,14 @@ const SCREENS = [
     url: '/projects/p1/compare?a=s1&b=s2',
     params: { id: 'p1' },
     table: true,
+  },
+  { name: 'new audit', component: NewAuditPage, url: '/audits/new', params: {}, table: false },
+  {
+    name: 'audit progress',
+    component: AuditPage,
+    url: '/audits/s2',
+    params: { id: 's2' },
+    table: false,
   },
 ] as const;
 
