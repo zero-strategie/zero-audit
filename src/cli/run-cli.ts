@@ -1,22 +1,13 @@
-import { BfsCrawler } from '../application/bfs-crawler.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetSnapshotReport } from '../application/get-snapshot-report.js';
-import { RunAudit } from '../application/run-audit.js';
-import { CheckRegistry } from '../domain/check.js';
 import {
   SnapshotNotFinished,
   SnapshotNotFound,
   SnapshotsFromDifferentProjects,
 } from '../domain/errors.js';
 import { allChecks } from '../domain/checks/index.js';
-import { CheerioHtmlParser } from '../infrastructure/cheerio-html-parser.js';
-import { FastXmlSitemapReader } from '../infrastructure/fast-xml-sitemap-reader.js';
 import { JsonLinesAuditEvents } from '../infrastructure/json-lines-audit-events.js';
-import { RealSleeper } from '../infrastructure/real-sleeper.js';
-import { RobotsParserAdapter } from '../infrastructure/robots-parser-adapter.js';
 import { SystemClock } from '../infrastructure/system-clock.js';
-import { UndiciHttpClient } from '../infrastructure/undici-http-client.js';
-import { buildUserAgent } from '../infrastructure/user-agent.js';
 import { buildServer, type HttpServer, type ServerDependencies } from '../http/server.js';
 import {
   parseCommand,
@@ -25,6 +16,7 @@ import {
   type MigrateConfig,
   type ServeConfig,
 } from './config.js';
+import { createRunAudit } from './audit-factory.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
 import { renderComparison } from './render-compare.js';
@@ -65,34 +57,6 @@ export interface CliHooks {
 const labelsById = (): ReadonlyMap<number, string> =>
   new Map(allChecks.map((check) => [check.id, check.label]));
 
-const buildRunAudit = (storage: Storage, io: CliIo): RunAudit => {
-  const clock = new SystemClock();
-  const http = new UndiciHttpClient({ clock, userAgent: buildUserAgent() });
-  const crawler = new BfsCrawler({
-    http,
-    robotsFactory: new RobotsParserAdapter(),
-    sitemapReader: new FastXmlSitemapReader(),
-    htmlParser: new CheerioHtmlParser(),
-    clock,
-    sleeper: new RealSleeper(),
-  });
-  return new RunAudit({
-    crawler,
-    repository: storage.snapshots,
-    projects: storage.projects,
-    registry: new CheckRegistry(allChecks),
-    clock,
-    events: new JsonLinesAuditEvents(
-      {
-        write: (text) => {
-          io.stdout(text);
-        },
-      },
-      clock,
-    ),
-  });
-};
-
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
@@ -105,7 +69,20 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
     const opened = await (hooks.storageFactory ?? createStorage)(config);
     storage = opened;
     hooks.onStorageOpened?.(opened);
-    const details = await buildRunAudit(opened, io).execute({
+    const clock = new SystemClock();
+    const runAudit = createRunAudit({
+      storage: opened,
+      events: new JsonLinesAuditEvents(
+        {
+          write: (text) => {
+            io.stdout(text);
+          },
+        },
+        clock,
+      ),
+      blockPrivateAddresses: false,
+    });
+    const details = await runAudit.execute({
       rootUrl: config.rootUrl,
       limit: config.limit,
       delayMs: config.delayMs,
