@@ -63,3 +63,10 @@ export class PrivateAddressRejected extends DomainError {
     this.name = 'PrivateAddressRejected';
   }
 }
+
+export class AuditAlreadyRunning extends DomainError {
+  constructor(readonly startedAt: Date) {
+    super(`An audit is already running since ${startedAt.toISOString()}`);
+    this.name = 'AuditAlreadyRunning';
+  }
+}
