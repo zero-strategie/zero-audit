@@ -1,7 +1,7 @@
 import type { Project } from '../domain/project.js';
+import type { SnapshotStatus } from '../domain/snapshot.js';
 import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotRepository } from './ports/snapshot-repository.js';
-import type { SnapshotStatus } from '../domain/snapshot.js';
 import { healthOf } from './snapshot-health.js';
 
 export interface LatestFinishedSnapshot {

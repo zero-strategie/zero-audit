@@ -190,6 +190,7 @@ describe('read-only HTTP API', () => {
       expect(body).toMatchObject({
         snapshot: {
           id,
+          rootUrl: 'https://e.com/',
           status: 'finished',
           startedAt: minutes(10).toISOString(),
           finishedAt: minutes(11).toISOString(),
