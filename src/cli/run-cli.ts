@@ -1,3 +1,5 @@
+import { AuditRunner } from '../application/audit-runner.js';
+import { FailOrphanedAudits } from '../application/fail-orphaned-audits.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetSnapshotReport } from '../application/get-snapshot-report.js';
 import {
@@ -44,6 +46,8 @@ export interface CliHooks {
   onStorageOpened?(storage: Storage): void;
   /** Lets the process entry point mark the snapshot failed on SIGINT. */
   onAuditStarted?(snapshotId: string, rootUrl: string): void;
+  /** Lets the process entry point stop the background audit on SIGINT / SIGTERM. */
+  onAuditRunnerStarted?(runner: AuditRunner): void;
   /** Lets the process entry point stop the server on SIGINT. */
   onServerStarted?(server: HttpServer): void;
   /** Builds the HTTP server; defaults to the Fastify API. */
@@ -121,9 +125,34 @@ const migrate = async (config: MigrateConfig, io: CliIo): Promise<number> => {
 const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<number> => {
   let storage: Storage | null = null;
   let server: HttpServer | null = null;
+  let runner: AuditRunner | null = null;
   try {
-    storage = await (hooks.storageFactory ?? createStorage)(config);
-    hooks.onStorageOpened?.(storage);
+    const opened = await (hooks.storageFactory ?? createStorage)(config);
+    storage = opened;
+    hooks.onStorageOpened?.(opened);
+    const clock = new SystemClock();
+    await new FailOrphanedAudits(opened.snapshots, clock).execute();
+    runner = new AuditRunner({
+      createRunAudit: (events) =>
+        createRunAudit({
+          storage: opened,
+          events,
+          blockPrivateAddresses: !config.allowPrivateTargets,
+        }),
+      snapshots: opened.snapshots,
+      projects: opened.projects,
+      clock,
+      logger: {
+        info: (message) => {
+          io.stderr(`${message}\n`);
+        },
+        error: (message) => {
+          io.stderr(`${message}\n`);
+        },
+      },
+      delayMs: config.delayMs,
+    });
+    hooks.onAuditRunnerStarted?.(runner);
     server = (hooks.createServer ?? buildServer)({
       projects: storage.projects,
       snapshots: storage.snapshots,
@@ -139,6 +168,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
     return EXIT_CRAWL_FAILED;
   } finally {
     await server?.close();
+    await runner?.stop();
     await storage?.close();
   }
 };

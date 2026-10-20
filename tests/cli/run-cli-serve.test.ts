@@ -1,11 +1,14 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInterruptController } from '../../src/cli/interrupt-controller.js';
 import { runCli, type CliHooks, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type Storage, type StorageFactory } from '../../src/cli/storage-factory.js';
 import type { HttpServer } from '../../src/http/server.js';
+import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../src/domain/snapshot.js';
+import type { AuditRunner } from '../../src/application/audit-runner.js';
+import { startFixtureServer } from '../support/fixture-server.js';
 
 interface ListenCall {
   host: string;
@@ -199,5 +202,85 @@ describe('runCli serve', () => {
     expect(events).toContain('server-close');
     expect(storageCloses).toBeGreaterThan(1);
     await expect(Promise.all(closeResults)).resolves.toBeDefined();
+  });
+
+  it('fails the running snapshots older than the orphan age at startup, and only those', async () => {
+    const seeded = await createStorage({
+      store: 'sqlite',
+      dbPath,
+      databaseUrl: null,
+    });
+    const project = await seeded.projects.findOrCreateByRootUrl({
+      rootUrl: 'https://exemple.com/',
+      createdAt: new Date(),
+    });
+    const start = (ageMs: number) =>
+      seeded.snapshots.create({
+        projectId: project.id,
+        pagesLimit: 100,
+        startedAt: new Date(Date.now() - ageMs),
+      });
+    const old = await start(ORPHAN_AUDIT_MAX_AGE_MS + 60_000);
+    const recent = await start(ORPHAN_AUDIT_MAX_AGE_MS - 60_000);
+    await seeded.close();
+    let statuses: string[] = [];
+
+    await serve([], fakeServer(events), {
+      storageFactory: async (config) => {
+        const storage = await storageFactory(config);
+        return {
+          ...storage,
+          close: async () => {
+            statuses = [
+              (await storage.snapshots.getById(old.id))?.snapshot.status ?? '',
+              (await storage.snapshots.getById(recent.id))?.snapshot.status ?? '',
+            ];
+            await storage.close();
+          },
+        };
+      },
+    });
+
+    expect(statuses).toEqual(['failed', 'running']);
+  });
+
+  it('hands over a runner that audits a local target once private targets are allowed', async () => {
+    const fixtures = await startFixtureServer({
+      '/': { status: 200, headers: { 'content-type': 'text/html' }, body: '<html></html>' },
+    });
+    const held: { runner: AuditRunner | null } = { runner: null };
+    let stop: () => void = () => undefined;
+    const untilStopped = new Promise<void>((resolve) => {
+      stop = resolve;
+    });
+
+    const running = serve(
+      [],
+      fakeServer(events),
+      {
+        untilStopped,
+        onAuditRunnerStarted: (started) => {
+          held.runner = started;
+        },
+      },
+      capture().io,
+      { ZERO_AUDIT_ALLOW_PRIVATE_TARGETS: 'true', ZERO_AUDIT_DELAY_MS: '0' },
+    );
+    await vi.waitFor(() => {
+      expect(held.runner).not.toBeNull();
+    });
+    const started = await held.runner?.start({
+      rootUrl: `${fixtures.baseUrl}/`,
+      limit: 5,
+    });
+    await vi.waitFor(async () => {
+      expect(await held.runner?.progress(started?.snapshotId ?? '')).toMatchObject({
+        status: 'finished',
+        pagesCrawled: 1,
+      });
+    });
+    stop();
+    await running;
+    await fixtures.close();
   });
 });

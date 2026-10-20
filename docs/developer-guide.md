@@ -201,6 +201,16 @@ The server (`serve`) crawls any public site on request, so its HTTP client must 
 - **`blocked`**: a refused request is a `NetworkFailure` of kind `blocked`. The crawler records it like any other network error; if the root itself is blocked the audit fails with `RootUnreachable`.
 - **`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`**: read by `serve` only. The exact value `true` turns the guard off (`allowPrivateTargets`); `TRUE`, `1` or `yes` do not.
 
+### Background audits (`AuditRunner`)
+
+`src/application/audit-runner.ts` runs one audit at a time inside the `serve` process, without making the caller wait for the crawl.
+
+- **Lock**: global, all projects together. It is held in memory and, for audits started by another process, by any `running` snapshot younger than `ORPHAN_AUDIT_MAX_AGE_MS` (6 hours, `src/domain/snapshot.ts`). `start` then rejects with `AuditAlreadyRunning`, which carries the start date of the blocking audit. The CLI `audit` command is not blocked by this lock, so a scheduled audit and one launched from the server may overlap.
+- **Orphans**: `serve` runs `FailOrphanedAudits` at startup and marks every `running` snapshot older than 6 hours as `failed`. Younger ones keep blocking until they age out; to unblock by hand, set the snapshot to `failed` in the database.
+- **Progress**: `progress(snapshotId)` reads the page counter from memory for the audit it runs, and from the database otherwise (0 pages for a `running` snapshot owned by another process).
+- **Shutdown**: on SIGINT / SIGTERM the server is closed, then `stop()` aborts the crawl at its next page (the progress callback throws), marks the snapshot `failed`, and only then is the storage closed.
+- **Config**: `serve` reads `ZERO_AUDIT_DELAY_MS` like `audit`.
+
 ## Dashboard
 
 `web/` is an Astro app, rendered on the server by `@astrojs/node` in standalone mode.
