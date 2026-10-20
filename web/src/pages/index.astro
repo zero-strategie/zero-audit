@@ -1,8 +1,10 @@
 ---
 import ErrorView from '../components/ErrorView.astro';
+import RelaunchForm from '../components/RelaunchForm.astro';
 import Layout from '../layouts/Layout.astro';
 import type { ProjectOverview } from '../lib/api/types';
 import { toFailure } from '../lib/failure';
+import { DEFAULT_LIMIT } from '../lib/audit-limits';
 import { formatDateFr } from '../lib/presentation';
 
 let projects: ProjectOverview[] = [];
@@ -21,18 +23,19 @@ try {
   ) : (
     <Layout title="Projets – zero-audit">
       <h1>Projets</h1>
+      <p><a href="/audits/new" class="button-primary">Nouvel audit</a></p>
       {projects.length === 0 ? (
         <p>
-          Aucun audit n'a encore été lancé. Lancez-en un avec <code>pnpm zero-audit &lt;url&gt;</code>.
+          Aucun audit n'a encore été lancé. <a href="/audits/new">Lancez votre premier audit</a>.
         </p>
       ) : (
         <div class="table-scroll">
         <table>
           <thead>
-            <tr><th>Site</th><th>Santé</th><th>Dernier audit</th></tr>
+            <tr><th>Site</th><th>Santé</th><th>Dernier audit</th><th>Statut</th><th>Action</th></tr>
           </thead>
           <tbody>
-            {projects.map(({ id, rootUrl, latestSnapshot }) => (
+            {projects.map(({ id, rootUrl, latestSnapshot, latestRun }) => (
               <tr data-testid={`project-${id}`}>
                 <td>{rootUrl}</td>
                 {latestSnapshot ? (
@@ -43,6 +46,11 @@ try {
                 ) : (
                   <td colspan="2">Aucun audit terminé</td>
                 )}
+                <td>
+                  {latestRun?.status === 'running' && <a href={`/audits/${latestRun.id}`}>en cours…</a>}
+                  {latestRun?.status === 'failed' && 'échoué'}
+                </td>
+                <td><RelaunchForm url={rootUrl} limit={DEFAULT_LIMIT} /></td>
               </tr>
             ))}
           </tbody>
