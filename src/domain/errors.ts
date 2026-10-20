@@ -77,3 +77,10 @@ export class HostNotResolved extends DomainError {
     this.name = 'HostNotResolved';
   }
 }
+
+export class InvalidAuditUrl extends DomainError {
+  constructor(readonly url: string) {
+    super('Audit URL is not a complete http(s) address');
+    this.name = 'InvalidAuditUrl';
+  }
+}

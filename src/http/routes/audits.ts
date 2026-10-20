@@ -1,10 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { DEFAULT_PAGES_LIMIT, PAGES_LIMIT_CHOICES } from '../../application/audit-limits.js';
 import type { LaunchAudit } from '../../application/launch-audit.js';
 import { errorResponseSchema } from '../errors.js';
 
 const HTTP_ACCEPTED = 202;
-const DEFAULT_PAGES_LIMIT = 100;
-const PAGES_LIMIT_CHOICES = [50, 100, 250, 500];
 
 const launchSchema = {
   body: {

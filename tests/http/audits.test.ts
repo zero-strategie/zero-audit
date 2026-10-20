@@ -65,17 +65,21 @@ describe('audit launch API', () => {
       expect(runner.requests).toEqual([]);
     });
 
-    it.each([{ url: 'zero-strategie.dev' }, { url: 'ftp://site.test' }, {}])(
-      'answers 400 invalid_request for the body %j and starts nothing',
-      async (body) => {
-        const response = await post(body);
+    it.each([
+      { url: 'zero-strategie.dev' },
+      { url: 'ftp://site.test' },
+      { url: 'https://' },
+      { url: 'http://:80/' },
+      {},
+    ])('answers 400 invalid_request for the body %j and starts nothing', async (body) => {
+      const response = await post(body);
 
-        expect(response.statusCode).toBe(400);
-        expect(response.json<ApiError>().error.code).toBe('invalid_request');
-        expect(response.json<ApiError>().error.message).not.toBe('');
-        expect(runner.requests).toEqual([]);
-      },
-    );
+      expect(response.statusCode).toBe(400);
+      expect(response.json<ApiError>().error.code).toBe('invalid_request');
+      expect(response.json<ApiError>().error.message).not.toBe('');
+      expect(response.json<ApiError>().error.message).not.toContain('body/');
+      expect(runner.requests).toEqual([]);
+    });
 
     it('refuses a host with one internal address among its resolved ones', async () => {
       resolver.outcome = ['93.184.216.34', '10.0.0.1'];

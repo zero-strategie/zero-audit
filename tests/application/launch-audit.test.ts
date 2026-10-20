@@ -5,6 +5,7 @@ import type { HostResolver } from '../../src/application/ports/host-resolver.js'
 import {
   AuditAlreadyRunning,
   HostNotResolved,
+  InvalidAuditUrl,
   PrivateAddressRejected,
 } from '../../src/domain/errors.js';
 
@@ -98,6 +99,18 @@ describe('LaunchAudit', () => {
     expect(resolver.hosts).toEqual([]);
     expect(runner.requests).toEqual([{ rootUrl: 'http://127.0.0.1:8080/', limit: 50 }]);
   });
+
+  it.each(['https://', 'http://:80/'])(
+    'rejects the URL %s that has no host and starts nothing',
+    async (url) => {
+      const { runner, launch } = build(new FakeResolver(['93.184.216.34']));
+
+      const error = await rejectionOf(launch.execute({ url, limit: 100 }));
+
+      expect(error).toBeInstanceOf(InvalidAuditUrl);
+      expect(runner.requests).toEqual([]);
+    },
+  );
 
   it('lets the runner conflict through', async () => {
     const { runner, launch } = build(new FakeResolver(['93.184.216.34']));
