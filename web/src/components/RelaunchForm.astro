@@ -1,0 +1,13 @@
+---
+interface Props {
+  url: string;
+  limit: number;
+}
+const { url, limit } = Astro.props;
+---
+
+<form method="post" action="/audits/new">
+  <input type="hidden" name="url" value={url} />
+  <input type="hidden" name="limit" value={limit} />
+  <button type="submit" class="button-primary">Relancer</button>
+</form>

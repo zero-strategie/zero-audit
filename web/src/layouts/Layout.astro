@@ -20,6 +20,7 @@ const sourceUrl = resolveSourceUrl(process.env);
     <meta name="color-scheme" content="light dark" />
     <link rel="stylesheet" href={globalStylesheet} />
     <title>{title}</title>
+    <slot name="head" />
   </head>
   <body>
     <header class="site-header"><MainNav projectId={projectId} snapshotId={snapshotId} /></header>
