@@ -50,7 +50,7 @@ try {
                   {latestRun?.status === 'running' && <a href={`/audits/${latestRun.id}`}>en cours…</a>}
                   {latestRun?.status === 'failed' && 'échoué'}
                 </td>
-                <td><RelaunchForm url={rootUrl} limit={DEFAULT_LIMIT} /></td>
+                <td><RelaunchForm url={rootUrl} limit={DEFAULT_LIMIT} ariaLabel={`Relancer l'audit de ${new URL(rootUrl).host}`} /></td>
               </tr>
             ))}
           </tbody>

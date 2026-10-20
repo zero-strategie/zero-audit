@@ -65,6 +65,12 @@ it('offers a relaunch form posting the root URL with 100 pages', async () => {
   expect(html).toMatch(/<form[^>]*action="\/audits\/new"[^]*?name="url" value="https:\/\/alpha.test\/"[^]*?name="limit" value="100"[^]*?Relancer/);
 });
 
+it('names the site in each relaunch button for screen readers', async () => {
+  const html = await (await render(() => Promise.resolve([aProject()]))).text();
+
+  expect(html).toContain(`aria-label="Relancer l'audit de alpha.test"`);
+});
+
 it('invites to run a first audit when there is no project', async () => {
   const html = await (await render(() => Promise.resolve([]))).text();
 
