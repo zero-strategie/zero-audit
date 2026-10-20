@@ -40,6 +40,13 @@ describe('Dockerfile', () => {
     expect(api).toMatch(/^CMD \["serve"\]$/m);
   });
 
+  it('gives the non-root user a writable default SQLite directory', () => {
+    const api = stageBody(dockerfile, 'api');
+    const chown = api.search(/chown node:node \/app\/\.zero-audit/);
+    expect(chown).toBeGreaterThan(-1);
+    expect(chown).toBeLessThan(api.search(/^USER node$/m));
+  });
+
   it('starts the web server on 0.0.0.0', () => {
     const web = stageBody(dockerfile, 'web');
     expect(web).toMatch(/^ENV .*HOST=0\.0\.0\.0/m);

@@ -59,6 +59,7 @@ jobs:
       - name: Smoke-test the api image
         run: |
           docker run --rm zero-audit-api:ci --help
+          docker run --rm zero-audit-api:ci migrate
           docker run --rm --entrypoint sh zero-audit-api:ci -c "find dist -name '*.sql'" | tee migrations.log
           grep -q 'dist/infrastructure/sqlite/migrations/' migrations.log
           grep -q 'dist/infrastructure/postgres/migrations/' migrations.log

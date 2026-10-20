@@ -20,6 +20,7 @@ describe('CI workflow', () => {
 
   it('smoke-tests the loaded api image: --help and the SQL migrations in dist', () => {
     expect(workflow).toMatch(/docker run --rm zero-audit-api:ci --help/);
+    expect(workflow).toMatch(/docker run --rm zero-audit-api:ci migrate$/m);
     expect(workflow).toMatch(/find dist -name '\*\.sql'/);
   });
 });
