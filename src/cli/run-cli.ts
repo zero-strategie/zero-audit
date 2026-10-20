@@ -9,6 +9,7 @@ import {
 } from '../domain/errors.js';
 import { allChecks } from '../domain/checks/index.js';
 import { JsonLinesAuditEvents } from '../infrastructure/json-lines-audit-events.js';
+import { DnsHostResolver } from '../infrastructure/dns-host-resolver.js';
 import { SystemClock } from '../infrastructure/system-clock.js';
 import { buildServer, type HttpServer, type ServerDependencies } from '../http/server.js';
 import {
@@ -157,6 +158,9 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
       projects: storage.projects,
       snapshots: storage.snapshots,
       health: storage.health,
+      auditRunner: runner,
+      hostResolver: new DnsHostResolver(),
+      allowPrivateTargets: config.allowPrivateTargets,
     });
     hooks.onServerStarted?.(server);
     await server.listen({ host: config.host, port: config.port });

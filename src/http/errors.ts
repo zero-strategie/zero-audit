@@ -1,5 +1,8 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
+  AuditAlreadyRunning,
+  HostNotResolved,
+  PrivateAddressRejected,
   ProjectNotFound,
   SnapshotNotFinished,
   SnapshotNotFound,
@@ -7,12 +10,16 @@ import {
   UnknownCheck,
 } from '../domain/errors.js';
 
-export type ApiErrorCode = 'not_found' | 'invalid_request' | 'internal_error';
+export type ApiErrorCode = 'not_found' | 'invalid_request' | 'conflict' | 'internal_error';
 
 const HTTP_BAD_REQUEST = 400;
 const HTTP_NOT_FOUND = 404;
+const HTTP_CONFLICT = 409;
 const HTTP_INTERNAL_ERROR = 500;
 const INTERNAL_MESSAGE = 'Internal server error';
+const PRIVATE_ADDRESS_MESSAGE =
+  'Adresse interne refusée : le site cible une adresse réseau non publique';
+const HOST_NOT_RESOLVED_MESSAGE = 'Site introuvable : le nom de domaine ne résout pas';
 
 const send = (reply: FastifyReply, status: number, code: ApiErrorCode, message: string) =>
   reply.status(status).send({ error: { code, message } });
@@ -25,7 +32,10 @@ export const errorResponseSchema = {
       type: 'object',
       required: ['code', 'message'],
       properties: {
-        code: { type: 'string', enum: ['not_found', 'invalid_request', 'internal_error'] },
+        code: {
+          type: 'string',
+          enum: ['not_found', 'invalid_request', 'conflict', 'internal_error'],
+        },
         message: { type: 'string' },
       },
     },
@@ -47,6 +57,15 @@ export const registerErrorHandlers = (app: FastifyInstance): void => {
     }
     if (error instanceof SnapshotNotFinished || error instanceof SnapshotsFromDifferentProjects) {
       return send(reply, HTTP_BAD_REQUEST, 'invalid_request', error.message);
+    }
+    if (error instanceof PrivateAddressRejected) {
+      return send(reply, HTTP_BAD_REQUEST, 'invalid_request', PRIVATE_ADDRESS_MESSAGE);
+    }
+    if (error instanceof HostNotResolved) {
+      return send(reply, HTTP_BAD_REQUEST, 'invalid_request', HOST_NOT_RESOLVED_MESSAGE);
+    }
+    if (error instanceof AuditAlreadyRunning) {
+      return send(reply, HTTP_CONFLICT, 'conflict', error.message);
     }
     request.log.error({ err: error }, 'Unhandled error');
     return send(reply, HTTP_INTERNAL_ERROR, 'internal_error', INTERNAL_MESSAGE);

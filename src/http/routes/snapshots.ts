@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import type { GetAuditProgress } from '../../application/get-audit-progress.js';
 import type { GetSnapshotReport } from '../../application/get-snapshot-report.js';
 import { errorResponseSchema } from '../errors.js';
 import { presentSnapshotReport } from '../presenters.js';
@@ -100,11 +101,41 @@ const reportSchema = {
   },
 } as const;
 
+const progressSchema = {
+  params: {
+    type: 'object',
+    required: ['id'],
+    properties: { id: { type: 'string', minLength: 1 } },
+  },
+  response: {
+    200: {
+      type: 'object',
+      required: ['status', 'pagesCrawled', 'pagesLimit', 'startedAt', 'rootUrl'],
+      properties: {
+        status: { type: 'string', enum: ['running', 'finished', 'failed'] },
+        pagesCrawled: { type: 'integer' },
+        pagesLimit: { type: 'integer' },
+        startedAt: { type: 'string' },
+        rootUrl: { type: 'string' },
+      },
+    },
+    404: errorResponseSchema,
+  },
+} as const;
+
 export const registerSnapshotRoutes = (
   app: FastifyInstance,
-  useCases: { getSnapshotReport: GetSnapshotReport },
+  useCases: { getSnapshotReport: GetSnapshotReport; getAuditProgress: GetAuditProgress },
 ): void => {
   app.get<{ Params: { id: string } }>('/snapshots/:id', { schema: reportSchema }, async (request) =>
     presentSnapshotReport(await useCases.getSnapshotReport.execute(request.params.id)),
+  );
+  app.get<{ Params: { id: string } }>(
+    '/snapshots/:id/progress',
+    { schema: progressSchema },
+    async (request) => {
+      const progress = await useCases.getAuditProgress.execute(request.params.id);
+      return { ...progress, startedAt: progress.startedAt.toISOString() };
+    },
   );
 };
