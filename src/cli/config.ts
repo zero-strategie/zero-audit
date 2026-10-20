@@ -29,6 +29,7 @@ export interface ServeConfig extends StoreSelection {
   dbPath: string;
   /** Disables the SSRF guard; only the exact value `true` of the environment variable does. */
   allowPrivateTargets: boolean;
+  delayMs: number;
 }
 
 export interface MigrateConfig extends StoreSelection {
@@ -159,6 +160,7 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
     port,
     dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
     allowPrivateTargets: env[ALLOW_PRIVATE_TARGETS_ENV] === 'true',
+    delayMs: parseInteger(env[DELAY_ENV] ?? String(DEFAULT_DELAY_MS), DELAY_ENV, 0),
     ...parseStore(values.store, env),
   };
 };

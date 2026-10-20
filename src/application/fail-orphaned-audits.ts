@@ -14,7 +14,7 @@ export class FailOrphanedAudits {
     const now = this.clock.now();
     const running = await this.snapshots.listRunning();
     const orphans = running.filter(
-      (snapshot) => now - snapshot.startedAt.getTime() > ORPHAN_AUDIT_MAX_AGE_MS,
+      (snapshot) => now - snapshot.startedAt.getTime() >= ORPHAN_AUDIT_MAX_AGE_MS,
     );
     for (const orphan of orphans) await this.snapshots.fail(orphan.id, new Date(now));
     return orphans.length;
