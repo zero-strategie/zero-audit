@@ -163,7 +163,7 @@ Migrations are **additive**: never edit one that has shipped. Add a new file to 
 
 ## HTTP API
 
-The API is read-only and has no authentication. It listens on `HOST:PORT`, `127.0.0.1:3000` by default. Routes live in `src/http/routes/`. Their inputs are validated by JSON schemas, and the response bodies are shaped by `presenters.ts`.
+The API has no authentication (**no authentication, loopback only**): it listens on `HOST:PORT`, `127.0.0.1:3000` by default. Apart from `POST /audits`, it is read-only. Routes live in `src/http/routes/`. Their inputs are validated by JSON schemas, and the response bodies are shaped by `presenters.ts`.
 
 | Route | Answer |
 |---|---|
@@ -175,7 +175,19 @@ The API is read-only and has no authentication. It listens on `HOST:PORT`, `127.
 | `GET /snapshots/:id/issues?severity=` | every check with `count`, `examined`, delta, new and fixed counts |
 | `GET /snapshots/:id/issues/:checkId?page=&limit=` | occurrences of one check, paginated |
 | `GET /snapshots/:id/pages?page=&limit=&sort=` | crawled pages with group, issue count and response time. `sort` is one of `url`, `status`, `depth`, `issues`, `responseTime`, prefixed with `-` for descending order. |
+| `GET /snapshots/:id/progress` | `200 {status, pagesCrawled, pagesLimit, startedAt, rootUrl}`; `404` for an unknown id. See [Background audits](#background-audits-auditrunner). |
+| `POST /audits` | launches a background audit, see below |
 | `GET /compare?a=&b=` | comparison of two finished snapshots of the same project |
+
+### `POST /audits`
+
+Body: `{ "url": "https://site.test/", "limit": 100 }`. `url` is required and must start with `http://` or `https://` (no scheme is added for the caller). `limit` is one of 50, 100, 250 or 500 and defaults to 100. The call returns as soon as the snapshot exists; follow it with `GET /snapshots/:id/progress`.
+
+- **202** `{ "snapshotId", "projectId" }`: the audit runs in the background.
+- **400** `invalid_request`: bad body or `limit`; a host with at least one non-public address (literal IP, or any resolved address); a domain that does not resolve (`Site introuvable : le nom de domaine ne résout pas`). Nothing is started.
+- **409** `conflict`: an audit is already running; the message carries the start date of the blocking audit.
+
+The address check (`LaunchAudit`, `HostResolver` port, `DnsHostResolver` adapter) is a fast pre-check; the connection-time guard of the HTTP client remains the authority. `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true` turns both off. `PUT`, `DELETE` and `GET` on `/audits` answer 404.
 
 Pagination:
 
@@ -183,10 +195,11 @@ Pagination:
 - `limit` defaults to 50, with a maximum of 200;
 - responses carry `items`, `total`, `page` and `limit`.
 
-Errors share one format: `{ "error": { "code": "not_found" | "invalid_request" | "internal_error", "message": "…" } }`.
+Errors share one format: `{ "error": { "code": "not_found" | "invalid_request" | "conflict" | "internal_error", "message": "…" } }`.
 
 - **404**: unknown id or route.
 - **400**: invalid parameter, or a comparison across sites.
+- **409**: an audit is already running.
 - **500**: unexpected failure, returned with a generic message.
 
 Tests use `fastify.inject()` and never open a port. See `tests/http/`.
@@ -207,7 +220,7 @@ The server (`serve`) crawls any public site on request, so its HTTP client must 
 
 - **Lock**: global, all projects together. It is held in memory and, for audits started by another process, by any `running` snapshot younger than `ORPHAN_AUDIT_MAX_AGE_MS` (6 hours, `src/domain/snapshot.ts`). `start` then rejects with `AuditAlreadyRunning`, which carries the start date of the blocking audit. The CLI `audit` command is not blocked by this lock, so a scheduled audit and one launched from the server may overlap.
 - **Orphans**: `serve` runs `FailOrphanedAudits` at startup and marks every `running` snapshot older than 6 hours as `failed`. Younger ones keep blocking until they age out; to unblock by hand, set the snapshot to `failed` in the database.
-- **Progress**: `progress(snapshotId)` reads the page counter from memory for the audit it runs, and from the database otherwise (0 pages for a `running` snapshot owned by another process).
+- **Progress**: `GET /snapshots/:id/progress` calls `progress(snapshotId)`, which reads the page counter from memory for the audit it runs, and from the database otherwise (0 pages for a `running` snapshot owned by another process).
 - **Shutdown**: on SIGINT / SIGTERM the server is closed, then `stop()` aborts the crawl at its next page (the progress callback throws), marks the snapshot `failed`, and only then is the storage closed.
 - **Config**: `serve` reads `ZERO_AUDIT_DELAY_MS` like `audit`.
 
