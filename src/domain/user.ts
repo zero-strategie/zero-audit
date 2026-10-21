@@ -18,3 +18,6 @@ export const normalizeEmail = (raw: string): string => {
   if (email.length > MAX_EMAIL_LENGTH || !email.includes('@')) throw new InvalidEmail();
   return email;
 };
+
+/** An account whose address is still unverified after this long is erased by the purge. */
+export const UNVERIFIED_ACCOUNT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
