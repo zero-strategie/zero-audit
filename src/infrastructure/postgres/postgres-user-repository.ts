@@ -50,6 +50,10 @@ export class PostgresUserRepository implements UserRepository {
     await this.pool.query('UPDATE users SET verified_at = $1 WHERE id = $2', [verifiedAt, id]);
   }
 
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    await this.pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, id]);
+  }
+
   findById(id: string): Promise<User | null> {
     return this.findOne('id', id);
   }

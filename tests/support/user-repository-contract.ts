@@ -43,6 +43,15 @@ export const describeUserRepositoryContract = (
       expect(await users.findById(created.id)).toEqual({ ...created, verifiedAt });
     });
 
+    it('replaces the password hash without touching the verification state', async () => {
+      const users = await factory();
+      const created = await users.create({ email: 'a@x.fr', passwordHash: 'old', createdAt });
+
+      await users.updatePasswordHash(created.id, 'new');
+
+      expect(await users.findById(created.id)).toEqual({ ...created, passwordHash: 'new' });
+    });
+
     it('returns null for an unknown e-mail or id', async () => {
       const users = await factory();
       expect(await users.findByEmail('nobody@example.fr')).toBeNull();
