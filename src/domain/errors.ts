@@ -98,3 +98,10 @@ export class EmailAlreadyRegistered extends DomainError {
     this.name = 'EmailAlreadyRegistered';
   }
 }
+
+export class InvalidPassword extends DomainError {
+  constructor() {
+    super('Password must be between 12 and 128 characters long');
+    this.name = 'InvalidPassword';
+  }
+}
