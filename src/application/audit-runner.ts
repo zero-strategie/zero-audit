@@ -1,5 +1,6 @@
 import { AuditAlreadyRunning, SnapshotImmutable, SnapshotNotFound } from '../domain/errors.js';
-import { ORPHAN_AUDIT_MAX_AGE_MS, type SnapshotStatus } from '../domain/snapshot.js';
+import { type SnapshotStatus } from '../domain/snapshot.js';
+import { LEGACY_ORPHAN_AGE_MS } from './legacy-orphan-age.js';
 import type { AuditEvents } from './ports/audit-events.js';
 import type { Clock } from './ports/clock.js';
 import type { Logger } from './ports/logger.js';
@@ -143,7 +144,7 @@ export class AuditRunner {
 
   private async assertNoRunningSnapshotElsewhere(): Promise<void> {
     const { snapshots, clock } = this.dependencies;
-    const orphanLimit = clock.now() - ORPHAN_AUDIT_MAX_AGE_MS;
+    const orphanLimit = clock.now() - LEGACY_ORPHAN_AGE_MS;
     const running = await snapshots.listRunning();
     const live = running.find((snapshot) => snapshot.startedAt.getTime() > orphanLimit);
     if (live) throw new AuditAlreadyRunning(live.startedAt);

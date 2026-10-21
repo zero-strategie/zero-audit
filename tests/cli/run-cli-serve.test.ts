@@ -6,7 +6,7 @@ import { createInterruptController } from '../../src/cli/interrupt-controller.js
 import { runCli, type CliHooks, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type Storage, type StorageFactory } from '../../src/cli/storage-factory.js';
 import type { HttpServer, ServerDependencies } from '../../src/http/server.js';
-import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../src/domain/snapshot.js';
+import { LEGACY_ORPHAN_AGE_MS } from '../../src/application/legacy-orphan-age.js';
 import type { AuditRunner } from '../../src/application/audit-runner.js';
 import { startFixtureServer } from '../support/fixture-server.js';
 
@@ -306,8 +306,8 @@ describe('runCli serve', () => {
         pagesLimit: 100,
         startedAt: new Date(Date.now() - ageMs),
       });
-    const old = await start(ORPHAN_AUDIT_MAX_AGE_MS + 60_000);
-    const recent = await start(ORPHAN_AUDIT_MAX_AGE_MS - 60_000);
+    const old = await start(LEGACY_ORPHAN_AGE_MS + 60_000);
+    const recent = await start(LEGACY_ORPHAN_AGE_MS - 60_000);
     await seeded.close();
     let statuses: string[] = [];
 

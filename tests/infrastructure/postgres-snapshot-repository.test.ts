@@ -243,8 +243,8 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       const columnsOf = async (): Promise<unknown[]> => {
         const { rows } = await legacy.pool.query<Record<string, string>>(
           `SELECT table_name, column_name, data_type FROM information_schema.columns
-           WHERE table_schema = current_schema() AND table_name NOT IN ('slash_probes', 'users', 'sessions', 'email_tokens', 'api_launches')
-             AND column_name NOT IN ('text_ratio', 'owner_id', 'launched_by')
+           WHERE table_schema = current_schema() AND table_name NOT IN ('slash_probes', 'users', 'sessions', 'email_tokens', 'api_launches', 'workers')
+             AND column_name NOT IN ('text_ratio', 'owner_id', 'launched_by', 'attempts', 'queued_at', 'heartbeat_at')
            ORDER BY table_name, column_name`,
         );
         return rows;
@@ -261,6 +261,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         { version: 3 },
         { version: 4 },
         { version: 5 },
+        { version: 6 },
       ]);
       await expect(legacy.pool.query('SELECT * FROM slash_probes')).resolves.toBeDefined();
     } finally {
@@ -303,6 +304,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         { version: 3 },
         { version: 4 },
         { version: 5 },
+        { version: 6 },
       ]);
     } finally {
       await legacy.dispose();
@@ -348,6 +350,78 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     } finally {
       await legacy.dispose();
     }
+  });
+  describe('migration 006 on a database at migration 005', () => {
+    const LEGACY_INSERT = `INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit)
+       VALUES ($1, 'p1', NULL, 'running', now(), 0, 10)`;
+
+    const migrateFrom005 = async (legacy: TestDatabase): Promise<void> => {
+      for (const file of [
+        '001_init.sql',
+        '002_slash_probes.sql',
+        '003_page_text_ratio.sql',
+        '004_accounts.sql',
+        '005_api_launches.sql',
+      ]) {
+        await legacy.pool.query(readMigration(file));
+      }
+      await legacy.pool.query(
+        'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+      );
+      await legacy.pool.query(
+        'INSERT INTO schema_migrations (version) VALUES (1), (2), (3), (4), (5)',
+      );
+      await legacy.pool.query(
+        `INSERT INTO projects (id, root_url, created_at) VALUES ('p1', 'https://a.test/', now());
+         INSERT INTO snapshots (id, project_id, status, started_at, pages_limit)
+         VALUES ('s1', 'p1', 'finished', now(), 10), ('s2', 'p1', 'running', now(), 10)`,
+      );
+      await migrate(legacy.pool);
+    };
+
+    it('keeps existing rows and creates the workers table', async () => {
+      const legacy = await createTestDatabase(TEST_DATABASE_URL ?? '');
+      try {
+        await migrateFrom005(legacy);
+
+        const snapshots = await legacy.pool.query(
+          'SELECT id, status, attempts, queued_at, heartbeat_at FROM snapshots ORDER BY id',
+        );
+        const workers = await legacy.pool.query('SELECT id, heartbeat_at FROM workers');
+        expect(snapshots.rows).toEqual([
+          { id: 's1', status: 'finished', attempts: 0, queued_at: null, heartbeat_at: null },
+          { id: 's2', status: 'running', attempts: 0, queued_at: null, heartbeat_at: null },
+        ]);
+        expect(workers.rows).toEqual([]);
+      } finally {
+        await legacy.dispose();
+      }
+    });
+
+    it('accepts the previous version INSERT and queued, and refuses any other status', async () => {
+      const legacy = await createTestDatabase(TEST_DATABASE_URL ?? '');
+      try {
+        await migrateFrom005(legacy);
+
+        await legacy.pool.query(LEGACY_INSERT, ['legacy']);
+        await legacy.pool.query(
+          `INSERT INTO snapshots (id, project_id, status, started_at, pages_limit)
+           VALUES ('q', 'p1', 'queued', now(), 10)`,
+        );
+        const legacyRow = await legacy.pool.query(
+          "SELECT attempts FROM snapshots WHERE id = 'legacy'",
+        );
+        expect(legacyRow.rows).toEqual([{ attempts: 0 }]);
+        await expect(
+          legacy.pool.query(
+            `INSERT INTO snapshots (id, project_id, status, started_at, pages_limit)
+             VALUES ('x', 'p1', 'paused', now(), 10)`,
+          ),
+        ).rejects.toThrow(/check/);
+      } finally {
+        await legacy.dispose();
+      }
+    });
   });
   describe('account erasure', () => {
     const ALL_TABLES = [

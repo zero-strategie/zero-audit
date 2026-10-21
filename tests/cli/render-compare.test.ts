@@ -15,6 +15,9 @@ const snapshot = (id: string): Snapshot =>
     pagesCrawled: 1,
     pagesLimit: 1,
     status: 'finished',
+    attempts: 0,
+    queuedAt: null,
+    heartbeatAt: null,
   });
 
 const occurrence = (pageUrl: string) => ({ checkId: 15, pageUrl, info: {} });

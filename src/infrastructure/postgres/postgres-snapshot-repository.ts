@@ -35,6 +35,9 @@ type SnapshotRow = {
   finished_at: Date | null;
   pages_crawled: number;
   pages_limit: number;
+  attempts: number;
+  queued_at: Date | null;
+  heartbeat_at: Date | null;
 };
 
 type PageRow = {
@@ -106,6 +109,9 @@ const toSnapshot = (row: SnapshotRow): Snapshot =>
     finishedAt: row.finished_at,
     pagesCrawled: row.pages_crawled,
     pagesLimit: row.pages_limit,
+    attempts: row.attempts,
+    queuedAt: row.queued_at,
+    heartbeatAt: row.heartbeat_at,
   });
 
 const toPage = (row: PageRow): Page => ({

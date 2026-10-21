@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FailOrphanedAudits } from '../../src/application/fail-orphaned-audits.js';
-import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../src/domain/snapshot.js';
+import { LEGACY_ORPHAN_AGE_MS } from '../../src/application/legacy-orphan-age.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 
@@ -22,8 +22,8 @@ describe('FailOrphanedAudits', () => {
         pagesLimit: 100,
         startedAt: new Date(NOW - ageMs),
       });
-    const old = await start(ORPHAN_AUDIT_MAX_AGE_MS + 1);
-    const recent = await start(ORPHAN_AUDIT_MAX_AGE_MS - 1);
+    const old = await start(LEGACY_ORPHAN_AGE_MS + 1);
+    const recent = await start(LEGACY_ORPHAN_AGE_MS - 1);
 
     const failed = await new FailOrphanedAudits(snapshots, { now: () => NOW }).execute();
 

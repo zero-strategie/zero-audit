@@ -19,6 +19,13 @@ export class SnapshotImmutable extends DomainError {
   }
 }
 
+export class InvalidSnapshotTransition extends DomainError {
+  constructor(snapshotId: string, status: string, action: string) {
+    super(`Snapshot ${snapshotId} is ${status} and cannot be ${action}ed`);
+    this.name = 'InvalidSnapshotTransition';
+  }
+}
+
 export class SnapshotNotFound extends DomainError {
   constructor(snapshotId: string) {
     super(`Snapshot ${snapshotId} does not exist`);

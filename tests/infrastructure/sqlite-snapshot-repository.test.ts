@@ -77,7 +77,7 @@ describe('SqliteSnapshotRepository file handling', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'nested', 'deeper', 'audit.db');
     SqliteSnapshotRepository.open(path).close();
     expect(existsSync(path)).toBe(true);
-    expect(schemaVersion(path)).toBe(10);
+    expect(schemaVersion(path)).toBe(11);
   });
 
   it('does not replay migrations and keeps existing snapshots readable', async () => {
@@ -101,7 +101,7 @@ describe('SqliteSnapshotRepository file handling', () => {
     second.close();
 
     expect(details?.snapshot.pagesLimit).toBe(5);
-    expect(schemaVersion(path)).toBe(10);
+    expect(schemaVersion(path)).toBe(11);
   });
 
   it('leaves the row count unchanged when a write on a finished snapshot is refused', async () => {
@@ -215,7 +215,7 @@ describe('migration 002 on a milestone 1 database', () => {
     SqliteSnapshotRepository.open(path).close();
     SqliteSnapshotRepository.open(path).close();
 
-    expect(schemaVersion(path)).toBe(10);
+    expect(schemaVersion(path)).toBe(11);
     expect(count(path, 'projects')).toBe(2);
   });
 
@@ -304,7 +304,7 @@ describe('migration 008 on a database at migration 007', () => {
     expect(after.slice(0, before.length)).toEqual(before);
     expect(after).toHaveLength(before.length + 1);
     expect(after.at(-1)).toMatchObject({ name: 'text_ratio', type: 'REAL', notnull: 0 });
-    expect(schemaVersion(path)).toBe(10);
+    expect(schemaVersion(path)).toBe(11);
     expect(details?.pages[0]?.textRatio).toBeNull();
   });
 });
@@ -364,7 +364,7 @@ describe('migration 009 on a database at migration 008', () => {
       ]);
       expect(db.prepare('SELECT COUNT(*) AS n FROM pages').get()).toEqual({ n: 1 });
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(schemaVersion(path)).toBe(10);
+      expect(schemaVersion(path)).toBe(11);
     });
   });
 
@@ -385,6 +385,124 @@ describe('migration 009 on a database at migration 008', () => {
       insert.run('a-for-v', 'v');
       expect(() => insert.run('a-for-u-again', 'u')).toThrow(/UNIQUE/);
       expect(() => insert.run('a-public-again', null)).toThrow(/UNIQUE/);
+    });
+  });
+});
+
+describe('migration 011 on a database at migration 010', () => {
+  const MIGRATIONS_DIR = join(import.meta.dirname, '../../src/infrastructure/sqlite/migrations');
+  const LAST_VERSION_BEFORE_QUEUE = 10;
+  const LEGACY_INSERT =
+    "INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit) VALUES (?, 'project-a', NULL, 'running', '2026-01-01T00:00:00.000Z', 0, 10)";
+
+  const buildPopulatedDatabaseAt010 = (): string => {
+    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
+    const db = new Database(path);
+    db.pragma('foreign_keys = ON');
+    db.exec('CREATE TABLE schema_version (version INTEGER PRIMARY KEY)');
+    for (const [index, file] of readdirSync(MIGRATIONS_DIR).sort().entries()) {
+      if (index >= LAST_VERSION_BEFORE_QUEUE) break;
+      db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
+      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(index + 1);
+    }
+    db.exec(
+      `INSERT INTO users (id, email, password_hash, created_at) VALUES ('u', 'u@example.fr', 'h', '2025-12-01T00:00:00.000Z');
+       INSERT INTO projects (id, root_url, owner_id, created_at) VALUES
+         ('project-a', 'https://a.test/', 'u', '2025-12-01T10:00:00.000Z');
+       INSERT INTO snapshots (id, project_id, launched_by, status, started_at, finished_at, pages_crawled, pages_limit) VALUES
+         ('snapshot-a1', 'project-a', 'u', 'finished', '2025-12-01T10:00:00.000Z', '2025-12-01T10:05:00.000Z', 3, 10),
+         ('snapshot-a2', 'project-a', NULL, 'running', '2025-12-03T10:00:00.000Z', NULL, 0, 10);
+       INSERT INTO pages (snapshot_id, url, depth, redirect_chain, headers, response_time_ms, is_html, h1)
+       VALUES ('snapshot-a1', 'https://a.test/', 0, '[]', '{}', 5, 1, '[]');
+       INSERT INTO links (snapshot_id, source_url, target_url, type) VALUES ('snapshot-a1', 'https://a.test/', 'https://a.test/b', 'internal');
+       INSERT INTO api_launches (id, email_hash, launched_at) VALUES ('l1', 'hash', '2025-12-01T10:00:00.000Z')`,
+    );
+    db.close();
+    return path;
+  };
+
+  const inspect = <T>(path: string, work: (db: Database.Database) => T): T => {
+    const db = new Database(path);
+    db.pragma('foreign_keys = ON');
+    try {
+      return work(db);
+    } finally {
+      db.close();
+    }
+  };
+
+  it('keeps every row and id, keeps child foreign keys valid and recreates the indexes', () => {
+    const path = buildPopulatedDatabaseAt010();
+
+    SqliteSnapshotRepository.open(path).close();
+
+    inspect(path, (db) => {
+      expect(
+        db
+          .prepare(
+            'SELECT id, project_id, launched_by, status, pages_crawled FROM snapshots ORDER BY id',
+          )
+          .all(),
+      ).toEqual([
+        {
+          id: 'snapshot-a1',
+          project_id: 'project-a',
+          launched_by: 'u',
+          status: 'finished',
+          pages_crawled: 3,
+        },
+        {
+          id: 'snapshot-a2',
+          project_id: 'project-a',
+          launched_by: null,
+          status: 'running',
+          pages_crawled: 0,
+        },
+      ]);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM pages').get()).toEqual({ n: 1 });
+      expect(db.prepare('SELECT COUNT(*) AS n FROM links').get()).toEqual({ n: 1 });
+      expect(db.prepare('SELECT COUNT(*) AS n FROM api_launches').get()).toEqual({ n: 1 });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(
+        db
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'snapshots' AND name LIKE 'idx_%' ORDER BY name",
+          )
+          .all(),
+      ).toEqual([
+        { name: 'idx_snapshots_project_started' },
+        { name: 'idx_snapshots_status_queued' },
+      ]);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM workers').get()).toEqual({ n: 0 });
+      expect(schemaVersion(path)).toBe(11);
+    });
+  });
+
+  it('defaults the new columns when the previous version inserts a snapshot', () => {
+    const path = buildPopulatedDatabaseAt010();
+    SqliteSnapshotRepository.open(path).close();
+
+    inspect(path, (db) => {
+      db.prepare(LEGACY_INSERT).run('legacy');
+
+      expect(
+        db
+          .prepare("SELECT attempts, queued_at, heartbeat_at FROM snapshots WHERE id = 'legacy'")
+          .get(),
+      ).toEqual({ attempts: 0, queued_at: null, heartbeat_at: null });
+    });
+  });
+
+  it('accepts queued and refuses any other status', () => {
+    const path = buildPopulatedDatabaseAt010();
+    SqliteSnapshotRepository.open(path).close();
+
+    inspect(path, (db) => {
+      const insert = db.prepare(
+        "INSERT INTO snapshots (id, project_id, status, started_at, pages_limit) VALUES (?, 'project-a', ?, '2026-01-01T00:00:00.000Z', 10)",
+      );
+      expect(() => insert.run('q', 'queued')).not.toThrow();
+      expect(() => insert.run('x', 'paused')).toThrow(/CHECK/);
     });
   });
 });

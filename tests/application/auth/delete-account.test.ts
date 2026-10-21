@@ -3,7 +3,7 @@ import { DeleteAccount } from '../../../src/application/auth/delete-account.js';
 import { ResolveSession } from '../../../src/application/auth/resolve-session.js';
 import { LOGIN_FAILURES_PER_ACCOUNT } from '../../../src/domain/abuse-limits.js';
 import { AuditInProgress, TooManyAttempts, Unauthenticated } from '../../../src/domain/errors.js';
-import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../../src/domain/snapshot.js';
+import { LEGACY_ORPHAN_AGE_MS } from '../../../src/application/legacy-orphan-age.js';
 import { InMemoryAccountEraser } from '../../../src/infrastructure/in-memory-account-eraser.js';
 import { InMemoryProjectRepository } from '../../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../../src/infrastructure/in-memory-snapshot-repository.js';
@@ -101,7 +101,7 @@ describe('DeleteAccount', () => {
 
   it('ignores a running snapshot left by a killed process', async () => {
     const { kit, user, deleteAccount } = await setup();
-    kit.clock.advance(ORPHAN_AUDIT_MAX_AGE_MS + 1);
+    kit.clock.advance(LEGACY_ORPHAN_AGE_MS + 1);
     await kit.sessions.create({
       id: 'session-2',
       userId: user.id,

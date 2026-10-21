@@ -1,6 +1,6 @@
 import { LOGIN_FAILURES_PER_ACCOUNT, LOGIN_WINDOW_MS } from '../../domain/abuse-limits.js';
 import { AuditInProgress, TooManyAttempts, Unauthenticated } from '../../domain/errors.js';
-import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../domain/snapshot.js';
+import { LEGACY_ORPHAN_AGE_MS } from '../legacy-orphan-age.js';
 import type { AccountEraser } from '../ports/account-eraser.js';
 import type { Clock } from '../ports/clock.js';
 import type { PasswordHasher } from '../ports/password-hasher.js';
@@ -53,7 +53,7 @@ export class DeleteAccount {
     const ownedIds = new Set(
       (await projects.list(userId)).filter(({ ownerId }) => ownerId === userId).map(({ id }) => id),
     );
-    const orphanLimit = clock.now() - ORPHAN_AUDIT_MAX_AGE_MS;
+    const orphanLimit = clock.now() - LEGACY_ORPHAN_AGE_MS;
     const running = await snapshots.listRunning();
     return running.some(
       ({ projectId, startedAt }) => ownedIds.has(projectId) && startedAt.getTime() > orphanLimit,

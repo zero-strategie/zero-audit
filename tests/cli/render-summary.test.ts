@@ -32,6 +32,9 @@ const snapshot = Snapshot.restore({
   pagesCrawled: 6,
   pagesLimit: 10,
   status: 'finished',
+  attempts: 0,
+  queuedAt: null,
+  heartbeatAt: null,
 });
 
 const details: SnapshotDetails = {

@@ -1,4 +1,4 @@
-import { ORPHAN_AUDIT_MAX_AGE_MS } from '../domain/snapshot.js';
+import { LEGACY_ORPHAN_AGE_MS } from './legacy-orphan-age.js';
 import type { Clock } from './ports/clock.js';
 import type { SnapshotRepository } from './ports/snapshot-repository.js';
 
@@ -14,7 +14,7 @@ export class FailOrphanedAudits {
     const now = this.clock.now();
     const running = await this.snapshots.listRunning();
     const orphans = running.filter(
-      (snapshot) => now - snapshot.startedAt.getTime() >= ORPHAN_AUDIT_MAX_AGE_MS,
+      (snapshot) => now - snapshot.startedAt.getTime() >= LEGACY_ORPHAN_AGE_MS,
     );
     for (const orphan of orphans) await this.snapshots.fail(orphan.id, new Date(now));
     return orphans.length;

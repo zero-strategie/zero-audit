@@ -34,6 +34,9 @@ interface SnapshotRow {
   finished_at: string | null;
   pages_crawled: number;
   pages_limit: number;
+  attempts: number;
+  queued_at: string | null;
+  heartbeat_at: string | null;
 }
 
 interface PageRow {
@@ -107,6 +110,9 @@ const toSnapshot = (row: SnapshotRow): Snapshot =>
     finishedAt: row.finished_at === null ? null : new Date(row.finished_at),
     pagesCrawled: row.pages_crawled,
     pagesLimit: row.pages_limit,
+    attempts: row.attempts,
+    queuedAt: row.queued_at === null ? null : new Date(row.queued_at),
+    heartbeatAt: row.heartbeat_at === null ? null : new Date(row.heartbeat_at),
   });
 
 const toPage = (row: PageRow): Page => ({
