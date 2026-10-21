@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AuditEvents } from '../../src/application/ports/audit-events.js';
 import type { Crawler, CrawlerRequest } from '../../src/application/ports/crawler.js';
-import { RunAudit } from '../../src/application/run-audit.js';
+import { AuditInterrupted, RunAudit } from '../../src/application/run-audit.js';
+import { AuditAttemptLost } from '../../src/domain/errors.js';
 import { CheckRegistry } from '../../src/domain/check.js';
 import type { CrawlResult } from '../../src/domain/crawl.js';
 import { allChecks } from '../../src/domain/checks/index.js';
@@ -297,5 +298,127 @@ describe('RunAudit', () => {
         expect(await projects.list(null)).toHaveLength(2);
       },
     );
+  });
+});
+
+describe('RunAudit.runExisting', () => {
+  let now = FIXED_NOW;
+  const movingClock = { now: () => now };
+  const options = (signal: AbortSignal = new AbortController().signal) => ({
+    delayMs: 0,
+    signal,
+  });
+
+  const claimed = async (crawler: Crawler) => {
+    now = FIXED_NOW;
+    const repository = new InMemorySnapshotRepository();
+    const projects = new InMemoryProjectRepository();
+    const project = await projects.findOrCreateByRootUrl({
+      rootUrl: ROOT,
+      ownerId: null,
+      createdAt: new Date(now),
+    });
+    await repository.enqueue(
+      { projectId: project.id, launchedBy: null, pagesLimit: 7, requestedAt: new Date(now) },
+      () => Promise.resolve(),
+    );
+    const snapshot = await repository.claimNext('worker', new Date(now));
+    if (!snapshot) throw new Error('nothing claimed');
+    const useCase = new RunAudit({
+      crawler,
+      repository,
+      projects,
+      registry: new CheckRegistry(allChecks),
+      clock: movingClock,
+      events: new RecordingEvents(),
+    });
+    return { repository, snapshot, useCase };
+  };
+
+  const progressing = (pages: readonly number[], step: (page: number) => void): Crawler => ({
+    crawl: (request) => {
+      for (const page of pages) {
+        step(page);
+        request.onProgress?.(page, request.limit);
+      }
+      return Promise.resolve(crawlResult);
+    },
+  });
+
+  it('crawls the normalized root of the project within the limit and finishes the claimed audit', async () => {
+    const crawler = new FakeCrawler();
+    const { repository, snapshot, useCase } = await claimed(crawler);
+
+    const details = await useCase.runExisting(snapshot, repository, options());
+
+    expect(crawler.requests[0]).toMatchObject({ rootUrl: ROOT, limit: 7, delayMs: 0 });
+    expect(details.snapshot.status).toBe('finished');
+    expect(details.pages).toHaveLength(2);
+    expect(details.checkResults.length).toBeGreaterThan(0);
+  });
+
+  it('persists a heartbeat every 5 pages or every 2 seconds', async () => {
+    const crawler = progressing([1, 2, 3, 4, 5, 6, 7], (page) => {
+      if (page === 7) now += 2_000;
+    });
+    const { repository, snapshot, useCase } = await claimed(crawler);
+    const beats: number[] = [];
+    const heartbeat = repository.heartbeat.bind(repository);
+    repository.heartbeat = (id, attempt, pages, at) => {
+      beats.push(pages);
+      return heartbeat(id, attempt, pages, at);
+    };
+
+    await useCase.runExisting(snapshot, repository, options());
+
+    expect(beats.slice(0, 2)).toEqual([5, 7]);
+  });
+
+  it('stops the crawl with AuditInterrupted when the signal fires', async () => {
+    const controller = new AbortController();
+    const crawler = progressing([1, 2, 3], (page) => {
+      if (page === 2) controller.abort();
+    });
+    const { repository, snapshot, useCase } = await claimed(crawler);
+
+    const run = useCase.runExisting(snapshot, repository, options(controller.signal));
+
+    await expect(run).rejects.toBeInstanceOf(AuditInterrupted);
+    expect((await repository.getById(snapshot.id))?.snapshot.status).toBe('running');
+  });
+
+  it('writes the results to the end when the signal fires after the crawl', async () => {
+    const controller = new AbortController();
+    const crawler: Crawler = {
+      crawl: () => {
+        controller.abort();
+        return Promise.resolve(crawlResult);
+      },
+    };
+    const { repository, snapshot, useCase } = await claimed(crawler);
+
+    const details = await useCase.runExisting(snapshot, repository, options(controller.signal));
+
+    expect(details.snapshot.status).toBe('finished');
+  });
+
+  it('writes no result when the attempt was taken over meanwhile', async () => {
+    const { repository, snapshot, useCase } = await claimed(new FakeCrawler());
+    await repository.requeue(snapshot.id, snapshot.attempts, new Date(now));
+
+    const run = useCase.runExisting(snapshot, repository, options());
+
+    await expect(run).rejects.toBeInstanceOf(AuditAttemptLost);
+    expect((await repository.getById(snapshot.id))?.pages).toEqual([]);
+  });
+
+  it('leaves a heartbeat failure to surface, aborting the crawl', async () => {
+    const crawler = progressing([1, 2, 3, 4, 5, 6, 7, 8], () => undefined);
+    const { repository, snapshot, useCase } = await claimed(crawler);
+    repository.heartbeat = (id, attempt) => Promise.reject(new AuditAttemptLost(id, attempt));
+
+    const run = useCase.runExisting(snapshot, repository, options());
+
+    await expect(run).rejects.toBeInstanceOf(AuditAttemptLost);
   });
 });

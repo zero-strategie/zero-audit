@@ -190,9 +190,10 @@ Sign in, click **Nouvel audit** on the projects page, enter the site address (wi
 
 - **Relaunch**: the projects page relaunches a site with 100 pages, in your own project. The overview relaunches with the page limit of the audit you are viewing, if it is one of the four choices, otherwise with 100.
 - **Internal addresses are refused.** The server rejects addresses that resolve to a private, loopback or link-local network, so the dashboard cannot be used to reach your internal services. Developers can lift this guard on a trusted machine with `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true`.
-- **One audit at a time.** While an audit started from the dashboard is running, any other launch is refused with a message giving the start date of the running audit.
-- **Manual unlock after a crash.** If the server stops during an audit, that audit stays `running` and blocks new launches. Either wait 6 hours, after which it is ignored, or set the snapshot status to `failed` in the database.
-- **Weekly audit.** The command line, and so a cron job or systemd timer, is not blocked by this rule. A weekly audit and an audit started from the dashboard can run at the same time and double the load on the audited site. While an audit run by another process is in progress, the dashboard shows "en cours" with no page count.
+- **Queue.** Audits are processed one after another by a worker. After you launch one, the page shows "En file d'attente" with your position (1 means you are next); it refreshes itself and switches to the progress display when your audit starts. The queue is shared by all accounts and holds 20 waiting audits by default: beyond that the launch is refused with "La file d'attente est pleine", and you can try again later.
+- **One audit per account.** While one of your audits is waiting or running, you cannot launch another (administrators included): the message points to the audit in progress.
+- **Automatic resumption.** If the server or the worker restarts during your audit (for example a deployment), the audit starts again from zero and the page shows "Reprise en cours (tentative 2/2)". At most 2 attempts are made: if it is interrupted a second time, it ends as failed and you can launch it again.
+- **Weekly audit.** The command line, and so a cron job or systemd timer, has no quota and no account limit: it joins the same queue, so it never runs at the same time as a dashboard audit when a single worker is running. Without `--wait` it only queues the audit and returns immediately; add `--wait` for a command that ends with the audit, or `--direct` to crawl outside the queue.
 - **Third-party content.** You can audit any public site. The pages' metadata and links are stored, and they may contain third-party content, including personal data. The crawler honours robots.txt and identifies itself, but audit only sites you are entitled to crawl.
 
 ## Store audits in Postgres
@@ -213,10 +214,10 @@ You can set `ZERO_AUDIT_STORE=postgres` instead of passing `--store` every time.
 
 The repository builds two images:
 
-- `api`: the CLI, the API and the migrations;
+- `api`: the CLI, the API, the worker and the migrations;
 - `web`: the dashboard.
 
-The `docker-compose.yml` starts the whole stack (Postgres, migrations, API and dashboard), publishing ports on `127.0.0.1` only:
+The `docker-compose.yml` starts the whole stack (Postgres, migrations, API, worker and dashboard), publishing ports on `127.0.0.1` only:
 
 ```sh
 POSTGRES_PASSWORD=change-me docker compose up --build
@@ -276,7 +277,11 @@ zero-audit [audit] <url> [options]   run an audit (the word "audit" is optional)
 zero-audit compare <A> <B>           compare two finished audits of the same site
 zero-audit serve                     start the HTTP API
 zero-audit migrate                   apply storage migrations and exit
+zero-audit worker                    process the queued audits (dedicated process)
+zero-audit worker-health             exit 0 if this host's worker is alive, else 1
 ```
+
+`zero-audit <url>` queues the audit and prints its id and position. `--wait` waits for the end and prints the summary; `--direct` crawls in the process without the queue.
 
 An option takes precedence over its environment variable, which takes precedence over the default.
 
@@ -287,7 +292,12 @@ An option takes precedence over its environment variable, which takes precedence
 | `--db <path>` | `ZERO_AUDIT_DB_PATH` | `./.zero-audit/audit.db` | SQLite database file |
 | `--store <sqlite\|postgres>` | `ZERO_AUDIT_STORE` | `sqlite` | storage backend |
 | | `DATABASE_URL` | | Postgres URL, required with `--store postgres` |
-| `--json <file>` | | | export the full snapshot as JSON |
+| `--json <file>` | | | export the full snapshot as JSON (with `--wait` or `--direct`) |
+| `--wait` | | | wait for the queued audit to end |
+| `--direct` | | | crawl in the process, outside the queue |
+| | `ZERO_AUDIT_WORKER` | `embedded` | `serve` runs the worker itself, or `external` for a dedicated process |
+| | `ZERO_AUDIT_WORKER_CONCURRENCY` | 1 | audits run in parallel by `worker` |
+| | `ZERO_AUDIT_QUEUE_MAX` | 20 | ceiling of waiting audits (API only) |
 | `--port <n>` | `PORT` | 3000 | API port (`serve`) |
 | | `HOST` | `127.0.0.1` | listening address (`serve`, dashboard). Use `0.0.0.0` only inside a container. |
 | | `ZERO_AUDIT_API_URL` | `http://127.0.0.1:3000` | API address used by the dashboard |
@@ -299,15 +309,15 @@ An option takes precedence over its environment variable, which takes precedence
 | 0 | success |
 | 1 | the audit failed (the snapshot is marked `failed`); unknown or unfinished snapshot in `compare` |
 | 2 | invalid usage; nothing was requested or stored |
-| 130 / 143 | interrupted by Ctrl+C or `SIGTERM` (an audit in progress is marked `failed`) |
+| 130 / 143 | interrupted by Ctrl+C or `SIGTERM` (`--direct`: the audit in progress is marked `failed`; `worker`: the audit goes back to the queue, and fails at attempt 2 of 2) |
 
 `.env.example` lists every variable.
 
 ## Limitations
 
 - **No JavaScript rendering.** Pages are analysed as served by the server. Content injected by client-side JavaScript is not seen.
-- **Single user.** There are no accounts. Protect the deployment with your reverse proxy.
-- **Read-only dashboard.** Audits are started from the command line or a scheduler, not from the UI.
+- **Simple accounts.** E-mail and password with e-mail verification; no single sign-on and no two-factor authentication yet.
+- **Queue.** Audits wait in a queue (one per account, 20 waiting at most through the API) and a worker crawls them one after the other.
 - **No performance metrics** such as Core Web Vitals or Lighthouse yet. Response times are measured but not scored.
 - **One site per project.** Subdomains are not crawled. Only `www.` and the apex domain are probed, for check 1000.
 

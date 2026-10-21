@@ -279,6 +279,11 @@ tbody tr:hover {
   animation: sweep 1.6s var(--ease-inout) infinite;
 }
 
+.chip-queued {
+  background: var(--color-notice-bg);
+  color: var(--color-notice-text);
+}
+
 .chip-failed {
   background: var(--color-error-bg);
   color: var(--color-error-text);

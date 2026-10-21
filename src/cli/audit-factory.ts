@@ -1,4 +1,8 @@
 import { BfsCrawler } from '../application/bfs-crawler.js';
+import os from 'node:os';
+import { ProcessAuditQueue } from '../application/process-audit-queue.js';
+import { RecoverStaleAudits } from '../application/recover-stale-audits.js';
+import type { Logger } from '../application/ports/logger.js';
 import type { AuditEvents } from '../application/ports/audit-events.js';
 import { RunAudit } from '../application/run-audit.js';
 import { CheckRegistry } from '../domain/check.js';
@@ -46,5 +50,47 @@ export const createRunAudit = ({
     registry: new CheckRegistry(allChecks),
     clock,
     events,
+  });
+};
+
+export interface AuditWorkerOptions {
+  storage: Pick<Storage, 'projects' | 'snapshots' | 'queue'>;
+  logger: Logger;
+  /** Same switch as `serve`: the SSRF guard of the worker is on unless it is explicitly lifted. */
+  allowPrivateTargets: boolean;
+  delayMs: number;
+  /** Audits crawled in parallel. */
+  concurrency: number;
+}
+
+const ignoredEvents: AuditEvents = {
+  started: () => undefined,
+  finished: () => undefined,
+  failed: () => undefined,
+};
+
+/** Single composition of the worker loop, shared by `serve` (embedded mode) and the worker command. */
+export const createAuditWorker = ({
+  storage,
+  logger,
+  allowPrivateTargets,
+  delayMs,
+  concurrency,
+}: AuditWorkerOptions): ProcessAuditQueue => {
+  const clock = new SystemClock();
+  return new ProcessAuditQueue({
+    queue: storage.queue,
+    runAudit: createRunAudit({
+      storage,
+      events: ignoredEvents,
+      blockPrivateAddresses: !allowPrivateTargets,
+    }),
+    recover: new RecoverStaleAudits(storage.queue, storage.snapshots, clock),
+    clock,
+    sleeper: new RealSleeper(),
+    logger,
+    hostname: os.hostname(),
+    concurrency,
+    delayMs,
   });
 };

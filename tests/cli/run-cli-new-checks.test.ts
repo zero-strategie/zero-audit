@@ -47,7 +47,7 @@ describe('checks 105, 137 and 205 end to end', () => {
     it.skipIf(skip)('reports 105 and 137, and no 205 over http, through the API', async () => {
       const configs: StorageConfig[] = [];
       let snapshotId = '';
-      const args = [server.baseUrl, '--delay', '0', '--db', join(dir, 'audit.db')];
+      const args = [server.baseUrl, '--direct', '--delay', '0', '--db', join(dir, 'audit.db')];
 
       const code = await runCli(
         store === 'postgres' ? [...args, '--store', 'postgres'] : args,

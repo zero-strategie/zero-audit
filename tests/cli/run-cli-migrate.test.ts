@@ -48,7 +48,7 @@ describe('runCli migrate', () => {
     const version = db.prepare('SELECT MAX(version) AS version FROM schema_version').get();
     db.close();
     expect(tables).toEqual(expect.arrayContaining([{ name: 'snapshots' }, { name: 'projects' }]));
-    expect(version).toEqual({ version: 10 });
+    expect(version).toEqual({ version: 11 });
   });
 
   it('creates nothing but the database file (no server, no snapshot)', async () => {
@@ -120,7 +120,7 @@ describe.skipIf(TEST_DATABASE_URL === undefined)('runCli migrate on Postgres', (
     const second = await run(['migrate', '--store', 'postgres'], env);
 
     expect([first.code, second.code]).toEqual([0, 0]);
-    expect(afterFirst).toHaveLength(5);
+    expect(afterFirst).toHaveLength(6);
     expect(await appliedAt()).toEqual(afterFirst);
   });
 });

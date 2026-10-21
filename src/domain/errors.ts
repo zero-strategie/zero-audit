@@ -19,10 +19,24 @@ export class SnapshotImmutable extends DomainError {
   }
 }
 
+export class InvalidSnapshotTransition extends DomainError {
+  constructor(snapshotId: string, status: string, action: string) {
+    super(`Snapshot ${snapshotId} is ${status} and cannot be ${action}ed`);
+    this.name = 'InvalidSnapshotTransition';
+  }
+}
+
 export class SnapshotNotFound extends DomainError {
   constructor(snapshotId: string) {
     super(`Snapshot ${snapshotId} does not exist`);
     this.name = 'SnapshotNotFound';
+  }
+}
+
+export class AuditAttemptLost extends DomainError {
+  constructor(snapshotId: string, attempt: number) {
+    super(`Snapshot ${snapshotId} is no longer running at attempt ${String(attempt)}`);
+    this.name = 'AuditAttemptLost';
   }
 }
 
@@ -64,10 +78,17 @@ export class PrivateAddressRejected extends DomainError {
   }
 }
 
-export class AuditAlreadyRunning extends DomainError {
-  constructor(readonly startedAt: Date) {
-    super(`An audit is already running since ${startedAt.toISOString()}`);
-    this.name = 'AuditAlreadyRunning';
+export class AuditAlreadyQueuedForAccount extends DomainError {
+  constructor() {
+    super('The account already has an audit queued or running');
+    this.name = 'AuditAlreadyQueuedForAccount';
+  }
+}
+
+export class QueueFull extends DomainError {
+  constructor() {
+    super('The audit queue is full');
+    this.name = 'QueueFull';
   }
 }
 

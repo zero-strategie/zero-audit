@@ -9,6 +9,7 @@ import { toFailure } from '../../lib/failure';
 const HTTP_SEE_OTHER = 303;
 const REFRESH_SECONDS = 3;
 const PERCENT = 100;
+const MAX_ATTEMPTS = 2;
 
 const snapshotId = Astro.params.id ?? '';
 let progress: AuditProgress | null = null;
@@ -29,6 +30,12 @@ const hasCount = progress !== null && progress.pagesCrawled > 0;
 const percent = progress ? Math.min(PERCENT, Math.round((progress.pagesCrawled / progress.pagesLimit) * PERCENT)) : 0;
 const count = progress ? `${String(progress.pagesCrawled)} / ${String(progress.pagesLimit)} pages` : '';
 const summary = `Audit de ${host} en cours` + (hasCount ? ` — ${count}` : '');
+const isQueued = progress?.status === 'queued';
+const isActive = isQueued || progress?.status === 'running';
+const queueLine =
+  progress?.queuePosition == null ? "En file d'attente" : `En file d'attente — position ${String(progress.queuePosition)}`;
+const isResumed = progress !== null && progress.attempts > 1;
+const resumeLine = `Reprise en cours (tentative ${String(progress?.attempts ?? 0)}/${String(MAX_ATTEMPTS)})`;
 ---
 
 {
@@ -36,12 +43,13 @@ const summary = `Audit de ${host} en cours` + (hasCount ? ` — ${count}` : '');
     <ErrorView failure={failure ?? { kind: 'not-found', status: 404 }} />
   ) : (
     <Layout title={`Audit de ${host} – zero-audit`}>
-      {progress.status === 'running' && <meta slot="head" http-equiv="refresh" content={String(REFRESH_SECONDS)} />}
-      <span class="eyebrow">{progress.status === 'running' ? 'Audit en cours' : 'Audit interrompu'}</span>
+      {isActive && <meta slot="head" http-equiv="refresh" content={String(REFRESH_SECONDS)} />}
+      <span class="eyebrow">{isQueued ? "En file d'attente" : isActive ? 'Audit en cours' : 'Audit interrompu'}</span>
       <h1>Audit de {host}</h1>
-      {progress.status === 'running' ? (
+      {isActive ? (
         <>
-          <p>{summary}</p>
+          <p>{isQueued ? queueLine : summary}</p>
+          {isResumed && <p class="resume-note">{resumeLine}</p>}
           {hasCount && (
             <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={percent}>
               <div class="progress-bar" style={`width: ${String(percent)}%`}></div>

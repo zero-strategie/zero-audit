@@ -1,6 +1,7 @@
 import { LOGIN_FAILURES_PER_ACCOUNT, LOGIN_WINDOW_MS } from '../../domain/abuse-limits.js';
 import { AuditInProgress, TooManyAttempts, Unauthenticated } from '../../domain/errors.js';
-import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../domain/snapshot.js';
+import { HEARTBEAT_STALE_MS, type Snapshot } from '../../domain/snapshot.js';
+import { LEGACY_ORPHAN_AGE_MS } from '../legacy-orphan-age.js';
 import type { AccountEraser } from '../ports/account-eraser.js';
 import type { Clock } from '../ports/clock.js';
 import type { PasswordHasher } from '../ports/password-hasher.js';
@@ -24,7 +25,7 @@ export class DeleteAccount {
 
   /**
    * Right to erasure. The password is asked again so that a stolen session cannot destroy the
-   * account (wrong attempts share the budget of the login), and a running audit blocks the erasure because it would keep writing to erased rows.
+   * account (wrong attempts share the budget of the login), and a queued or live audit blocks the erasure because the worker would keep writing to erased rows.
    */
   async execute({
     sessionId,
@@ -48,15 +49,22 @@ export class DeleteAccount {
     await eraser.eraseAccount(user.id);
   }
 
+  /** A queued audit counts; a running one only while its worker is alive (fresh heartbeat). */
   private async hasRunningAudit(userId: string): Promise<boolean> {
     const { projects, snapshots, clock } = this.dependencies;
-    const ownedIds = new Set(
-      (await projects.list(userId)).filter(({ ownerId }) => ownerId === userId).map(({ id }) => id),
-    );
-    const orphanLimit = clock.now() - ORPHAN_AUDIT_MAX_AGE_MS;
-    const running = await snapshots.listRunning();
-    return running.some(
-      ({ projectId, startedAt }) => ownedIds.has(projectId) && startedAt.getTime() > orphanLimit,
-    );
+    const owned = (await projects.list(userId)).filter(({ ownerId }) => ownerId === userId);
+    const now = clock.now();
+    for (const { id } of owned) {
+      const audits = await snapshots.listByProject(id);
+      if (audits.some((audit) => isInProgress(audit, now))) return true;
+    }
+    return false;
   }
 }
+
+const isInProgress = (audit: Snapshot, now: number): boolean => {
+  if (audit.status === 'queued') return true;
+  if (audit.status !== 'running') return false;
+  if (audit.heartbeatAt === null) return now - audit.startedAt.getTime() < LEGACY_ORPHAN_AGE_MS;
+  return now - audit.heartbeatAt.getTime() < HEARTBEAT_STALE_MS;
+};

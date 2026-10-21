@@ -18,9 +18,94 @@ describe('parseCommand defaults', () => {
       delayMs: 1000,
       dbPath: './.zero-audit/audit.db',
       jsonPath: null,
+      mode: 'queue',
+      workerConcurrency: 1,
       store: 'sqlite',
       databaseUrl: null,
     });
+  });
+});
+
+describe('parseCommand audit mode', () => {
+  it('waits for the worker with --wait', () => {
+    expect(auditConfig([URL_ARG, '--wait']).mode).toBe('wait');
+  });
+
+  it('crawls in the process with --direct', () => {
+    expect(auditConfig([URL_ARG, '--direct']).mode).toBe('direct');
+  });
+
+  it('reads the concurrency of the worker to look for when waiting', () => {
+    expect(
+      auditConfig([URL_ARG, '--wait'], { ZERO_AUDIT_WORKER_CONCURRENCY: '3' }).workerConcurrency,
+    ).toBe(3);
+  });
+
+  it('does not read the concurrency of the worker without --wait', () => {
+    expect(
+      auditConfig([URL_ARG, '--direct'], { ZERO_AUDIT_WORKER_CONCURRENCY: 'x' }).workerConcurrency,
+    ).toBe(1);
+  });
+
+  it('rejects --wait together with --direct', () => {
+    expect(parseCommand([URL_ARG, '--wait', '--direct'], {}).kind).toBe('usage-error');
+  });
+
+  it('rejects an unknown flag', () => {
+    expect(parseCommand([URL_ARG, '--bogus'], {}).kind).toBe('usage-error');
+  });
+});
+
+describe('parseCommand worker', () => {
+  it('defaults to one audit at a time, the SSRF guard on and the default storage', () => {
+    expect(parseCommand(['worker'], {})).toEqual({
+      kind: 'worker',
+      concurrency: 1,
+      allowPrivateTargets: false,
+      delayMs: 1000,
+      dbPath: './.zero-audit/audit.db',
+      store: 'sqlite',
+      databaseUrl: null,
+    });
+  });
+
+  it('reads the concurrency, the delay and the private-target switch from the environment', () => {
+    expect(
+      parseCommand(['worker'], {
+        ZERO_AUDIT_WORKER_CONCURRENCY: '3',
+        ZERO_AUDIT_DELAY_MS: '250',
+        ZERO_AUDIT_ALLOW_PRIVATE_TARGETS: 'true',
+      }),
+    ).toMatchObject({ concurrency: 3, delayMs: 250, allowPrivateTargets: true });
+  });
+
+  it.each(['0', '-1', '1.5', 'abc', ''])('rejects the concurrency "%s"', (value) => {
+    const command = parseCommand(['worker'], { ZERO_AUDIT_WORKER_CONCURRENCY: value });
+
+    expect(command).toMatchObject({ kind: 'usage-error' });
+    expect(command.kind === 'usage-error' && command.message).toContain(
+      'ZERO_AUDIT_WORKER_CONCURRENCY',
+    );
+  });
+});
+
+describe('parseCommand worker-health', () => {
+  it('uses the storage selection and the concurrency of the worker', () => {
+    expect(
+      parseCommand(['worker-health', '--db', 'x.db'], { ZERO_AUDIT_WORKER_CONCURRENCY: '2' }),
+    ).toEqual({
+      kind: 'worker-health',
+      concurrency: 2,
+      dbPath: 'x.db',
+      store: 'sqlite',
+      databaseUrl: null,
+    });
+  });
+
+  it('rejects an invalid concurrency', () => {
+    expect(parseCommand(['worker-health'], { ZERO_AUDIT_WORKER_CONCURRENCY: '0' }).kind).toBe(
+      'usage-error',
+    );
   });
 });
 
@@ -123,6 +208,8 @@ describe('parseCommand subcommands', () => {
       mail: { kind: 'disabled', from: 'no-reply@agents.zero-strategie.dev', publicUrl: null },
       adminEmails: [],
       launchesPerDay: 30,
+      workerMode: 'embedded',
+      queueMax: 20,
     });
   });
 
@@ -248,6 +335,24 @@ describe('parseCommand migrate', () => {
   });
 });
 
+describe('usage of the worker commands', () => {
+  it.each([
+    'worker',
+    'worker-health',
+    '--wait',
+    '--direct',
+    'ZERO_AUDIT_WORKER',
+    'ZERO_AUDIT_WORKER_CONCURRENCY',
+    'ZERO_AUDIT_QUEUE_MAX',
+  ])('mentions %s', (token) => {
+    expect(USAGE).toContain(token);
+  });
+
+  it('is what --help prints', () => {
+    expect(parseCommand(['--help'], {})).toEqual({ kind: 'help' });
+  });
+});
+
 describe('parseCommand mailer configuration', () => {
   const PUBLIC_URL = 'https://audit.exemple.test';
   const mailOf = (env: Record<string, string>) => {
@@ -349,4 +454,48 @@ describe('parseCommand serve: ZERO_AUDIT_LAUNCHES_PER_DAY', () => {
     expect(command).toMatchObject({ kind: 'usage-error' });
     expect(JSON.stringify(command)).toContain('ZERO_AUDIT_LAUNCHES_PER_DAY');
   });
+});
+
+describe('parseCommand serve: ZERO_AUDIT_WORKER and ZERO_AUDIT_QUEUE_MAX', () => {
+  const serveOf = (env: Record<string, string>) => parseCommand(['serve'], env);
+
+  it('runs the worker inside serve by default, with every storage', () => {
+    expect(serveOf({})).toMatchObject({ workerMode: 'embedded' });
+    expect(
+      serveOf({ ZERO_AUDIT_STORE: 'postgres', DATABASE_URL: 'postgresql://x@h/d' }),
+    ).toMatchObject({
+      workerMode: 'embedded',
+    });
+  });
+
+  it.each(['embedded', 'external'])('reads ZERO_AUDIT_WORKER=%s', (mode) => {
+    expect(serveOf({ ZERO_AUDIT_WORKER: mode })).toMatchObject({ workerMode: mode });
+  });
+
+  it.each(['Embedded', 'both', '', 'none'])(
+    'refuses ZERO_AUDIT_WORKER=%j, naming the variable',
+    (value) => {
+      const command = serveOf({ ZERO_AUDIT_WORKER: value });
+
+      expect(command).toMatchObject({ kind: 'usage-error' });
+      expect(JSON.stringify(command)).toContain('ZERO_AUDIT_WORKER');
+      expect(JSON.stringify(command)).toContain('embedded');
+      expect(JSON.stringify(command)).toContain('external');
+    },
+  );
+
+  it('caps the queue at 20 audits by default and reads ZERO_AUDIT_QUEUE_MAX', () => {
+    expect(serveOf({})).toMatchObject({ queueMax: 20 });
+    expect(serveOf({ ZERO_AUDIT_QUEUE_MAX: '5' })).toMatchObject({ queueMax: 5 });
+  });
+
+  it.each(['0', '-1', 'lots', ''])(
+    'refuses ZERO_AUDIT_QUEUE_MAX=%j, naming the variable',
+    (value) => {
+      const command = serveOf({ ZERO_AUDIT_QUEUE_MAX: value });
+
+      expect(command).toMatchObject({ kind: 'usage-error' });
+      expect(JSON.stringify(command)).toContain('ZERO_AUDIT_QUEUE_MAX');
+    },
+  );
 });

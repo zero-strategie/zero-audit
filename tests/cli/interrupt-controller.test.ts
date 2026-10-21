@@ -12,6 +12,7 @@ const fakeStorage = (calls: string[]): Storage => ({
   sessions: {} as Storage['sessions'],
   emailTokens: {} as Storage['emailTokens'],
   eraser: {} as Storage['eraser'],
+  queue: {} as Storage['queue'],
   snapshots: {
     fail: (id: string) => {
       calls.push(`fail:${id}`);
@@ -143,7 +144,7 @@ describe('createInterruptController terminate (SIGTERM)', () => {
     expect(calls).toEqual(['server-close', 'close', 'exit:0']);
   });
 
-  it('stops the audit runner after the server and before releasing the storage', async () => {
+  it('stops the worker after the server and before releasing the storage', async () => {
     const calls: string[] = [];
     const controller = createInterruptController(() => undefined);
     controller.onStorageOpened(fakeStorage(calls));
@@ -153,28 +154,57 @@ describe('createInterruptController terminate (SIGTERM)', () => {
         return Promise.resolve();
       },
     });
-    controller.onAuditRunnerStarted({
+    controller.onWorkerStarted({
       stop: () => {
-        calls.push('runner-stop');
+        calls.push('worker-stop');
         return Promise.resolve();
       },
     });
 
     await controller.terminate();
 
-    expect(calls).toEqual(['server-close', 'runner-stop', 'close']);
+    expect(calls).toEqual(['server-close', 'worker-stop', 'close']);
   });
 
-  it('still releases the storage when the runner cannot be stopped', async () => {
+  it('still releases the storage when the worker cannot be stopped', async () => {
     const calls: string[] = [];
     const controller = createInterruptController((code) => {
       calls.push(`exit:${String(code)}`);
     });
     controller.onStorageOpened(fakeStorage(calls));
-    controller.onAuditRunnerStarted({ stop: () => Promise.reject(new Error('boom')) });
+    controller.onWorkerStarted({ stop: () => Promise.reject(new Error('boom')) });
 
     await controller.interrupt().catch(() => undefined);
 
     expect(calls).toEqual(['close', 'exit:130']);
   });
+});
+
+describe('createInterruptController with the worker command', () => {
+  const workerProcess = (calls: string[], exitCodes: number[]) => {
+    const controller = createInterruptController((code) => {
+      exitCodes.push(code);
+    });
+    controller.onStorageOpened(fakeStorage(calls));
+    controller.onWorkerProcessStarted({
+      stop: () => {
+        calls.push('worker-stop');
+        return Promise.resolve();
+      },
+    });
+    return controller;
+  };
+
+  it.each(['interrupt', 'terminate'] as const)(
+    'stops the worker, releases the storage and exits 0 on %s, without failing any audit',
+    async (signal) => {
+      const calls: string[] = [];
+      const exitCodes: number[] = [];
+
+      await workerProcess(calls, exitCodes)[signal]();
+
+      expect(calls).toEqual(['worker-stop', 'close']);
+      expect(exitCodes).toEqual([0]);
+    },
+  );
 });

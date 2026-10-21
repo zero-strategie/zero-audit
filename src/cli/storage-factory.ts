@@ -1,3 +1,4 @@
+import type { AuditQueue } from '../application/ports/audit-queue.js';
 import type { AccountEraser } from '../application/ports/account-eraser.js';
 import type { EmailTokenRepository } from '../application/ports/email-token-repository.js';
 import type { SessionRepository } from '../application/ports/session-repository.js';
@@ -17,6 +18,7 @@ import type { StoreSelection } from './config.js';
 export interface Storage {
   readonly projects: ProjectRepository;
   readonly snapshots: SnapshotRepository;
+  readonly queue: AuditQueue;
   readonly health: StorageHealth;
   readonly users: UserRepository;
   readonly sessions: SessionRepository;
@@ -58,6 +60,7 @@ const openSqlite = (dbPath: string): Storage => {
   return {
     projects: repository.projects,
     snapshots: repository,
+    queue: repository,
     health: repository,
     users: repository.users,
     sessions: repository.sessions,
@@ -90,6 +93,7 @@ const openPostgres = async (databaseUrl: string): Promise<Storage> => {
   return {
     projects: repository.projects,
     snapshots: repository,
+    queue: repository,
     health: repository,
     users: repository.users,
     sessions: repository.sessions,

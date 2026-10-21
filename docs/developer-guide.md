@@ -94,7 +94,7 @@ This way, past audits benefit from formula changes.
 | Table | Content |
 |---|---|
 | `projects` | one row per normalised start URL |
-| `snapshots` | one audit: project, status (`running`, `finished`, `failed`), start and end dates, pages crawled, limit |
+| `snapshots` | one audit: project, status (`queued`, `running`, `finished`, `failed`), start and end dates, pages crawled, limit, plus the queue columns `queued_at`, `attempts` and the worker heartbeat |
 | `pages` | crawled and blocked pages: URL, depth, status, headers, response time, content type, title, meta description, canonical, h1, word count, text ratio, error |
 | `links` | links found on each page: source, target, type, `rel`, anchor text |
 | `site_files` | `robots.txt`, sitemaps, `llms.txt`: URL, status, error |
@@ -175,17 +175,18 @@ The API listens on `HOST:PORT`, `127.0.0.1:3000` by default and must never be ex
 | `GET /snapshots/:id/issues?severity=` | every check with `count`, `examined`, delta, new and fixed counts |
 | `GET /snapshots/:id/issues/:checkId?page=&limit=` | occurrences of one check, paginated |
 | `GET /snapshots/:id/pages?page=&limit=&sort=` | crawled pages with group, issue count and response time. `sort` is one of `url`, `status`, `depth`, `issues`, `responseTime`, prefixed with `-` for descending order. |
-| `GET /snapshots/:id/progress` | `200 {status, pagesCrawled, pagesLimit, startedAt, rootUrl}`; `404` for an unknown id. See [Background audits](#background-audits-auditrunner). |
+| `GET /snapshots/:id/progress` | `200 {status, pagesCrawled, pagesLimit, startedAt, rootUrl, queuePosition, attempts}`; `404` for an unknown id. `queuePosition` (null unless queued) and `attempts` are added. See [Worker and queue](#worker-and-queue). |
 | `POST /audits` | launches a background audit, see below |
 | `GET /compare?a=&b=` | comparison of two finished snapshots of the same project |
 
 ### `POST /audits`
 
-Body: `{ "url": "https://site.test/", "limit": 100 }`. `url` is required and must start with `http://` or `https://` (no scheme is added for the caller). `limit` is one of 50, 100, 250 or 500 and defaults to 100. The call returns as soon as the snapshot exists; follow it with `GET /snapshots/:id/progress`.
+Body: `{ "url": "https://site.test/", "limit": 100 }`. `url` is required and must start with `http://` or `https://` (no scheme is added for the caller). `limit` is one of 50, 100, 250 or 500 and defaults to 100. The call returns as soon as the audit is queued; follow it with `GET /snapshots/:id/progress`. See [Worker and queue](#worker-and-queue).
 
-- **202** `{ "snapshotId", "projectId" }`: the audit runs in the background.
-- **400** `invalid_request`: bad body or `limit`; a host with at least one non-public address (literal IP, or any resolved address); a domain that does not resolve (`Site introuvable : le nom de domaine ne résout pas`). Nothing is started.
-- **409** `conflict`: an audit is already running; the message carries the start date of the blocking audit.
+- **202** `{ "snapshotId", "projectId" }`: the audit is `queued`.
+- **400** `invalid_request`: bad body or `limit`; a host with at least one non-public address (literal IP, or any resolved address); a domain that does not resolve (`Site introuvable : le nom de domaine ne résout pas`). Nothing is queued.
+- **409** `conflict`: the account already has an audit `queued` or `running`.
+- **429** `quota_exceeded`: a quota is reached, or the queue is full (`La file d'attente est pleine`, no `Retry-After`).
 
 The address check (`LaunchAudit`, `HostResolver` port, `DnsHostResolver` adapter) is a fast pre-check; the connection-time guard of the HTTP client remains the authority. `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true` turns both off. `PUT`, `DELETE` and `GET` on `/audits` answer 404.
 
@@ -199,7 +200,7 @@ Errors share one format: `{ "error": { "code": "not_found" | "invalid_request" |
 
 - **404**: unknown id or route.
 - **400**: invalid parameter, or a comparison across sites.
-- **409**: an audit is already running.
+- **409**: the account already has an audit queued or running (also: account deletion while an audit is active).
 - **500**: unexpected failure, returned with a generic message.
 
 Tests use `fastify.inject()` and never open a port. See `tests/http/`.
@@ -218,23 +219,35 @@ Tests use `fastify.inject()` and never open a port. See `tests/http/`.
 
 ## SSRF guard
 
-The server (`serve`) crawls any public site on request, so its HTTP client must never reach an internal service such as Postgres or the API on the Docker network. `UndiciHttpClient` enforces this when built with `blockPrivateAddresses: true`; the `audit` command does not enable it.
+The server (`serve`) crawls any public site on request, so its HTTP client must never reach an internal service such as Postgres or the API on the Docker network. `UndiciHttpClient` enforces this when built with `blockPrivateAddresses: true`; the `audit --direct` command does not enable it, and audits queued by the CLI go through the worker's guard.
 
 - **Refused ranges** (`src/domain/network-address.ts`, `isPublicAddress`): `0.0.0.0/8`, `10/8`, `100.64/10`, `127/8`, `169.254/16`, `172.16/12`, `192.168/16`, `224/4` and `240/4` (including `255.255.255.255`), plus `::`, `::1`, `fc00::/7`, `fe80::/10` and every IPv4-mapped address (`::ffff:0:0/96`).
 - **Name resolution**: the undici agent has a custom `connect.lookup`. It keeps only public addresses and fails if none is left, so a host with one internal and one public address is still reachable on the public one. Node 22 calls `lookup` with `all: true` (autoSelectFamily), others with the simple form; both are handled. Checking at connection time also covers DNS rebinding and every redirect hop, because redirects are not followed by the client: each hop is a new request.
 - **Literal IPs**: `lookup` is not called for an IP in the URL, so `get` checks `new URL(url).hostname` before `fetch` (`new URL` already normalises forms such as `0x7f.1` to `127.0.0.1`).
 - **`blocked`**: a refused request is a `NetworkFailure` of kind `blocked`. The crawler records it like any other network error; if the root itself is blocked the audit fails with `RootUnreachable`.
-- **`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`**: read by `serve` only. The exact value `true` turns the guard off (`allowPrivateTargets`); `TRUE`, `1` or `yes` do not.
+- **`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`**: read by `serve` and `worker`. The exact value `true` turns the guard off (`allowPrivateTargets`); `TRUE`, `1` or `yes` do not.
 
-### Background audits (`AuditRunner`)
+## Worker and queue
 
-`src/application/audit-runner.ts` runs one audit at a time inside the `serve` process, without making the caller wait for the crawl.
+`POST /audits` (`LaunchAudit`) never crawls: it checks the quotas and the SSRF guard, then `AuditQueue.enqueue` inserts a `queued` snapshot and answers 202. A worker (`ProcessAuditQueue`) claims the audits one by one (`claimNext`, safe against concurrent workers) in the order of `queued_at`. The queue lives in the `snapshots` table: no Redis, no extra dependency.
 
-- **Lock**: global, all projects together. It is held in memory and, for audits started by another process, by any `running` snapshot younger than `ORPHAN_AUDIT_MAX_AGE_MS` (6 hours, `src/domain/snapshot.ts`). `start` then rejects with `AuditAlreadyRunning`, which carries the start date of the blocking audit. The CLI `audit` command is not blocked by this lock, so a scheduled audit and one launched from the server may overlap.
-- **Orphans**: `serve` runs `FailOrphanedAudits` at startup and marks every `running` snapshot older than 6 hours as `failed`. Younger ones keep blocking until they age out; to unblock by hand, set the snapshot to `failed` in the database.
-- **Progress**: `GET /snapshots/:id/progress` calls `progress(snapshotId)`, which reads the page counter from memory for the audit it runs, and from the database otherwise (0 pages for a `running` snapshot owned by another process).
-- **Shutdown**: on SIGINT / SIGTERM the server is closed, then `stop()` aborts the crawl at its next page (the progress callback throws), marks the snapshot `failed`, and only then is the storage closed.
-- **Config**: `serve` reads `ZERO_AUDIT_DELAY_MS` like `audit`.
+- **Admission**: `LaunchQuota.assertAdmitted` runs inside the transaction of `enqueue`, serialised by `pg_advisory_xact_lock` (Postgres) or `BEGIN IMMEDIATE` (SQLite). Order: quotas, then one `queued` or `running` audit per account (409, administrators included), then the ceiling of waiting audits `ZERO_AUDIT_QUEUE_MAX` (429 `quota_exceeded`; running audits do not count). The command line is outside these limits.
+- **Worker mode**: `ZERO_AUDIT_WORKER` is `embedded` (default: `serve` runs the worker loop, and stops it on shutdown, which puts the running audit back in the queue) or `external` (another process runs the worker; audits stay `queued` until one runs). Any other value stops `serve` at startup. `embedded` is the default so that a deployment without a worker container keeps running audits. The SSRF guard of the worker follows `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`, including for audits queued by the CLI.
+- **`zero-audit worker`**: dedicated process; `ZERO_AUDIT_WORKER_CONCURRENCY` (default 1) audits in parallel. Its identity is `os.hostname()` (suffixed when concurrency is above 1). `SIGTERM` or `SIGINT` puts the running audit back in the queue and exits 0.
+- **`zero-audit worker-health`**: exits 0 if the worker of this host signalled itself less than 60 s ago, else 1. It is the compose healthcheck. The worker has its own presence heartbeat every 15 s, independent of the pages crawled.
+- **CLI**: `zero-audit <url>` queues the audit (no owner, no quota, not subject to the queue ceiling) and prints its id and position. `--wait` follows it until the end and prints the summary (a warning appears if no worker is active; the wait is otherwise unbounded). `--direct` crawls in the process, outside the queue, with the previous behaviour (`--wait` and `--direct` are exclusive).
+- **Progress**: `GET /snapshots/:id/progress` reads everything from the database: status, `pagesCrawled` (last heartbeat), `pagesLimit`, `queuePosition` and `attempts`.
+- **Account deletion**: refused with 409 while an audit of the account is `queued` or `running` with a heartbeat of less than 2 minutes.
+
+### Recovery and failure
+
+- **Orphans**: `RecoverStaleAudits` (worker loop, and `serve` at startup) puts back in the queue every `running` audit whose heartbeat is older than 2 minutes, keeping its original `queued_at` (so it is resumed first). The audit restarts from zero.
+- **Two attempts at most**: after the second interruption the audit is marked `failed`. Two deployments during the same audit therefore fail it. A `SIGTERM` during attempt 2/2 also ends in `failed`. `heartbeat`, `finish` and `fail` are conditional on `status = 'running' AND attempts = <claimed attempt>`: a refused write makes the worker abandon the attempt.
+- **Legacy audits** without a heartbeat (`--direct`, rows older than the migration) are marked `failed` once they are 6 hours old (`LEGACY_ORPHAN_AGE_MS`), never earlier.
+- **Rollback with queued audits (R5)**: rolling back to a version without a worker leaves the `queued` audits untouched; the old version does not process them and its dashboard shows them as interrupted; the migration stays compatible (the snapshots table was rebuilt to allow the `queued` status). They are processed after the new version is redeployed.
+- **Weekly timer without `--wait` (R6)**: a timer that runs `zero-audit <url>` now only queues the audit and returns 0 at once, with no summary. Add `--wait` (or `--direct`) to keep the old behaviour of a command that ends with the audit. A worker must be running (`embedded` serve or `external`).
+- **`stop_grace_period` (R7)**: give the worker container a `stop_grace_period` of at least 30 s so that it can put its audit back in the queue before `SIGKILL`. After a `kill -9` the heartbeat expires after 2 minutes and the audit is recovered anyway.
+- **Exception to append-only (R4)**: finished snapshots stay immutable, but `requeue` and `recoverStale` delete the child rows (pages, links, issues) of an interrupted attempt so that the restart begins clean.
 
 ## Dashboard
 
@@ -277,7 +290,8 @@ A single `Dockerfile` has two targets. Both are built from Node 22 `bookworm-sli
 - **`api`**:
   - entry point `node dist/cli/main.js`;
   - default command `serve`, with `HOST=0.0.0.0` and port 3000;
-  - `docker run … zero-audit-api migrate` and `… audit <url>` run the other commands.
+  - `docker run … zero-audit-api migrate` and `… audit <url>` run the other commands;
+  - the compose `worker` service uses the same image with the command `worker` and `worker-health` as healthcheck; the `api` service sets `ZERO_AUDIT_WORKER=external`.
 - **`web`**: `node dist/server/entry.mjs` on port 4321.
 
 ```sh

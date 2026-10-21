@@ -112,13 +112,23 @@ const progressSchema = {
   response: {
     200: {
       type: 'object',
-      required: ['status', 'pagesCrawled', 'pagesLimit', 'startedAt', 'rootUrl'],
+      required: [
+        'status',
+        'pagesCrawled',
+        'pagesLimit',
+        'startedAt',
+        'rootUrl',
+        'queuePosition',
+        'attempts',
+      ],
       properties: {
-        status: { type: 'string', enum: ['running', 'finished', 'failed'] },
+        status: { type: 'string', enum: ['queued', 'running', 'finished', 'failed'] },
         pagesCrawled: { type: 'integer' },
         pagesLimit: { type: 'integer' },
         startedAt: { type: 'string' },
         rootUrl: { type: 'string' },
+        queuePosition: { type: ['integer', 'null'] },
+        attempts: { type: 'integer' },
       },
     },
     404: errorResponseSchema,

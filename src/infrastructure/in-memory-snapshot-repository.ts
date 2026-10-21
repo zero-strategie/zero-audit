@@ -3,16 +3,18 @@ import type {
   SnapshotDetails,
   SnapshotRepository,
 } from '../application/ports/snapshot-repository.js';
+import type { Admission, AuditQueue } from '../application/ports/audit-queue.js';
 import type { StorageHealth } from '../application/ports/storage-health.js';
 import type { CheckResult } from '../domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../domain/crawl.js';
-import { SnapshotNotFound } from '../domain/errors.js';
+import { AuditAttemptLost, SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
 import type { UserRepository } from '../application/ports/user-repository.js';
 import { hashToken } from './hash-token.js';
 
 interface Stored {
   snapshot: Snapshot;
+  launchedBy: string | null;
   pages: Page[];
   links: Link[];
   checkResults: CheckResult[];
@@ -31,8 +33,10 @@ const bySlashProbeOrder = (a: SlashVariantProbe, b: SlashVariantProbe): number =
 const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
   compare(a.kind, b.kind) || compare(a.url, b.url);
 
-export class InMemorySnapshotRepository implements SnapshotRepository, StorageHealth {
+export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueue, StorageHealth {
   private readonly stored = new Map<string, Stored>();
+  private readonly presences = new Map<string, Date>();
+  private enqueuing: Promise<unknown> = Promise.resolve();
   private readonly launchJournal: { id: string; emailHash: string; launchedAt: Date }[] = [];
 
   /**
@@ -53,8 +57,122 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
   }): Promise<Snapshot> {
     const { launchedBy, ...props } = input;
     const snapshot = Snapshot.start({ id: randomUUID(), ...props });
+    await this.record(snapshot, launchedBy);
+    return snapshot;
+  }
+
+  /** One at a time, like the transaction of the SQL adapters, so two requests cannot both be admitted. */
+  enqueue(
+    input: { projectId: string; launchedBy: string | null; pagesLimit: number; requestedAt: Date },
+    admit: Admission,
+  ): Promise<Snapshot> {
+    const admitted = this.enqueuing.then(async () => {
+      await admit(this);
+      const { requestedAt, launchedBy, ...props } = input;
+      const snapshot = Snapshot.enqueue({ id: randomUUID(), startedAt: requestedAt, ...props });
+      await this.record(snapshot, launchedBy);
+      return snapshot;
+    });
+    this.enqueuing = admitted.catch(() => undefined);
+    return admitted;
+  }
+
+  claimNext(workerId: string, now: Date): Promise<Snapshot | null> {
+    this.presences.set(workerId, now);
+    const [next] = this.queuedInOrder();
+    if (!next) return Promise.resolve(null);
+    next.snapshot = next.snapshot.claim(now);
+    return Promise.resolve(next.snapshot);
+  }
+
+  finishAttempt(
+    id: string,
+    attempt: number,
+    input: { finishedAt: Date; pagesCrawled: number },
+  ): Promise<void> {
+    return this.writeAttempt(id, attempt, (entry) => {
+      entry.snapshot = entry.snapshot.finish(input.finishedAt, input.pagesCrawled);
+    });
+  }
+
+  heartbeat(id: string, attempt: number, pagesCrawled: number, now: Date): Promise<void> {
+    return this.writeAttempt(id, attempt, (entry) => {
+      entry.snapshot = entry.snapshot.beat(now, pagesCrawled);
+    });
+  }
+
+  failAttempt(id: string, attempt: number, finishedAt: Date): Promise<void> {
+    return this.writeAttempt(id, attempt, (entry) => {
+      entry.snapshot = entry.snapshot.fail(finishedAt);
+    });
+  }
+
+  async requeue(id: string, attempt: number, now: Date): Promise<Snapshot> {
+    await this.writeAttempt(id, attempt, (entry) => {
+      this.interrupt(entry, now);
+    });
+    return this.snapshotOf(id);
+  }
+
+  recoverStale(now: Date, staleAfterMs: number): Promise<readonly Snapshot[]> {
+    const limit = now.getTime() - staleAfterMs;
+    const stale = [...this.stored.values()].filter(
+      ({ snapshot }) =>
+        snapshot.status === 'running' &&
+        snapshot.heartbeatAt !== null &&
+        snapshot.heartbeatAt.getTime() < limit,
+    );
+    for (const entry of stale) this.interrupt(entry, now);
+    return Promise.resolve(stale.map(({ snapshot }) => snapshot));
+  }
+
+  recordWorkerPresence(workerId: string, now: Date): Promise<void> {
+    this.presences.set(workerId, now);
+    return Promise.resolve();
+  }
+
+  getWorkerPresence(workerId: string): Promise<Date | null> {
+    return Promise.resolve(this.presences.get(workerId) ?? null);
+  }
+
+  queuePosition(id: string): Promise<number | null> {
+    const index = this.queuedInOrder().findIndex(({ snapshot }) => snapshot.id === id);
+    return Promise.resolve(index === -1 ? null : index + 1);
+  }
+
+  countQueued(): Promise<number> {
+    return Promise.resolve(this.queuedInOrder().length);
+  }
+
+  countActiveFor(userId: string): Promise<number> {
+    const active = [...this.stored.values()].filter(
+      ({ launchedBy, snapshot }) =>
+        launchedBy === userId && (snapshot.status === 'queued' || snapshot.status === 'running'),
+    );
+    return Promise.resolve(active.length);
+  }
+
+  /** The rows written by the interrupted attempt go with it. */
+  private interrupt(entry: Stored, now: Date): void {
+    entry.snapshot = entry.snapshot.interrupt(now);
+    entry.pages = [];
+    entry.links = [];
+    entry.checkResults = [];
+    entry.siteFiles = [];
+    entry.hostProbe = null;
+    entry.slashProbes = [];
+  }
+
+  private snapshotOf(id: string): Snapshot {
+    const entry = this.stored.get(id);
+    if (!entry) throw new SnapshotNotFound(id);
+    return entry.snapshot;
+  }
+
+  private async record(snapshot: Snapshot, launchedBy: string | null): Promise<void> {
     this.stored.set(snapshot.id, {
       snapshot,
+      launchedBy,
       pages: [],
       links: [],
       checkResults: [],
@@ -66,7 +184,29 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
     if (emailHash !== null) {
       this.launchJournal.push({ id: snapshot.id, emailHash, launchedAt: snapshot.startedAt });
     }
-    return snapshot;
+  }
+
+  private queuedInOrder(): Stored[] {
+    return [...this.stored.values()]
+      .filter(({ snapshot }) => snapshot.status === 'queued')
+      .sort(
+        (a, b) =>
+          (a.snapshot.queuedAt?.getTime() ?? 0) - (b.snapshot.queuedAt?.getTime() ?? 0) ||
+          compare(a.snapshot.id, b.snapshot.id),
+      );
+  }
+
+  private writeAttempt(
+    id: string,
+    attempt: number,
+    mutate: (entry: Stored) => void,
+  ): Promise<void> {
+    const entry = this.stored.get(id);
+    if (entry?.snapshot.status !== 'running' || entry.snapshot.attempts !== attempt) {
+      return Promise.reject(new AuditAttemptLost(id, attempt));
+    }
+    mutate(entry);
+    return Promise.resolve();
   }
 
   addPages(id: string, pages: readonly Page[]): Promise<void> {

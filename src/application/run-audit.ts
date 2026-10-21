@@ -1,11 +1,14 @@
 import type { CheckRegistry } from '../domain/check.js';
 import { SnapshotNotFound } from '../domain/errors.js';
+import type { Snapshot } from '../domain/snapshot.js';
 import { normalizeUrl } from '../domain/url.js';
 import type { AuditEvents } from './ports/audit-events.js';
+import type { AuditQueue } from './ports/audit-queue.js';
 import type { Clock } from './ports/clock.js';
 import type { Crawler } from './ports/crawler.js';
 import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotDetails, SnapshotRepository } from './ports/snapshot-repository.js';
+import { AttemptHeartbeat } from './attempt-heartbeat.js';
 import { runChecks } from './run-checks.js';
 import { healthOf } from './snapshot-health.js';
 
@@ -28,6 +31,20 @@ export interface AuditRequest {
   launchedBy?: string;
   onProgress?: (crawled: number, limit: number) => void;
   onSnapshotCreated?: (snapshotId: string) => void;
+}
+
+/** Thrown from the progress callback to abort a crawl whose worker is shutting down. */
+export class AuditInterrupted extends Error {
+  constructor() {
+    super('Audit interrupted');
+    this.name = 'AuditInterrupted';
+  }
+}
+
+export interface ExistingAuditOptions {
+  delayMs: number;
+  /** Stops the crawl; once the crawl is over, the results are written whatever the signal. */
+  signal: AbortSignal;
 }
 
 export class RunAudit {
@@ -63,6 +80,52 @@ export class RunAudit {
       events.failed(identity);
       throw error;
     }
+  }
+
+  /**
+   * Runs an audit already claimed by a worker (its attempt is `snapshot.attempts`). Raises
+   * `AuditInterrupted` on shutdown and `AuditAttemptLost` when another worker took the audit over;
+   * any other error is the crawl's own, the caller fails the audit.
+   */
+  async runExisting(
+    snapshot: Snapshot,
+    queue: AuditQueue,
+    { delayMs, signal }: ExistingAuditOptions,
+  ): Promise<SnapshotDetails> {
+    const { crawler, repository, projects, registry, clock } = this.dependencies;
+    const project = await projects.getById(snapshot.projectId);
+    if (!project) throw new SnapshotNotFound(snapshot.id);
+    const heartbeat = new AttemptHeartbeat(queue, clock, snapshot);
+    const crawl = await crawler.crawl({
+      rootUrl: project.rootUrl,
+      limit: snapshot.pagesLimit,
+      delayMs,
+      onProgress: (crawled) => {
+        if (signal.aborted) throw new AuditInterrupted();
+        heartbeat.onPage(crawled);
+      },
+    });
+    await heartbeat.settle();
+    // The rows below are not guarded by the attempt: check beforehand that it is still ours.
+    await queue.heartbeat(
+      snapshot.id,
+      snapshot.attempts,
+      crawl.pages.length,
+      new Date(clock.now()),
+    );
+    await repository.addPages(snapshot.id, [...crawl.pages, ...crawl.blockedPages]);
+    await repository.addLinks(snapshot.id, crawl.links);
+    await repository.addSiteFiles(snapshot.id, crawl.siteFiles);
+    if (crawl.hostProbe) await repository.addHostProbe(snapshot.id, crawl.hostProbe);
+    await repository.addSlashProbes(snapshot.id, crawl.slashProbes);
+    await repository.addCheckResults(snapshot.id, runChecks(crawl, registry));
+    await queue.finishAttempt(snapshot.id, snapshot.attempts, {
+      finishedAt: new Date(clock.now()),
+      pagesCrawled: crawl.pages.length,
+    });
+    const details = await repository.getById(snapshot.id);
+    if (!details) throw new SnapshotNotFound(snapshot.id);
+    return details;
   }
 
   private async crawlAndPersist(
