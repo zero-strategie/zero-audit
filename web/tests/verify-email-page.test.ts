@@ -5,7 +5,11 @@ import { get, post, renderPage, setCookiesOf } from './account-page-helpers';
 import { fakeApiClient } from './fake-api-client';
 
 it('shows an activation button without calling the API on a plain visit', async () => {
-  const response = await renderPage(VerifyPage, get('/verifier-email?token=abc'), fakeApiClient({}));
+  const response = await renderPage(
+    VerifyPage,
+    get('/verifier-email?token=abc'),
+    fakeApiClient({}),
+  );
   const html = await response.text();
 
   expect(html).toMatch(/<form[^>]+method="post"[^>]+action="\/verifier-email"/);
@@ -22,7 +26,11 @@ it('activates the account, opens the session and redirects to the new audit page
     },
   });
 
-  const response = await renderPage(VerifyPage, post('/verifier-email', { token: 'abc' }), apiClient);
+  const response = await renderPage(
+    VerifyPage,
+    post('/verifier-email', { token: 'abc' }),
+    apiClient,
+  );
 
   expect(tokens).toEqual(['abc']);
   expect(response.status).toBe(303);
@@ -35,7 +43,11 @@ it('tells the visitor the link is invalid or expired when the API refuses it', a
     verifyEmail: () => Promise.reject(new InvalidRequest('message de l’API')),
   });
 
-  const response = await renderPage(VerifyPage, post('/verifier-email', { token: 'abc' }), apiClient);
+  const response = await renderPage(
+    VerifyPage,
+    post('/verifier-email', { token: 'abc' }),
+    apiClient,
+  );
 
   expect(await response.text()).toContain('Ce lien est invalide ou a expiré');
   expect(setCookiesOf(response)).toEqual([]);

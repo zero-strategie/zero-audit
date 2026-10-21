@@ -62,7 +62,8 @@ it('confirms the new password with the API and redirects to the sign-in page', a
 
 it('shows the API error when the link or the password is refused', async () => {
   const apiClient = fakeApiClient({
-    confirmPasswordReset: () => Promise.reject(new InvalidRequest('Ce lien est invalide ou a expiré')),
+    confirmPasswordReset: () =>
+      Promise.reject(new InvalidRequest('Ce lien est invalide ou a expiré')),
   });
 
   const response = await renderPage(

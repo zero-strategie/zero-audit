@@ -80,7 +80,9 @@ it('resends the confirmation link and shows the generic answer', async () => {
   const apiClient = fakeApiClient({
     resendVerification: (email) => {
       sent.push(email);
-      return Promise.resolve('Si cette adresse peut être utilisée, un e-mail vient de vous être envoyé');
+      return Promise.resolve(
+        'Si cette adresse peut être utilisée, un e-mail vient de vous être envoyé',
+      );
     },
   });
 

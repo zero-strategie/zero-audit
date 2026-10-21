@@ -30,13 +30,13 @@ it('relays the form to the API and shows its generic message', async () => {
   const apiClient = fakeApiClient({
     register: (input) => {
       calls.push(input);
-      return Promise.resolve('Si cette adresse peut être utilisée, un e-mail vient de vous être envoyé');
+      return Promise.resolve(
+        'Si cette adresse peut être utilisée, un e-mail vient de vous être envoyé',
+      );
     },
   });
 
-  const html = await (
-    await renderPage(SignupPage, post('/inscription', FIELDS), apiClient)
-  ).text();
+  const html = await (await renderPage(SignupPage, post('/inscription', FIELDS), apiClient)).text();
 
   expect(calls).toEqual([FIELDS]);
   expect(html).toContain('un e-mail vient de vous être envoyé');

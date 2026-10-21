@@ -1,0 +1,19 @@
+---
+import { Unauthenticated } from '../lib/api/errors';
+import { isSameOrigin } from '../lib/same-origin';
+import { SESSION_COOKIE } from '../lib/session-cookie';
+
+const HTTP_FORBIDDEN = 403;
+const HTTP_SEE_OTHER = 303;
+
+if (Astro.request.method === 'POST') {
+  if (!isSameOrigin(Astro.request)) return new Response('Forbidden', { status: HTTP_FORBIDDEN });
+  try {
+    await Astro.locals.apiClient.logout();
+  } catch (error) {
+    if (!(error instanceof Unauthenticated)) throw error;
+  }
+  Astro.cookies.delete(SESSION_COOKIE, { path: '/' });
+}
+return Astro.redirect('/', HTTP_SEE_OTHER);
+---
