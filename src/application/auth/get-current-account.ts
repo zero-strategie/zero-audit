@@ -17,7 +17,7 @@ export class GetCurrentAccount {
 
   async execute(sessionId: string | undefined): Promise<CurrentAccount> {
     const user = await this.dependencies.resolveSession.execute(sessionId);
-    if (!user) throw new Unauthenticated();
+    if (!user) throw new Unauthenticated('no-session');
     return { email: user.email, isAdmin: this.dependencies.adminEmails.includes(user.email) };
   }
 }

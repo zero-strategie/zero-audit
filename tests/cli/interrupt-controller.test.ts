@@ -8,6 +8,9 @@ const ROOT = 'https://exemple.com/';
 const fakeStorage = (calls: string[]): Storage => ({
   projects: {} as Storage['projects'],
   health: {} as Storage['health'],
+  users: {} as Storage['users'],
+  sessions: {} as Storage['sessions'],
+  emailTokens: {} as Storage['emailTokens'],
   snapshots: {
     fail: (id: string) => {
       calls.push(`fail:${id}`);

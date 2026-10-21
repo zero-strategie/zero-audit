@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuditAlreadyRunning, HostNotResolved } from '../../src/domain/errors.js';
+import { idleAccountDependencies } from '../support/auth-doubles.js';
 import { buildServer } from '../../src/http/server.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
@@ -21,6 +22,7 @@ describe('audit launch API', () => {
   const serverWith = (allowPrivateTargets: boolean): FastifyInstance => {
     const snapshots = new InMemorySnapshotRepository();
     return buildServer({
+      ...idleAccountDependencies(),
       projects: new InMemoryProjectRepository(),
       snapshots,
       health: snapshots,

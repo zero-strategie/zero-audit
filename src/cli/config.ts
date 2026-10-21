@@ -1,4 +1,6 @@
 import { parseArgs } from 'node:util';
+import { InvalidEmail } from '../domain/errors.js';
+import { normalizeEmail } from '../domain/user.js';
 
 export const STORE_KINDS = ['sqlite', 'postgres'] as const;
 export type StoreKind = (typeof STORE_KINDS)[number];
@@ -39,6 +41,8 @@ export interface ServeConfig extends StoreSelection {
   allowPrivateTargets: boolean;
   delayMs: number;
   mail: MailConfig;
+  /** Normalized with `normalizeEmail`. */
+  adminEmails: string[];
 }
 
 export interface MigrateConfig extends StoreSelection {
@@ -68,6 +72,7 @@ const STORE_ENV = 'ZERO_AUDIT_STORE';
 const MAILER_ENV = 'ZERO_AUDIT_MAILER';
 const BREVO_API_KEY_ENV = 'ZERO_AUDIT_BREVO_API_KEY';
 const MAIL_FROM_ENV = 'ZERO_AUDIT_MAIL_FROM';
+const ADMIN_EMAILS_ENV = 'ZERO_AUDIT_ADMIN_EMAILS';
 const PUBLIC_URL_ENV = 'ZERO_AUDIT_PUBLIC_URL';
 const HOST_ENV = 'HOST';
 const PORT_ENV = 'PORT';
@@ -151,6 +156,21 @@ const parseMail = (env: Environment): MailConfig => {
   return { kind, from, publicUrl, apiKey };
 };
 
+const parseAdminEmails = (raw: string | undefined): string[] =>
+  (raw ?? '')
+    .split(',')
+    .filter((entry) => entry.trim() !== '')
+    .map((entry) => {
+      try {
+        return normalizeEmail(entry);
+      } catch (error) {
+        if (!(error instanceof InvalidEmail)) throw error;
+        throw new UsageError(
+          `${ADMIN_EMAILS_ENV} must list e-mail addresses (received "${entry}")`,
+        );
+      }
+    });
+
 const buildConfig = (argv: readonly string[], env: Environment): AuditConfig => {
   const { values, positionals } = parseArgs({
     args: [...argv],
@@ -210,6 +230,7 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
     allowPrivateTargets: env[ALLOW_PRIVATE_TARGETS_ENV] === 'true',
     delayMs: parseInteger(env[DELAY_ENV] ?? String(DEFAULT_DELAY_MS), DELAY_ENV, 0),
     mail: parseMail(env),
+    adminEmails: parseAdminEmails(env[ADMIN_EMAILS_ENV]),
     ...parseStore(values.store, env),
   };
 };

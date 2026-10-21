@@ -9,7 +9,10 @@ const PASSWORD = 'correct horse battery';
 
 const setup = () => {
   const kit = buildAuthKit();
-  return { kit, register: new RegisterAccount({ ...kit, sendVerificationLink: new SendVerificationLink(kit) }) };
+  return {
+    kit,
+    register: new RegisterAccount({ ...kit, sendVerificationLink: new SendVerificationLink(kit) }),
+  };
 };
 
 describe('RegisterAccount', () => {

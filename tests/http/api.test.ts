@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CheckResult, Severity, Theme } from '../../src/domain/check.js';
 import type { SiteFile } from '../../src/domain/crawl.js';
 import { idleAuditDependencies } from '../support/audit-doubles.js';
+import { idleAccountDependencies } from '../support/auth-doubles.js';
 import { buildServer } from '../../src/http/server.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
@@ -61,7 +62,13 @@ describe('read-only HTTP API', () => {
   beforeEach(() => {
     projects = new InMemoryProjectRepository();
     snapshots = new InMemorySnapshotRepository();
-    app = buildServer({ projects, snapshots, health: snapshots, ...idleAuditDependencies() });
+    app = buildServer({
+      ...idleAccountDependencies(),
+      projects,
+      snapshots,
+      health: snapshots,
+      ...idleAuditDependencies(),
+    });
   });
 
   afterEach(async () => {

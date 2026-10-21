@@ -1,3 +1,6 @@
+import type { EmailTokenRepository } from '../application/ports/email-token-repository.js';
+import type { SessionRepository } from '../application/ports/session-repository.js';
+import type { UserRepository } from '../application/ports/user-repository.js';
 import type { ProjectRepository } from '../application/ports/project-repository.js';
 import type { StorageHealth } from '../application/ports/storage-health.js';
 import type { SnapshotRepository } from '../application/ports/snapshot-repository.js';
@@ -14,6 +17,9 @@ export interface Storage {
   readonly projects: ProjectRepository;
   readonly snapshots: SnapshotRepository;
   readonly health: StorageHealth;
+  readonly users: UserRepository;
+  readonly sessions: SessionRepository;
+  readonly emailTokens: EmailTokenRepository;
   /** Idempotent: releasing the connection twice (end of command and SIGINT) is harmless. */
   close(): Promise<void>;
 }
@@ -51,6 +57,9 @@ const openSqlite = (dbPath: string): Storage => {
     projects: repository.projects,
     snapshots: repository,
     health: repository,
+    users: repository.users,
+    sessions: repository.sessions,
+    emailTokens: repository.emailTokens,
     close: once(() => {
       repository.close();
       return Promise.resolve();
@@ -79,6 +88,9 @@ const openPostgres = async (databaseUrl: string): Promise<Storage> => {
     projects: repository.projects,
     snapshots: repository,
     health: repository,
+    users: repository.users,
+    sessions: repository.sessions,
+    emailTokens: repository.emailTokens,
     close: once(() => pool.end()),
   };
 };

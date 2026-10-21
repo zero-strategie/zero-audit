@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuditRunner } from '../../src/application/audit-runner.js';
 import { createRunAudit } from '../../src/cli/audit-factory.js';
+import { idleAccountDependencies } from '../support/auth-doubles.js';
 import { buildServer } from '../../src/http/server.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
@@ -40,6 +41,7 @@ describe('audit launched through the API against a local fixture site', () => {
       delayMs: 0,
     });
     const app = buildServer({
+      ...idleAccountDependencies(),
       projects,
       snapshots,
       health: snapshots,

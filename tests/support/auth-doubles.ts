@@ -80,3 +80,6 @@ export const buildAuthKit = () => ({
   clock: new MutableClock(),
   publicUrl: PUBLIC_URL,
 });
+
+/** Account dependencies for server tests that never touch the authentication routes. */
+export const idleAccountDependencies = () => ({ ...buildAuthKit(), adminEmails: [] as string[] });

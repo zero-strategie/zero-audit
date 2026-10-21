@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageHealth } from '../../src/application/ports/storage-health.js';
 import { idleAuditDependencies } from '../support/audit-doubles.js';
+import { idleAccountDependencies } from '../support/auth-doubles.js';
 import { buildServer } from '../../src/http/server.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 
 const serverWith = (health: StorageHealth) =>
   buildServer({
+    ...idleAccountDependencies(),
     projects: new InMemoryProjectRepository(),
     snapshots: new InMemorySnapshotRepository(),
     health,

@@ -120,8 +120,10 @@ export class MailerUnavailable extends DomainError {
   }
 }
 
+export type UnauthenticatedReason = 'bad-credentials' | 'no-session';
+
 export class Unauthenticated extends DomainError {
-  constructor() {
+  constructor(readonly reason: UnauthenticatedReason = 'bad-credentials') {
     super('Authentication is required or the credentials are wrong');
     this.name = 'Unauthenticated';
   }

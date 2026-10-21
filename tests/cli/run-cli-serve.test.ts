@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInterruptController } from '../../src/cli/interrupt-controller.js';
 import { runCli, type CliHooks, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type Storage, type StorageFactory } from '../../src/cli/storage-factory.js';
-import type { HttpServer } from '../../src/http/server.js';
+import type { HttpServer, ServerDependencies } from '../../src/http/server.js';
 import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../src/domain/snapshot.js';
 import type { AuditRunner } from '../../src/application/audit-runner.js';
 import { startFixtureServer } from '../support/fixture-server.js';
@@ -65,6 +65,9 @@ describe('runCli serve', () => {
       projects: real.projects,
       snapshots: real.snapshots,
       health: real.health,
+      users: real.users,
+      sessions: real.sessions,
+      emailTokens: real.emailTokens,
       close: () => {
         storageCloses += 1;
         const result = real.close();
@@ -122,6 +125,69 @@ describe('runCli serve', () => {
     await serve(['--port', '4000'], server);
 
     expect(server.calls).toEqual([{ host: '127.0.0.1', port: 4000 }]);
+  });
+
+  describe('account dependencies given to the server', () => {
+    const dependenciesOf = async (
+      env: Record<string, string> = {},
+    ): Promise<ServerDependencies> => {
+      const received: ServerDependencies[] = [];
+      await serve(
+        [],
+        fakeServer(events),
+        {
+          createServer: (dependencies) => {
+            received.push(dependencies);
+            return fakeServer(events);
+          },
+        },
+        capture().io,
+        env,
+      );
+      const [dependencies] = received;
+      if (!dependencies) throw new Error('the server was not built');
+      return dependencies;
+    };
+
+    it('keeps the mailer disabled and has no administrator by default', async () => {
+      const dependencies = await dependenciesOf();
+
+      expect(dependencies.mailer.enabled).toBe(false);
+      expect(dependencies.adminEmails).toEqual([]);
+    });
+
+    it('wires the console mailer, the administrators and the public URL from the environment', async () => {
+      const dependencies = await dependenciesOf({
+        ZERO_AUDIT_MAILER: 'console',
+        ZERO_AUDIT_ADMIN_EMAILS: 'Admin@Exemple.test',
+        ZERO_AUDIT_PUBLIC_URL: 'https://audit.exemple.test',
+      });
+
+      expect(dependencies.mailer.enabled).toBe(true);
+      expect(dependencies.adminEmails).toEqual(['admin@exemple.test']);
+      expect(dependencies.publicUrl).toBe('https://audit.exemple.test');
+    });
+
+    it('points the links at the local dashboard when no public URL is set', async () => {
+      expect((await dependenciesOf()).publicUrl).toBe('http://127.0.0.1:4321');
+    });
+
+    it('stores accounts in the opened storage', async () => {
+      const opened: Storage[] = [];
+      const received: ServerDependencies[] = [];
+
+      await serve([], fakeServer(events), {
+        onStorageOpened: (storage) => opened.push(storage),
+        createServer: (dependencies) => {
+          received.push(dependencies);
+          return fakeServer(events);
+        },
+      });
+
+      expect(received[0]?.users).toBe(opened[0]?.users);
+      expect(received[0]?.sessions).toBe(opened[0]?.sessions);
+      expect(received[0]?.emailTokens).toBe(opened[0]?.emailTokens);
+    });
   });
 
   it('warns that the console mailer is forbidden in production', async () => {

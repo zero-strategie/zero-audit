@@ -1,4 +1,13 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { GetCurrentAccount } from '../application/auth/get-current-account.js';
+import { Login } from '../application/auth/login.js';
+import { Logout } from '../application/auth/logout.js';
+import { OpenSession } from '../application/auth/open-session.js';
+import { RegisterAccount } from '../application/auth/register-account.js';
+import { ResendVerification } from '../application/auth/resend-verification.js';
+import { ResolveSession } from '../application/auth/resolve-session.js';
+import { SendVerificationLink } from '../application/auth/send-verification-link.js';
+import { VerifyEmail } from '../application/auth/verify-email.js';
 import type { AuditRunner } from '../application/audit-runner.js';
 import { CheckHealth } from '../application/check-health.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
@@ -10,13 +19,21 @@ import { ListOccurrences } from '../application/list-occurrences.js';
 import { ListPages } from '../application/list-pages.js';
 import { ListProjectSnapshots } from '../application/list-project-snapshots.js';
 import { ListProjects } from '../application/list-projects.js';
+import type { Clock } from '../application/ports/clock.js';
+import type { EmailTokenRepository } from '../application/ports/email-token-repository.js';
 import type { HostResolver } from '../application/ports/host-resolver.js';
+import type { Mailer } from '../application/ports/mailer.js';
+import type { PasswordHasher } from '../application/ports/password-hasher.js';
+import type { SessionRepository } from '../application/ports/session-repository.js';
+import type { TokenGenerator } from '../application/ports/token-generator.js';
+import type { UserRepository } from '../application/ports/user-repository.js';
 import type { StorageHealth } from '../application/ports/storage-health.js';
 import type { ProjectRepository } from '../application/ports/project-repository.js';
 import type { SnapshotRepository } from '../application/ports/snapshot-repository.js';
 import { allChecks } from '../domain/checks/index.js';
 import { registerErrorHandlers } from './errors.js';
 import { registerAuditRoutes } from './routes/audits.js';
+import { registerAuthRoutes, type AuthUseCases } from './routes/auth.js';
 import { registerCheckRoutes } from './routes/checks.js';
 import { registerCompareRoutes } from './routes/compare.js';
 import { registerHealthRoutes } from './routes/health.js';
@@ -33,6 +50,17 @@ export interface ServerDependencies {
   readonly hostResolver: HostResolver;
   /** Turns the SSRF pre-check of `POST /audits` off (`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`). */
   readonly allowPrivateTargets: boolean;
+  readonly users: UserRepository;
+  readonly sessions: SessionRepository;
+  readonly emailTokens: EmailTokenRepository;
+  readonly passwordHasher: PasswordHasher;
+  readonly mailer: Mailer;
+  readonly tokenGenerator: TokenGenerator;
+  readonly clock: Clock;
+  /** Base of the links sent by e-mail, without trailing slash. */
+  readonly publicUrl: string;
+  /** Administrator addresses, normalized with `normalizeEmail`. */
+  readonly adminEmails: readonly string[];
 }
 
 /** What the process entry point needs from the server: start it and stop it. */
@@ -41,17 +69,34 @@ export interface HttpServer {
   close(): Promise<void>;
 }
 
+const buildAuthUseCases = (dependencies: ServerDependencies): AuthUseCases => {
+  const { users, sessions, passwordHasher, mailer, clock, adminEmails } = dependencies;
+  const sendVerificationLink = new SendVerificationLink(dependencies);
+  const openSession = new OpenSession(dependencies);
+  const resolveSession = new ResolveSession(dependencies);
+  return {
+    registerAccount: new RegisterAccount({
+      users,
+      passwordHasher,
+      mailer,
+      clock,
+      sendVerificationLink,
+    }),
+    resendVerification: new ResendVerification({ users, mailer, sendVerificationLink }),
+    verifyEmail: new VerifyEmail({ ...dependencies, openSession }),
+    login: new Login({ users, passwordHasher, openSession }),
+    logout: new Logout({ resolveSession, sessions }),
+    getCurrentAccount: new GetCurrentAccount({ resolveSession, adminEmails }),
+  };
+};
+
 /** Builds the API without listening, so that tests can use `inject()`. */
-export const buildServer = ({
-  projects,
-  snapshots,
-  health,
-  auditRunner,
-  hostResolver,
-  allowPrivateTargets,
-}: ServerDependencies): FastifyInstance => {
+export const buildServer = (dependencies: ServerDependencies): FastifyInstance => {
+  const { projects, snapshots, health, auditRunner, hostResolver, allowPrivateTargets } =
+    dependencies;
   const app = Fastify();
   registerErrorHandlers(app);
+  registerAuthRoutes(app, buildAuthUseCases(dependencies));
   registerProjectRoutes(app, {
     listProjects: new ListProjects(projects, snapshots),
     listProjectSnapshots: new ListProjectSnapshots(projects, snapshots),

@@ -13,7 +13,8 @@ export class Logout {
   /** Ends the given session only; the account keeps its other sessions. */
   async execute(sessionId: string | undefined): Promise<void> {
     const { resolveSession, sessions } = this.dependencies;
-    if (!sessionId || !(await resolveSession.execute(sessionId))) throw new Unauthenticated();
+    if (!sessionId || !(await resolveSession.execute(sessionId)))
+      throw new Unauthenticated('no-session');
     await sessions.delete(sessionId);
   }
 }

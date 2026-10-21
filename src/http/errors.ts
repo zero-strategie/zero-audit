@@ -1,22 +1,38 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   AuditAlreadyRunning,
+  EmailNotVerified,
   HostNotResolved,
   InvalidAuditUrl,
+  InvalidEmail,
+  InvalidOrExpiredToken,
+  InvalidPassword,
+  MailerUnavailable,
   PrivateAddressRejected,
   ProjectNotFound,
   SnapshotNotFinished,
   SnapshotNotFound,
   SnapshotsFromDifferentProjects,
+  Unauthenticated,
   UnknownCheck,
 } from '../domain/errors.js';
 
-export type ApiErrorCode = 'not_found' | 'invalid_request' | 'conflict' | 'internal_error';
+export type ApiErrorCode =
+  | 'not_found'
+  | 'invalid_request'
+  | 'unauthenticated'
+  | 'forbidden'
+  | 'conflict'
+  | 'unavailable'
+  | 'internal_error';
 
 const HTTP_BAD_REQUEST = 400;
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 const HTTP_CONFLICT = 409;
 const HTTP_INTERNAL_ERROR = 500;
+const HTTP_SERVICE_UNAVAILABLE = 503;
 const INTERNAL_MESSAGE = 'Internal server error';
 const PRIVATE_ADDRESS_MESSAGE =
   'Adresse interne refusée : le site cible une adresse réseau non publique';
@@ -26,6 +42,23 @@ const HOST_NOT_RESOLVED_MESSAGE = 'Site introuvable : le nom de domaine ne réso
 
 const INVALID_URL_MESSAGE =
   'URL invalide : indiquez une adresse complète commençant par http:// ou https://, par exemple https://exemple.fr/';
+
+const INVALID_EMAIL_MESSAGE = 'Adresse e-mail invalide';
+const INVALID_PASSWORD_MESSAGE = 'Le mot de passe doit contenir entre 12 et 128 caractères';
+const BAD_CREDENTIALS_MESSAGE = 'E-mail ou mot de passe incorrect';
+const SESSION_REQUIRED_MESSAGE = 'Connexion requise';
+const EMAIL_NOT_VERIFIED_MESSAGE = "Confirmez d'abord votre adresse e-mail";
+const INVALID_TOKEN_MESSAGE = 'Ce lien est invalide ou a expiré';
+const SIGN_UP_UNAVAILABLE_MESSAGE = 'Les inscriptions sont momentanément indisponibles';
+
+/** Message of a body validation failure, in French for the fields filled in by visitors. */
+const validationMessage = (error: FastifyError): string => {
+  const paths = error.validation?.map((issue) => issue.instancePath) ?? [];
+  if (paths.includes('/url')) return INVALID_URL_MESSAGE;
+  if (paths.includes('/email')) return INVALID_EMAIL_MESSAGE;
+  if (paths.includes('/password')) return INVALID_PASSWORD_MESSAGE;
+  return error.message;
+};
 
 const send = (reply: FastifyReply, status: number, code: ApiErrorCode, message: string) =>
   reply.status(status).send({ error: { code, message } });
@@ -40,7 +73,15 @@ export const errorResponseSchema = {
       properties: {
         code: {
           type: 'string',
-          enum: ['not_found', 'invalid_request', 'conflict', 'internal_error'],
+          enum: [
+            'not_found',
+            'invalid_request',
+            'unauthenticated',
+            'forbidden',
+            'conflict',
+            'unavailable',
+            'internal_error',
+          ],
         },
         message: { type: 'string' },
       },
@@ -54,13 +95,7 @@ export const registerErrorHandlers = (app: FastifyInstance): void => {
   );
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error.validation) {
-      const onUrl = error.validation.some((issue) => issue.instancePath === '/url');
-      return send(
-        reply,
-        HTTP_BAD_REQUEST,
-        'invalid_request',
-        onUrl ? INVALID_URL_MESSAGE : error.message,
-      );
+      return send(reply, HTTP_BAD_REQUEST, 'invalid_request', validationMessage(error));
     }
     if (
       error instanceof ProjectNotFound ||
@@ -80,6 +115,26 @@ export const registerErrorHandlers = (app: FastifyInstance): void => {
     }
     if (error instanceof HostNotResolved) {
       return send(reply, HTTP_BAD_REQUEST, 'invalid_request', HOST_NOT_RESOLVED_MESSAGE);
+    }
+    if (error instanceof InvalidEmail) {
+      return send(reply, HTTP_BAD_REQUEST, 'invalid_request', INVALID_EMAIL_MESSAGE);
+    }
+    if (error instanceof InvalidPassword) {
+      return send(reply, HTTP_BAD_REQUEST, 'invalid_request', INVALID_PASSWORD_MESSAGE);
+    }
+    if (error instanceof InvalidOrExpiredToken) {
+      return send(reply, HTTP_BAD_REQUEST, 'invalid_request', INVALID_TOKEN_MESSAGE);
+    }
+    if (error instanceof Unauthenticated) {
+      const message =
+        error.reason === 'no-session' ? SESSION_REQUIRED_MESSAGE : BAD_CREDENTIALS_MESSAGE;
+      return send(reply, HTTP_UNAUTHORIZED, 'unauthenticated', message);
+    }
+    if (error instanceof EmailNotVerified) {
+      return send(reply, HTTP_FORBIDDEN, 'forbidden', EMAIL_NOT_VERIFIED_MESSAGE);
+    }
+    if (error instanceof MailerUnavailable) {
+      return send(reply, HTTP_SERVICE_UNAVAILABLE, 'unavailable', SIGN_UP_UNAVAILABLE_MESSAGE);
     }
     if (error instanceof AuditAlreadyRunning) {
       return send(reply, HTTP_CONFLICT, 'conflict', auditAlreadyRunningMessage(error));

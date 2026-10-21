@@ -121,6 +121,7 @@ describe('parseCommand subcommands', () => {
       allowPrivateTargets: false,
       delayMs: 1000,
       mail: { kind: 'disabled', from: 'no-reply@agents.zero-strategie.dev', publicUrl: null },
+      adminEmails: [],
     });
   });
 
@@ -300,4 +301,29 @@ describe('parseCommand mailer configuration', () => {
       expect(messageOf({ ZERO_AUDIT_PUBLIC_URL: url })).toContain('ZERO_AUDIT_PUBLIC_URL');
     },
   );
+});
+
+describe('parseCommand administrator addresses', () => {
+  const adminsOf = (env: Record<string, string>) => {
+    const command = parseCommand(['serve'], env);
+    if (command.kind !== 'serve') throw new Error(`expected serve, got ${command.kind}`);
+    return command.adminEmails;
+  };
+
+  it('has no administrator by default', () => {
+    expect(adminsOf({})).toEqual([]);
+  });
+
+  it('reads a comma-separated list, trimmed and lowercased, ignoring empty entries', () => {
+    expect(
+      adminsOf({ ZERO_AUDIT_ADMIN_EMAILS: ' Admin@Exemple.test, ,boss@exemple.test,' }),
+    ).toEqual(['admin@exemple.test', 'boss@exemple.test']);
+  });
+
+  it('refuses an entry that is not an e-mail address, naming the variable', () => {
+    const command = parseCommand(['serve'], { ZERO_AUDIT_ADMIN_EMAILS: 'admin@exemple.test,oops' });
+
+    expect(command).toMatchObject({ kind: 'usage-error' });
+    expect(JSON.stringify(command)).toContain('ZERO_AUDIT_ADMIN_EMAILS');
+  });
 });
