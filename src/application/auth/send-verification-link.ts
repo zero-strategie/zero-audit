@@ -1,3 +1,4 @@
+import { EMAIL_LINKS_PER_HOUR, HOUR_MS } from '../../domain/abuse-limits.js';
 import { VERIFY_TTL_MS } from '../../domain/email-token.js';
 import type { User } from '../../domain/user.js';
 import { buildVerificationLink } from '../emails/index.js';
@@ -5,9 +6,6 @@ import type { Clock } from '../ports/clock.js';
 import type { EmailTokenRepository } from '../ports/email-token-repository.js';
 import type { Mailer } from '../ports/mailer.js';
 import type { TokenGenerator } from '../ports/token-generator.js';
-
-export const MAX_LINKS_PER_HOUR = 3;
-const HOUR_MS = 60 * 60 * 1000;
 
 export interface SendVerificationLinkDependencies {
   readonly emailTokens: EmailTokenRepository;
@@ -28,7 +26,7 @@ export class SendVerificationLink {
       user.email,
       new Date(now.getTime() - HOUR_MS),
     );
-    if (recent >= MAX_LINKS_PER_HOUR) return;
+    if (recent >= EMAIL_LINKS_PER_HOUR) return;
     const token = tokenGenerator.generate();
     await emailTokens.create({
       token,

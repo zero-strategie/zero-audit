@@ -33,7 +33,9 @@ export class SpyMailer implements Mailer {
     return Promise.resolve();
   }
 
-  sendPasswordReset(): Promise<void> {
+  sendPasswordReset(to: string, link: string): Promise<void> {
+    if (!this.enabled) return Promise.reject(new MailerUnavailable());
+    this.sent.push({ to, link });
     return Promise.resolve();
   }
 
