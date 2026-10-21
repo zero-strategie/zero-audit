@@ -7,7 +7,7 @@ import type { CheckResult } from '../../src/domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../../src/domain/crawl.js';
 import { check1000 } from '../../src/domain/checks/site/check-1000-url-variants.js';
 import { crawlOf } from './check-fixtures.js';
-import { SnapshotImmutable, SnapshotNotFound } from '../../src/domain/errors.js';
+import { AuditAttemptLost, SnapshotImmutable, SnapshotNotFound } from '../../src/domain/errors.js';
 
 const startedAt = new Date('2026-01-01T10:00:00.000Z');
 const finishedAt = new Date('2026-01-01T10:05:00.000Z');
@@ -647,6 +647,145 @@ export const describeSnapshotRepositoryContract = (
 
       expect(await queue.countQueued()).toBe(2);
       expect(await queue.countActiveFor(account.id)).toBe(2);
+    });
+
+    const claimedAt = async (seconds: number) => {
+      const context = await setup();
+      const id = await context.enqueue(1);
+      await context.queue.claimNext('worker-a', at(seconds));
+      return { ...context, id };
+    };
+    const STALE_MS = 2 * 60 * 1000;
+
+    it('persists the progress and the heartbeat of the attempt', async () => {
+      const { queue, id } = await claimedAt(2);
+
+      await queue.heartbeat(id, 1, 7, at(5));
+
+      const snapshot = (await queue.getById(id))?.snapshot;
+      expect(snapshot).toMatchObject({ pagesCrawled: 7, heartbeatAt: at(5), status: 'running' });
+    });
+
+    it.each([
+      ['heartbeat', (queue: AuditQueue, id: string) => queue.heartbeat(id, 1, 9, at(30))],
+      [
+        'finishAttempt',
+        (queue: AuditQueue, id: string) =>
+          queue.finishAttempt(id, 1, { finishedAt: at(30), pagesCrawled: 9 }),
+      ],
+      ['failAttempt', (queue: AuditQueue, id: string) => queue.failAttempt(id, 1, at(30))],
+    ])('refuses %s from a worker whose attempt was superseded', async (_name, write) => {
+      const { queue, id } = await claimedAt(2);
+      await queue.requeue(id, 1, at(3));
+      await queue.claimNext('worker-b', at(4));
+
+      await expect(write(queue, id)).rejects.toBeInstanceOf(AuditAttemptLost);
+
+      expect((await queue.getById(id))?.snapshot).toMatchObject({
+        status: 'running',
+        attempts: 2,
+        pagesCrawled: 0,
+        heartbeatAt: at(4),
+        finishedAt: null,
+      });
+    });
+
+    it('fails the attempt with a finish date', async () => {
+      const { queue, id } = await claimedAt(2);
+
+      await queue.failAttempt(id, 1, at(9));
+
+      expect((await queue.getById(id))?.snapshot).toMatchObject({
+        status: 'failed',
+        finishedAt: at(9),
+      });
+    });
+
+    it('puts a first interrupted attempt back in line at its original place, without its rows', async () => {
+      const { queue, enqueue, id } = await claimedAt(2);
+      const later = await enqueue(5);
+      await queue.addPages(id, [page()]);
+      await queue.addLinks(id, [link]);
+      await queue.heartbeat(id, 1, 4, at(3));
+
+      const requeued = await queue.requeue(id, 1, at(6));
+
+      expect(requeued).toMatchObject({ status: 'queued', queuedAt: at(1), attempts: 1 });
+      const details = await queue.getById(id);
+      expect(details?.snapshot).toMatchObject({ status: 'queued', pagesCrawled: 0 });
+      expect(details?.pages).toEqual([]);
+      expect(details?.links).toEqual([]);
+      expect(await queue.queuePosition(id)).toBe(1);
+      expect(await queue.queuePosition(later)).toBe(2);
+    });
+
+    it('fails an audit interrupted at its second attempt', async () => {
+      const { queue, id } = await claimedAt(2);
+      await queue.requeue(id, 1, at(3));
+      await queue.claimNext('worker-b', at(4));
+      await queue.addPages(id, [page()]);
+
+      const failed = await queue.requeue(id, 2, at(9));
+
+      expect(failed).toMatchObject({ status: 'failed', finishedAt: at(9), attempts: 2 });
+      expect((await queue.getById(id))?.pages).toEqual([]);
+    });
+
+    it('recovers an audit whose heartbeat is stale, once', async () => {
+      const { queue, id } = await claimedAt(2);
+      await queue.addPages(id, [page()]);
+      const now = new Date(at(2).getTime() + STALE_MS + 1);
+
+      const recovered = await queue.recoverStale(now, STALE_MS);
+
+      expect(recovered.map((snapshot) => [snapshot.id, snapshot.status])).toEqual([[id, 'queued']]);
+      expect((await queue.getById(id))?.pages).toEqual([]);
+      expect(await queue.recoverStale(now, STALE_MS)).toEqual([]);
+    });
+
+    it('fails a stale audit whose attempts are spent', async () => {
+      const { queue, id } = await claimedAt(2);
+      await queue.requeue(id, 1, at(3));
+      await queue.claimNext('worker-b', at(4));
+      const now = new Date(at(4).getTime() + STALE_MS + 1);
+
+      const recovered = await queue.recoverStale(now, STALE_MS);
+
+      expect(recovered[0]).toMatchObject({ id, status: 'failed', finishedAt: now });
+      expect(await queue.recoverStale(now, STALE_MS)).toEqual([]);
+    });
+
+    it('leaves running an audit whose heartbeat is recent', async () => {
+      const { queue, id } = await claimedAt(2);
+
+      expect(await queue.recoverStale(new Date(at(2).getTime() + STALE_MS - 1), STALE_MS)).toEqual(
+        [],
+      );
+      expect((await queue.getById(id))?.snapshot.status).toBe('running');
+    });
+
+    it('does not touch a directly started audit, which has no heartbeat', async () => {
+      const { queue, project } = await setup();
+      const direct = await queue.create({
+        launchedBy: null,
+        projectId: project.id,
+        pagesLimit: 10,
+        startedAt: at(0),
+      });
+
+      expect(await queue.recoverStale(at(100_000), STALE_MS)).toEqual([]);
+      expect((await queue.getById(direct.id))?.snapshot.status).toBe('running');
+    });
+
+    it('records the presence of a worker and updates it in place', async () => {
+      const { queue } = await setup();
+      expect(await queue.getWorkerPresence('worker-a')).toBeNull();
+
+      await queue.recordWorkerPresence('worker-a', at(1));
+      await queue.recordWorkerPresence('worker-a', at(9));
+
+      expect(await queue.getWorkerPresence('worker-a')).toEqual(at(9));
+      expect(await queue.getWorkerPresence('worker-b')).toBeNull();
     });
   });
 };

@@ -91,6 +91,20 @@ describe('Snapshot audit queue lifecycle', () => {
     expect(requeued.status).toBe('queued');
     expect(requeued.queuedAt).toEqual(queuedAt);
     expect(requeued.attempts).toBe(1);
+    expect(requeued.heartbeatAt).toBeNull();
+  });
+
+  it('records progress and a heartbeat while running', () => {
+    const beaten = enqueue().claim(startedAt).beat(finishedAt, 12);
+
+    expect(beaten).toMatchObject({ pagesCrawled: 12, heartbeatAt: finishedAt, status: 'running' });
+    expect(() => enqueue().beat(finishedAt, 1)).toThrow(DomainError);
+  });
+
+  it('forgets the progress of an interrupted attempt', () => {
+    const progressed = enqueue().claim(startedAt).beat(finishedAt, 5).requeue();
+
+    expect(progressed.pagesCrawled).toBe(0);
   });
 
   it('fails after the last allowed attempt is interrupted', () => {

@@ -22,11 +22,26 @@ export interface AuditQueue extends AdmissionView {
   ): Promise<Snapshot>;
   /** Oldest queued audit first. It becomes `running` with one more attempt; null when the queue is empty. */
   claimNext(workerId: string, now: Date): Promise<Snapshot | null>;
+  /**
+   * The next four writes belong to one attempt: they throw `AuditAttemptLost` when the audit is no
+   * longer running at that attempt (a recovered audit whose former worker still writes).
+   */
+  heartbeat(id: string, attempt: number, pagesCrawled: number, now: Date): Promise<void>;
   finishAttempt(
     id: string,
     attempt: number,
     input: { finishedAt: Date; pagesCrawled: number },
   ): Promise<void>;
+  failAttempt(id: string, attempt: number, finishedAt: Date): Promise<void>;
+  /**
+   * Gives the attempt up: back to the queue with its original place, or `failed` when every
+   * attempt is spent. The rows written by the attempt are deleted.
+   */
+  requeue(id: string, attempt: number, now: Date): Promise<Snapshot>;
+  /** Interrupts the `running` audits whose heartbeat is older than `staleAfterMs`; returns them as they are now. */
+  recoverStale(now: Date, staleAfterMs: number): Promise<readonly Snapshot[]>;
   /** 1 for the next audit to be claimed; null unless the audit is queued. */
   queuePosition(id: string): Promise<number | null>;
+  recordWorkerPresence(workerId: string, now: Date): Promise<void>;
+  getWorkerPresence(workerId: string): Promise<Date | null>;
 }

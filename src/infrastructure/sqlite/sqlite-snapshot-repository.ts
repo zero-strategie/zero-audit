@@ -102,6 +102,17 @@ interface OccurrenceRow {
   info: string;
 }
 
+/** Tables holding what a crawl attempt wrote, emptied when the attempt is given up. */
+const ATTEMPT_TABLES = [
+  'issue_occurrences',
+  'check_results',
+  'slash_probes',
+  'host_probes',
+  'site_files',
+  'links',
+  'pages',
+] as const;
+
 const toSnapshot = (row: SnapshotRow): Snapshot =>
   Snapshot.restore({
     id: row.id,
@@ -306,6 +317,93 @@ export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue 
         .run(input.finishedAt.toISOString(), input.pagesCrawled, id, attempt);
       if (changes === 0) throw new AuditAttemptLost(id, attempt);
     });
+  }
+
+  heartbeat(id: string, attempt: number, pagesCrawled: number, now: Date): Promise<void> {
+    return this.run(() => {
+      const { changes } = this.db
+        .prepare(
+          `UPDATE snapshots SET pages_crawled = ?, heartbeat_at = ?
+           WHERE id = ? AND status = 'running' AND attempts = ?`,
+        )
+        .run(pagesCrawled, now.toISOString(), id, attempt);
+      if (changes === 0) throw new AuditAttemptLost(id, attempt);
+    });
+  }
+
+  failAttempt(id: string, attempt: number, finishedAt: Date): Promise<void> {
+    return this.run(() => {
+      const { changes } = this.db
+        .prepare(
+          `UPDATE snapshots SET status = 'failed', finished_at = ?
+           WHERE id = ? AND status = 'running' AND attempts = ?`,
+        )
+        .run(finishedAt.toISOString(), id, attempt);
+      if (changes === 0) throw new AuditAttemptLost(id, attempt);
+    });
+  }
+
+  requeue(id: string, attempt: number, now: Date): Promise<Snapshot> {
+    return this.run(() =>
+      this.db
+        .transaction(() => {
+          const row = this.db
+            .prepare("SELECT * FROM snapshots WHERE id = ? AND status = 'running' AND attempts = ?")
+            .get(id, attempt) as SnapshotRow | undefined;
+          if (!row) throw new AuditAttemptLost(id, attempt);
+          return this.interrupt(toSnapshot(row), now);
+        })
+        .immediate(),
+    );
+  }
+
+  recoverStale(now: Date, staleAfterMs: number): Promise<readonly Snapshot[]> {
+    return this.run(() =>
+      this.db
+        .transaction(() => {
+          const rows = this.db
+            .prepare(
+              "SELECT * FROM snapshots WHERE status = 'running' AND heartbeat_at < ? ORDER BY queued_at, id",
+            )
+            .all(new Date(now.getTime() - staleAfterMs).toISOString()) as SnapshotRow[];
+          return rows.map((row) => this.interrupt(toSnapshot(row), now));
+        })
+        .immediate(),
+    );
+  }
+
+  recordWorkerPresence(workerId: string, now: Date): Promise<void> {
+    return this.run(() => {
+      this.db
+        .prepare(
+          `INSERT INTO workers (id, heartbeat_at) VALUES (?, ?)
+           ON CONFLICT (id) DO UPDATE SET heartbeat_at = excluded.heartbeat_at`,
+        )
+        .run(workerId, now.toISOString());
+    });
+  }
+
+  getWorkerPresence(workerId: string): Promise<Date | null> {
+    return this.run(() => {
+      const row = this.db.prepare('SELECT heartbeat_at FROM workers WHERE id = ?').get(workerId) as
+        { heartbeat_at: string } | undefined;
+      return row ? new Date(row.heartbeat_at) : null;
+    });
+  }
+
+  /** Must run in a transaction: the rows of the attempt are deleted along with its state change. */
+  private interrupt(snapshot: Snapshot, now: Date): Snapshot {
+    const interrupted = snapshot.interrupt(now);
+    for (const table of ATTEMPT_TABLES) {
+      this.db.prepare(`DELETE FROM ${table} WHERE snapshot_id = ?`).run(snapshot.id);
+    }
+    this.db
+      .prepare(
+        `UPDATE snapshots SET status = ?, pages_crawled = 0, heartbeat_at = NULL, finished_at = ?
+         WHERE id = ?`,
+      )
+      .run(interrupted.status, interrupted.finishedAt?.toISOString() ?? null, snapshot.id);
+    return interrupted;
   }
 
   queuePosition(id: string): Promise<number | null> {

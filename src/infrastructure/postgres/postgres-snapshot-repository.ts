@@ -104,6 +104,17 @@ type OccurrenceRow = {
   info: Record<string, unknown>;
 };
 
+/** Tables holding what a crawl attempt wrote, emptied when the attempt is given up. */
+const ATTEMPT_TABLES = [
+  'issue_occurrences',
+  'check_results',
+  'slash_probes',
+  'host_probes',
+  'site_files',
+  'links',
+  'pages',
+] as const;
+
 const toSnapshot = (row: SnapshotRow): Snapshot =>
   Snapshot.restore({
     id: row.id,
@@ -273,6 +284,79 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
       [input.finishedAt, input.pagesCrawled, id, attempt],
     );
     if (rowCount === 0) throw new AuditAttemptLost(id, attempt);
+  }
+
+  async heartbeat(id: string, attempt: number, pagesCrawled: number, now: Date): Promise<void> {
+    const { rowCount } = await this.pool.query(
+      `UPDATE snapshots SET pages_crawled = $1, heartbeat_at = $2
+       WHERE id = $3 AND status = 'running' AND attempts = $4`,
+      [pagesCrawled, now, id, attempt],
+    );
+    if (rowCount === 0) throw new AuditAttemptLost(id, attempt);
+  }
+
+  async failAttempt(id: string, attempt: number, finishedAt: Date): Promise<void> {
+    const { rowCount } = await this.pool.query(
+      `UPDATE snapshots SET status = 'failed', finished_at = $1
+       WHERE id = $2 AND status = 'running' AND attempts = $3`,
+      [finishedAt, id, attempt],
+    );
+    if (rowCount === 0) throw new AuditAttemptLost(id, attempt);
+  }
+
+  requeue(id: string, attempt: number, now: Date): Promise<Snapshot> {
+    return withTransaction(this.pool, async (client) => {
+      const { rows } = await client.query<SnapshotRow>(
+        "SELECT * FROM snapshots WHERE id = $1 AND status = 'running' AND attempts = $2 FOR UPDATE",
+        [id, attempt],
+      );
+      if (!rows[0]) throw new AuditAttemptLost(id, attempt);
+      return this.interrupt(client, toSnapshot(rows[0]), now);
+    });
+  }
+
+  /** SKIP LOCKED: an audit another recovery is already handling is left to it. */
+  recoverStale(now: Date, staleAfterMs: number): Promise<readonly Snapshot[]> {
+    return withTransaction(this.pool, async (client) => {
+      const { rows } = await client.query<SnapshotRow>(
+        `SELECT * FROM snapshots WHERE status = 'running' AND heartbeat_at < $1
+         ORDER BY queued_at, id FOR UPDATE SKIP LOCKED`,
+        [new Date(now.getTime() - staleAfterMs)],
+      );
+      const recovered: Snapshot[] = [];
+      for (const row of rows) recovered.push(await this.interrupt(client, toSnapshot(row), now));
+      return recovered;
+    });
+  }
+
+  async recordWorkerPresence(workerId: string, now: Date): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO workers (id, heartbeat_at) VALUES ($1, $2)
+       ON CONFLICT (id) DO UPDATE SET heartbeat_at = EXCLUDED.heartbeat_at`,
+      [workerId, now],
+    );
+  }
+
+  async getWorkerPresence(workerId: string): Promise<Date | null> {
+    const { rows } = await this.pool.query<{ heartbeat_at: Date }>(
+      'SELECT heartbeat_at FROM workers WHERE id = $1',
+      [workerId],
+    );
+    return rows[0]?.heartbeat_at ?? null;
+  }
+
+  /** The caller holds the row lock: the rows of the attempt are deleted along with its state change. */
+  private async interrupt(client: pg.PoolClient, snapshot: Snapshot, now: Date): Promise<Snapshot> {
+    const interrupted = snapshot.interrupt(now);
+    for (const table of ATTEMPT_TABLES) {
+      await client.query(`DELETE FROM ${table} WHERE snapshot_id = $1`, [snapshot.id]);
+    }
+    await client.query(
+      `UPDATE snapshots SET status = $1, pages_crawled = 0, heartbeat_at = NULL, finished_at = $2
+       WHERE id = $3`,
+      [interrupted.status, interrupted.finishedAt, snapshot.id],
+    );
+    return interrupted;
   }
 
   async queuePosition(id: string): Promise<number | null> {

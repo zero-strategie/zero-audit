@@ -109,12 +109,22 @@ export class Snapshot implements SnapshotProps {
 
   requeue(): Snapshot {
     this.assertWritable();
-    return new Snapshot({ ...this.props(), status: 'queued', heartbeatAt: null });
+    return new Snapshot({
+      ...this.props(),
+      status: 'queued',
+      pagesCrawled: 0,
+      heartbeatAt: null,
+    });
   }
 
   /** The worker running this audit is gone: try again, unless every attempt has been spent. */
   interrupt(now: Date): Snapshot {
     return this.attempts < MAX_ATTEMPTS ? this.requeue() : this.fail(now);
+  }
+
+  beat(now: Date, pagesCrawled: number): Snapshot {
+    this.assertWritable();
+    return new Snapshot({ ...this.props(), pagesCrawled, heartbeatAt: now });
   }
 
   finish(now: Date, pagesCrawled: number): Snapshot {

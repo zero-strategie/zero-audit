@@ -35,6 +35,7 @@ const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
 
 export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueue, StorageHealth {
   private readonly stored = new Map<string, Stored>();
+  private readonly presences = new Map<string, Date>();
   private enqueuing: Promise<unknown> = Promise.resolve();
   private readonly launchJournal: { id: string; emailHash: string; launchedAt: Date }[] = [];
 
@@ -93,6 +94,44 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
     });
   }
 
+  heartbeat(id: string, attempt: number, pagesCrawled: number, now: Date): Promise<void> {
+    return this.writeAttempt(id, attempt, (entry) => {
+      entry.snapshot = entry.snapshot.beat(now, pagesCrawled);
+    });
+  }
+
+  failAttempt(id: string, attempt: number, finishedAt: Date): Promise<void> {
+    return this.writeAttempt(id, attempt, (entry) => {
+      entry.snapshot = entry.snapshot.fail(finishedAt);
+    });
+  }
+
+  async requeue(id: string, attempt: number, now: Date): Promise<Snapshot> {
+    await this.writeAttempt(id, attempt, (entry) => this.interrupt(entry, now));
+    return this.snapshotOf(id);
+  }
+
+  recoverStale(now: Date, staleAfterMs: number): Promise<readonly Snapshot[]> {
+    const limit = now.getTime() - staleAfterMs;
+    const stale = [...this.stored.values()].filter(
+      ({ snapshot }) =>
+        snapshot.status === 'running' &&
+        snapshot.heartbeatAt !== null &&
+        snapshot.heartbeatAt.getTime() < limit,
+    );
+    for (const entry of stale) this.interrupt(entry, now);
+    return Promise.resolve(stale.map(({ snapshot }) => snapshot));
+  }
+
+  recordWorkerPresence(workerId: string, now: Date): Promise<void> {
+    this.presences.set(workerId, now);
+    return Promise.resolve();
+  }
+
+  getWorkerPresence(workerId: string): Promise<Date | null> {
+    return Promise.resolve(this.presences.get(workerId) ?? null);
+  }
+
   queuePosition(id: string): Promise<number | null> {
     const index = this.queuedInOrder().findIndex(({ snapshot }) => snapshot.id === id);
     return Promise.resolve(index === -1 ? null : index + 1);
@@ -108,6 +147,23 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
         launchedBy === userId && (snapshot.status === 'queued' || snapshot.status === 'running'),
     );
     return Promise.resolve(active.length);
+  }
+
+  /** The rows written by the interrupted attempt go with it. */
+  private interrupt(entry: Stored, now: Date): void {
+    entry.snapshot = entry.snapshot.interrupt(now);
+    entry.pages = [];
+    entry.links = [];
+    entry.checkResults = [];
+    entry.siteFiles = [];
+    entry.hostProbe = null;
+    entry.slashProbes = [];
+  }
+
+  private snapshotOf(id: string): Snapshot {
+    const entry = this.stored.get(id);
+    if (!entry) throw new SnapshotNotFound(id);
+    return entry.snapshot;
   }
 
   private async record(snapshot: Snapshot, launchedBy: string | null): Promise<void> {
