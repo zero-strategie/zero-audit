@@ -1,3 +1,7 @@
+import os from 'node:os';
+import { CheckWorkerHealth } from '../application/check-worker-health.js';
+import { workerIdsFor } from '../application/process-audit-queue.js';
+import type { Clock } from '../application/ports/clock.js';
 import type { Logger } from '../application/ports/logger.js';
 import { PurgeStaleAccounts } from '../application/purge-stale-accounts.js';
 import { RecoverStaleAudits } from '../application/recover-stale-audits.js';
@@ -24,6 +28,7 @@ import {
   type MigrateConfig,
   type ServeConfig,
   type WorkerConfig,
+  type WorkerHealthConfig,
 } from './config.js';
 import { CONSOLE_MAILER_WARNING, createMailer } from './mailer-factory.js';
 import { createAuditWorker, createRunAudit } from './audit-factory.js';
@@ -68,6 +73,10 @@ export interface CliHooks {
   createServer?(dependencies: ServerDependencies): HttpServer;
   /** Resolves when `serve` must stop; defaults to never (the process is stopped by a signal). */
   untilStopped?: Promise<void>;
+  /** Time source of `worker-health`; defaults to the system clock. */
+  clock?: Clock;
+  /** Host name the worker announces itself with; defaults to `os.hostname()`. */
+  hostname?: string;
   /** Composition root override; defaults to the real SQLite / Postgres factory. */
   storageFactory?: StorageFactory;
 }
@@ -279,6 +288,30 @@ const work = async (config: WorkerConfig, io: CliIo, hooks: CliHooks): Promise<n
   }
 };
 
+const workerHealth = async (
+  config: WorkerHealthConfig,
+  io: CliIo,
+  hooks: CliHooks,
+): Promise<number> => {
+  let storage: Storage | null = null;
+  try {
+    storage = await (hooks.storageFactory ?? createStorage)(config);
+    const workerIds = workerIdsFor(hooks.hostname ?? os.hostname(), config.concurrency);
+    const healthy = await new CheckWorkerHealth(
+      storage.queue,
+      hooks.clock ?? new SystemClock(),
+    ).execute(workerIds);
+    if (healthy) return EXIT_SUCCESS;
+    io.stderr('Worker en panne : aucun worker actif sur cet hôte depuis moins de 60 s.\n');
+    return EXIT_CRAWL_FAILED;
+  } catch (error) {
+    io.stderr(`Contrôle du worker échoué : ${errorMessage(error)}\n`);
+    return EXIT_CRAWL_FAILED;
+  } finally {
+    await storage?.close();
+  }
+};
+
 const compareFailureMessage = (error: unknown, { baseId, targetId }: CompareConfig): string => {
   if (error instanceof SnapshotNotFound) return `Snapshot introuvable : ${error.message}`;
   if (error instanceof SnapshotsFromDifferentProjects) {
@@ -325,8 +358,8 @@ export const runCli = async (
   }
   if (command.kind === 'migrate') return migrate(command, io);
   if (command.kind === 'worker') return work(command, io, hooks);
+  if (command.kind === 'worker-health') return workerHealth(command, io, hooks);
   if (command.kind === 'serve') return serve(command, io, hooks);
   if (command.kind === 'compare') return compare(command, io, hooks);
-  if (command.kind === 'audit') return audit(command.config, io, hooks);
-  return Promise.resolve(EXIT_USAGE);
+  return audit(command.config, io, hooks);
 };
