@@ -119,3 +119,24 @@ export class MailerUnavailable extends DomainError {
     this.name = 'MailerUnavailable';
   }
 }
+
+export class Unauthenticated extends DomainError {
+  constructor() {
+    super('Authentication is required or the credentials are wrong');
+    this.name = 'Unauthenticated';
+  }
+}
+
+export class EmailNotVerified extends DomainError {
+  constructor() {
+    super('The e-mail address of this account is not verified');
+    this.name = 'EmailNotVerified';
+  }
+}
+
+export class InvalidOrExpiredToken extends DomainError {
+  constructor() {
+    super('The token is unknown, already used or expired');
+    this.name = 'InvalidOrExpiredToken';
+  }
+}
