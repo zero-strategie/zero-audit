@@ -15,7 +15,10 @@ export interface SnapshotDetails {
   readonly slashProbes: readonly SlashVariantProbe[];
 }
 
-/** Deliberately has no delete method: audit history is append-only. */
+/**
+ * Deliberately has no delete method: audit history is append-only. The one exception is internal
+ * to `AuditQueue`: an interrupted attempt erases the rows it wrote before the audit starts over.
+ */
 export interface SnapshotRepository {
   /** `launchedBy` is the account behind an API launch; null for the CLI. */
   create(input: {

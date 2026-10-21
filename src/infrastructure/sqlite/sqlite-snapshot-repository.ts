@@ -1,5 +1,6 @@
 import type { Database as SqliteDatabase } from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
+import type { Admission, AuditQueue } from '../../application/ports/audit-queue.js';
 import type {
   SnapshotDetails,
   SnapshotRepository,
@@ -14,7 +15,7 @@ import type {
   SiteFileKind,
   SlashVariantProbe,
 } from '../../domain/crawl.js';
-import { SnapshotNotFound } from '../../domain/errors.js';
+import { AuditAttemptLost, SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { hashToken } from '../hash-token.js';
@@ -164,12 +165,13 @@ const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
   sourcePageUrl: row.source_page_url,
 });
 
-export class SqliteSnapshotRepository implements SnapshotRepository {
+export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue {
   readonly projects: SqliteProjectRepository;
   readonly users: SqliteUserRepository;
   readonly sessions: SqliteSessionRepository;
   readonly emailTokens: SqliteEmailTokenRepository;
   readonly eraser: SqliteAccountEraser;
+  private enqueuing: Promise<unknown> = Promise.resolve();
 
   private constructor(private readonly db: SqliteDatabase) {
     this.projects = new SqliteProjectRepository(db);
@@ -222,6 +224,125 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
       })();
       return snapshot;
     });
+  }
+
+  /**
+   * The write lock is taken up front (`BEGIN IMMEDIATE`) and held while the admission reads, so two
+   * processes cannot both be admitted. In this process, requests wait for one another: the
+   * admission awaits, and a second transaction on the same connection would fail.
+   */
+  enqueue(
+    input: { projectId: string; launchedBy: string | null; pagesLimit: number; requestedAt: Date },
+    admit: Admission,
+  ): Promise<Snapshot> {
+    const admitted = this.enqueuing.then(async () => {
+      this.db.exec('BEGIN IMMEDIATE');
+      try {
+        await admit(this);
+        const { requestedAt, launchedBy, ...props } = input;
+        const snapshot = Snapshot.enqueue({ id: randomUUID(), startedAt: requestedAt, ...props });
+        this.insertQueued(snapshot, launchedBy);
+        this.db.exec('COMMIT');
+        return snapshot;
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        throw error;
+      }
+    });
+    this.enqueuing = admitted.catch(() => undefined);
+    return admitted;
+  }
+
+  private insertQueued(snapshot: Snapshot, launchedBy: string | null): void {
+    this.db
+      .prepare(
+        `INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit, attempts, queued_at)
+         VALUES (?, ?, ?, ?, ?, 0, ?, 0, ?)`,
+      )
+      .run(
+        snapshot.id,
+        snapshot.projectId,
+        launchedBy,
+        snapshot.status,
+        snapshot.startedAt.toISOString(),
+        snapshot.pagesLimit,
+        snapshot.startedAt.toISOString(),
+      );
+    if (launchedBy !== null) this.journalLaunch(launchedBy, snapshot);
+  }
+
+  claimNext(_workerId: string, now: Date): Promise<Snapshot | null> {
+    return this.run(() => {
+      const row = this.db
+        .transaction(
+          () =>
+            this.db
+              .prepare(
+                `UPDATE snapshots
+                 SET status = 'running', attempts = attempts + 1, heartbeat_at = ?
+                 WHERE id = (
+                   SELECT id FROM snapshots WHERE status = 'queued' ORDER BY queued_at, id LIMIT 1
+                 )
+                 RETURNING *`,
+              )
+              .get(now.toISOString()) as SnapshotRow | undefined,
+        )
+        .immediate();
+      return row ? toSnapshot(row) : null;
+    });
+  }
+
+  finishAttempt(
+    id: string,
+    attempt: number,
+    input: { finishedAt: Date; pagesCrawled: number },
+  ): Promise<void> {
+    return this.run(() => {
+      const { changes } = this.db
+        .prepare(
+          `UPDATE snapshots SET status = 'finished', finished_at = ?, pages_crawled = ?
+           WHERE id = ? AND status = 'running' AND attempts = ?`,
+        )
+        .run(input.finishedAt.toISOString(), input.pagesCrawled, id, attempt);
+      if (changes === 0) throw new AuditAttemptLost(id, attempt);
+    });
+  }
+
+  queuePosition(id: string): Promise<number | null> {
+    return this.run(() => {
+      const row = this.db
+        .prepare(
+          `SELECT COUNT(*) AS ahead FROM snapshots AS other, snapshots AS me
+           WHERE me.id = ? AND me.status = 'queued' AND other.status = 'queued'
+             AND (other.queued_at < me.queued_at OR (other.queued_at = me.queued_at AND other.id <= me.id))`,
+        )
+        .get(id) as { ahead: number };
+      return row.ahead === 0 ? null : row.ahead;
+    });
+  }
+
+  countQueued(): Promise<number> {
+    return this.run(
+      () =>
+        (
+          this.db.prepare("SELECT COUNT(*) AS n FROM snapshots WHERE status = 'queued'").get() as {
+            n: number;
+          }
+        ).n,
+    );
+  }
+
+  countActiveFor(userId: string): Promise<number> {
+    return this.run(
+      () =>
+        (
+          this.db
+            .prepare(
+              "SELECT COUNT(*) AS n FROM snapshots WHERE launched_by = ? AND status IN ('queued', 'running')",
+            )
+            .get(userId) as { n: number }
+        ).n,
+    );
   }
 
   private emailHashOf(userId: string): string | null {

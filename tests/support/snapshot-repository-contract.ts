@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRepository } from '../../src/application/ports/project-repository.js';
 import type { UserRepository } from '../../src/application/ports/user-repository.js';
+import type { AuditQueue } from '../../src/application/ports/audit-queue.js';
 import type { SnapshotRepository } from '../../src/application/ports/snapshot-repository.js';
 import type { CheckResult } from '../../src/domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../../src/domain/crawl.js';
@@ -62,7 +63,7 @@ const slashProbe = (overrides: Partial<SlashVariantProbe> = {}): SlashVariantPro
 });
 
 export interface RepositoryPair {
-  readonly snapshots: SnapshotRepository;
+  readonly snapshots: SnapshotRepository & AuditQueue;
   readonly projects: ProjectRepository;
   readonly users: UserRepository;
 }
@@ -524,6 +525,128 @@ export const describeSnapshotRepositoryContract = (
       const only = await start(project.id, 1);
       expect(await snapshots.findPreviousFinished(project.id, at(1))).toBeNull();
       expect(only).toBeDefined();
+    });
+  });
+  describe('AuditQueue contract', () => {
+    const at = (seconds: number): Date => new Date(startedAt.getTime() + seconds * 1000);
+    const admitAll = (): Promise<void> => Promise.resolve();
+
+    const setup = async () => {
+      const pair = await factory();
+      const project = await pair.projects.findOrCreateByRootUrl({
+        rootUrl: 'https://example.test/',
+        ownerId: null,
+        createdAt: startedAt,
+      });
+      const account = await pair.users.create({
+        email: 'queue@example.test',
+        passwordHash: 'h',
+        createdAt: startedAt,
+      });
+      const enqueue = async (seconds: number, launchedBy: string | null = null): Promise<string> =>
+        (
+          await pair.snapshots.enqueue(
+            { projectId: project.id, launchedBy, pagesLimit: 50, requestedAt: at(seconds) },
+            admitAll,
+          )
+        ).id;
+      return { queue: pair.snapshots, project, account, enqueue };
+    };
+
+    it('records a queued snapshot dated at the request, and journals an API launch', async () => {
+      const { queue, account, enqueue } = await setup();
+
+      const id = await enqueue(1, account.id);
+
+      const details = await queue.getById(id);
+      expect(details?.snapshot).toMatchObject({
+        status: 'queued',
+        startedAt: at(1),
+        queuedAt: at(1),
+        attempts: 0,
+        pagesLimit: 50,
+      });
+      expect(await queue.listLaunchedAtBy(account.id, at(0))).toEqual([at(1)]);
+    });
+
+    it('does not journal a CLI launch', async () => {
+      const { queue, enqueue } = await setup();
+      await enqueue(1);
+      expect(await queue.countApiLaunchedSince(at(0))).toBe(0);
+    });
+
+    it('writes nothing and propagates the error when the admission refuses', async () => {
+      const { queue, project, account } = await setup();
+      const refusal = new Error('refused');
+
+      await expect(
+        queue.enqueue(
+          { projectId: project.id, launchedBy: account.id, pagesLimit: 50, requestedAt: at(1) },
+          () => Promise.reject(refusal),
+        ),
+      ).rejects.toBe(refusal);
+
+      expect(await queue.listByProject(project.id)).toEqual([]);
+      expect(await queue.countApiLaunchedSince(at(0))).toBe(0);
+    });
+
+    it('lets the admission see the audits already queued', async () => {
+      const { queue, project, account, enqueue } = await setup();
+      await enqueue(1, account.id);
+      let seen = -1;
+
+      await queue.enqueue(
+        { projectId: project.id, launchedBy: account.id, pagesLimit: 50, requestedAt: at(2) },
+        async (view) => {
+          seen = (await view.countActiveFor(account.id)) + 10 * (await view.countQueued());
+        },
+      );
+
+      expect(seen).toBe(11);
+    });
+
+    it('claims the oldest queued audit, which runs at attempt 1, and ranks the others', async () => {
+      const { queue, enqueue } = await setup();
+      const first = await enqueue(1);
+      const second = await enqueue(2);
+      const third = await enqueue(3);
+
+      const claimed = await queue.claimNext('worker-a', at(10));
+
+      expect(claimed).toMatchObject({ id: first, status: 'running', attempts: 1, queuedAt: at(1) });
+      expect(claimed?.heartbeatAt).toEqual(at(10));
+      expect(await queue.queuePosition(second)).toBe(1);
+      expect(await queue.queuePosition(third)).toBe(2);
+      expect(await queue.queuePosition(first)).toBeNull();
+    });
+
+    it('claims nothing from an empty queue', async () => {
+      const { queue } = await setup();
+      expect(await queue.claimNext('worker-a', at(1))).toBeNull();
+    });
+
+    it('has no position for a finished or unknown snapshot', async () => {
+      const { queue, enqueue } = await setup();
+      const id = await enqueue(1);
+      await queue.claimNext('worker-a', at(2));
+      await queue.finishAttempt(id, 1, { finishedAt: at(3), pagesCrawled: 1 });
+
+      expect(await queue.queuePosition(id)).toBeNull();
+      expect(await queue.queuePosition('missing')).toBeNull();
+    });
+
+    it('counts the queued audits, and the queued or running ones of an account', async () => {
+      const { queue, account, enqueue } = await setup();
+      const finished = await enqueue(1, account.id);
+      await queue.claimNext('worker-a', at(2));
+      await queue.finishAttempt(finished, 1, { finishedAt: at(3), pagesCrawled: 1 });
+      await enqueue(4, account.id);
+      await queue.claimNext('worker-a', at(5));
+      await enqueue(6, account.id);
+      await enqueue(7);
+
+      expect(await queue.countQueued()).toBe(2);
+      expect(await queue.countActiveFor(account.id)).toBe(2);
     });
   });
 };

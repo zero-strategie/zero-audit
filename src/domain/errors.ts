@@ -33,6 +33,13 @@ export class SnapshotNotFound extends DomainError {
   }
 }
 
+export class AuditAttemptLost extends DomainError {
+  constructor(snapshotId: string, attempt: number) {
+    super(`Snapshot ${snapshotId} is no longer running at attempt ${String(attempt)}`);
+    this.name = 'AuditAttemptLost';
+  }
+}
+
 export class SnapshotsFromDifferentProjects extends DomainError {
   constructor(baseId: string, targetId: string) {
     super(`Snapshots ${baseId} and ${targetId} do not belong to the same project`);

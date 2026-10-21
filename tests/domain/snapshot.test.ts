@@ -78,14 +78,15 @@ describe('Snapshot audit queue lifecycle', () => {
   });
 
   it('runs when claimed and counts the attempt', () => {
-    const claimed = enqueue().claim();
+    const claimed = enqueue().claim(startedAt);
 
     expect(claimed.status).toBe('running');
     expect(claimed.attempts).toBe(1);
+    expect(claimed.heartbeatAt).toEqual(startedAt);
   });
 
   it('goes back to the queue after a first interruption, keeping its original queue date', () => {
-    const requeued = enqueue().claim().interrupt(finishedAt);
+    const requeued = enqueue().claim(startedAt).interrupt(finishedAt);
 
     expect(requeued.status).toBe('queued');
     expect(requeued.queuedAt).toEqual(queuedAt);
@@ -93,7 +94,7 @@ describe('Snapshot audit queue lifecycle', () => {
   });
 
   it('fails after the last allowed attempt is interrupted', () => {
-    const last = enqueue().claim().interrupt(finishedAt).claim();
+    const last = enqueue().claim(startedAt).interrupt(finishedAt).claim(startedAt);
 
     const failed = last.interrupt(finishedAt);
 
@@ -112,7 +113,7 @@ describe('Snapshot audit queue lifecycle', () => {
       Snapshot.start({ id: 's', projectId: 'p', startedAt, pagesLimit: 1 }).fail(finishedAt),
     ],
   ])('refuses to claim or requeue a %s snapshot', (_status, snapshot) => {
-    expect(() => snapshot.claim()).toThrow(DomainError);
+    expect(() => snapshot.claim(startedAt)).toThrow(DomainError);
     expect(() => snapshot.requeue()).toThrow(DomainError);
   });
 

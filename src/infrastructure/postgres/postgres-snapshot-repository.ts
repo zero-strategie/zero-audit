@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type pg from 'pg';
+import type { Admission, AdmissionView, AuditQueue } from '../../application/ports/audit-queue.js';
 import type {
   SnapshotDetails,
   SnapshotRepository,
@@ -14,7 +15,7 @@ import type {
   SiteFileKind,
   SlashVariantProbe,
 } from '../../domain/crawl.js';
-import { SnapshotNotFound } from '../../domain/errors.js';
+import { AuditAttemptLost, SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { hashToken } from '../hash-token.js';
@@ -26,6 +27,9 @@ import { PostgresSessionRepository } from './postgres-session-repository.js';
 import { PostgresUserRepository } from './postgres-user-repository.js';
 
 type Queryable = pg.Pool | pg.PoolClient;
+
+/** Arbitrary constant (distinct from the migration lock): serializes the admission of new audits. */
+const ENQUEUE_LOCK_KEY = 7_204_002;
 
 type SnapshotRow = {
   id: string;
@@ -163,7 +167,7 @@ const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
   sourcePageUrl: row.source_page_url,
 });
 
-export class PostgresSnapshotRepository implements SnapshotRepository {
+export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueue {
   readonly projects: PostgresProjectRepository;
   readonly users: PostgresUserRepository;
   readonly sessions: PostgresSessionRepository;
@@ -203,15 +207,116 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
           snapshot.pagesLimit,
         ],
       );
-      if (launchedBy === null) return;
-      const emailHash = await this.emailHashOf(client, launchedBy);
-      if (emailHash === null) return;
-      await client.query(
-        'INSERT INTO api_launches (id, email_hash, launched_at) VALUES ($1, $2, $3)',
-        [snapshot.id, emailHash, snapshot.startedAt],
-      );
+      if (launchedBy !== null) await this.journalLaunch(client, launchedBy, snapshot);
     });
     return snapshot;
+  }
+
+  /** The advisory lock makes the admission and the insert atomic across every process. */
+  enqueue(
+    input: { projectId: string; launchedBy: string | null; pagesLimit: number; requestedAt: Date },
+    admit: Admission,
+  ): Promise<Snapshot> {
+    return withTransaction(this.pool, async (client) => {
+      await client.query('SELECT pg_advisory_xact_lock($1)', [ENQUEUE_LOCK_KEY]);
+      await admit(this.admissionView(client));
+      const { requestedAt, launchedBy, ...props } = input;
+      const snapshot = Snapshot.enqueue({ id: randomUUID(), startedAt: requestedAt, ...props });
+      await client.query(
+        `INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit, attempts, queued_at)
+         VALUES ($1, $2, $3, $4, $5, 0, $6, 0, $5)`,
+        [
+          snapshot.id,
+          snapshot.projectId,
+          launchedBy,
+          snapshot.status,
+          snapshot.startedAt,
+          snapshot.pagesLimit,
+        ],
+      );
+      if (launchedBy !== null) await this.journalLaunch(client, launchedBy, snapshot);
+      return snapshot;
+    });
+  }
+
+  private admissionView(db: Queryable): AdmissionView {
+    return {
+      listLaunchedAtBy: (userId, since) => this.launchedAtBy(db, userId, since),
+      countApiLaunchedSince: (since) => this.apiLaunchedSince(db, since),
+      countActiveFor: (userId) => this.activeFor(db, userId),
+      countQueued: () => this.queuedCount(db),
+    };
+  }
+
+  async claimNext(_workerId: string, now: Date): Promise<Snapshot | null> {
+    const { rows } = await this.pool.query<SnapshotRow>(
+      `UPDATE snapshots
+       SET status = 'running', attempts = attempts + 1, heartbeat_at = $1
+       WHERE id = (
+         SELECT id FROM snapshots WHERE status = 'queued'
+         ORDER BY queued_at, id FOR UPDATE SKIP LOCKED LIMIT 1
+       ) AND status = 'queued'
+       RETURNING *`,
+      [now],
+    );
+    return rows[0] ? toSnapshot(rows[0]) : null;
+  }
+
+  async finishAttempt(
+    id: string,
+    attempt: number,
+    input: { finishedAt: Date; pagesCrawled: number },
+  ): Promise<void> {
+    const { rowCount } = await this.pool.query(
+      `UPDATE snapshots SET status = 'finished', finished_at = $1, pages_crawled = $2
+       WHERE id = $3 AND status = 'running' AND attempts = $4`,
+      [input.finishedAt, input.pagesCrawled, id, attempt],
+    );
+    if (rowCount === 0) throw new AuditAttemptLost(id, attempt);
+  }
+
+  async queuePosition(id: string): Promise<number | null> {
+    const { rows } = await this.pool.query<{ position: string | null }>(
+      `SELECT COUNT(*) AS position FROM snapshots AS other, snapshots AS me
+       WHERE me.id = $1 AND me.status = 'queued' AND other.status = 'queued'
+         AND (other.queued_at, other.id) <= (me.queued_at, me.id)`,
+      [id],
+    );
+    const position = Number(rows[0]?.position);
+    return position === 0 ? null : position;
+  }
+
+  countQueued(): Promise<number> {
+    return this.queuedCount(this.pool);
+  }
+
+  countActiveFor(userId: string): Promise<number> {
+    return this.activeFor(this.pool, userId);
+  }
+
+  private async queuedCount(db: Queryable): Promise<number> {
+    const { rows } = await db.query<{ n: string }>(
+      "SELECT COUNT(*) AS n FROM snapshots WHERE status = 'queued'",
+    );
+    return Number(rows[0]?.n);
+  }
+
+  private async activeFor(db: Queryable, userId: string): Promise<number> {
+    const { rows } = await db.query<{ n: string }>(
+      "SELECT COUNT(*) AS n FROM snapshots WHERE launched_by = $1 AND status IN ('queued', 'running')",
+      [userId],
+    );
+    return Number(rows[0]?.n);
+  }
+
+  private async journalLaunch(db: Queryable, userId: string, snapshot: Snapshot): Promise<void> {
+    const emailHash = await this.emailHashOf(db, userId);
+    if (emailHash === null) return;
+    await db.query('INSERT INTO api_launches (id, email_hash, launched_at) VALUES ($1, $2, $3)', [
+      snapshot.id,
+      emailHash,
+      snapshot.startedAt,
+    ]);
   }
 
   private async emailHashOf(db: pg.Pool | pg.PoolClient, userId: string): Promise<string | null> {
@@ -222,18 +327,26 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
     return email === undefined ? null : hashToken(email);
   }
 
-  async listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
-    const emailHash = await this.emailHashOf(this.pool, userId);
+  listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
+    return this.launchedAtBy(this.pool, userId, since);
+  }
+
+  countApiLaunchedSince(since: Date): Promise<number> {
+    return this.apiLaunchedSince(this.pool, since);
+  }
+
+  private async launchedAtBy(db: Queryable, userId: string, since: Date): Promise<readonly Date[]> {
+    const emailHash = await this.emailHashOf(db, userId);
     if (emailHash === null) return [];
-    const { rows } = await this.pool.query<{ launched_at: Date }>(
+    const { rows } = await db.query<{ launched_at: Date }>(
       'SELECT launched_at FROM api_launches WHERE email_hash = $1 AND launched_at >= $2 ORDER BY launched_at',
       [emailHash, since],
     );
     return rows.map((row) => row.launched_at);
   }
 
-  async countApiLaunchedSince(since: Date): Promise<number> {
-    const { rows } = await this.pool.query<{ n: string }>(
+  private async apiLaunchedSince(db: Queryable, since: Date): Promise<number> {
+    const { rows } = await db.query<{ n: string }>(
       'SELECT COUNT(*) AS n FROM api_launches WHERE launched_at >= $1',
       [since],
     );

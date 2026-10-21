@@ -96,10 +96,15 @@ export class Snapshot implements SnapshotProps {
     return new Snapshot(props);
   }
 
-  claim(): Snapshot {
+  claim(now: Date): Snapshot {
     if (this.status !== 'queued')
       throw new InvalidSnapshotTransition(this.id, this.status, 'claim');
-    return new Snapshot({ ...this.props(), status: 'running', attempts: this.attempts + 1 });
+    return new Snapshot({
+      ...this.props(),
+      status: 'running',
+      attempts: this.attempts + 1,
+      heartbeatAt: now,
+    });
   }
 
   requeue(): Snapshot {
