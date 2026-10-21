@@ -3,6 +3,7 @@ import { DeleteAccount } from '../../../src/application/auth/delete-account.js';
 import { ResolveSession } from '../../../src/application/auth/resolve-session.js';
 import { LOGIN_FAILURES_PER_ACCOUNT } from '../../../src/domain/abuse-limits.js';
 import { AuditInProgress, TooManyAttempts, Unauthenticated } from '../../../src/domain/errors.js';
+import { HEARTBEAT_STALE_MS } from '../../../src/domain/snapshot.js';
 import { LEGACY_ORPHAN_AGE_MS } from '../../../src/application/legacy-orphan-age.js';
 import { InMemoryAccountEraser } from '../../../src/infrastructure/in-memory-account-eraser.js';
 import { InMemoryProjectRepository } from '../../../src/infrastructure/in-memory-project-repository.js';
@@ -99,15 +100,61 @@ describe('DeleteAccount', () => {
     expect(await kit.users.findById(user.id)).toBeNull();
   });
 
-  it('ignores a running snapshot left by a killed process', async () => {
-    const { kit, user, deleteAccount } = await setup();
-    kit.clock.advance(LEGACY_ORPHAN_AGE_MS + 1);
-    await kit.sessions.create({
+  const addSession = (kit: Awaited<ReturnType<typeof setup>>['kit'], userId: string) =>
+    kit.sessions.create({
       id: 'session-2',
-      userId: user.id,
+      userId,
       createdAt: NOW,
       expiresAt: new Date(NOW.getTime() + 1e10),
     });
+
+  describe('with the queue', () => {
+    const queuedSetup = async () => {
+      const context = await setup();
+      const { snapshots, project, user } = context;
+      await snapshots.fail(context.snapshot.id, NOW);
+      const queued = await snapshots.enqueue(
+        { projectId: project.id, launchedBy: user.id, pagesLimit: 10, requestedAt: NOW },
+        () => Promise.resolve(),
+      );
+      return { ...context, queued };
+    };
+
+    it('refuses while an audit of the account is queued', async () => {
+      const { kit, user, deleteAccount } = await queuedSetup();
+
+      await expect(
+        deleteAccount.execute({ sessionId: 'session-1', password: PASSWORD }),
+      ).rejects.toThrow(AuditInProgress);
+      expect(await kit.users.findById(user.id)).not.toBeNull();
+    });
+
+    it('refuses while the audit runs with a heartbeat of less than 2 minutes', async () => {
+      const { kit, user, snapshots, deleteAccount } = await queuedSetup();
+      await snapshots.claimNext('worker', NOW);
+      kit.clock.advance(HEARTBEAT_STALE_MS - 1);
+
+      await expect(
+        deleteAccount.execute({ sessionId: 'session-1', password: PASSWORD }),
+      ).rejects.toThrow(AuditInProgress);
+      expect(await kit.users.findById(user.id)).not.toBeNull();
+    });
+
+    it('erases the account once the heartbeat of its running audit is stale', async () => {
+      const { kit, user, snapshots, deleteAccount } = await queuedSetup();
+      await snapshots.claimNext('worker', NOW);
+      kit.clock.advance(HEARTBEAT_STALE_MS + 1);
+
+      await deleteAccount.execute({ sessionId: 'session-1', password: PASSWORD });
+
+      expect(await kit.users.findById(user.id)).toBeNull();
+    });
+  });
+
+  it('ignores a running snapshot without heartbeat left by a killed process', async () => {
+    const { kit, user, deleteAccount } = await setup();
+    kit.clock.advance(LEGACY_ORPHAN_AGE_MS + 1);
+    await addSession(kit, user.id);
 
     await deleteAccount.execute({ sessionId: 'session-2', password: PASSWORD });
 
