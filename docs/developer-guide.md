@@ -241,7 +241,12 @@ The server (`serve`) crawls any public site on request, so its HTTP client must 
 `web/` is an Astro app, rendered on the server by `@astrojs/node` in standalone mode.
 
 - Pages fetch the API from the server through the client in `web/src/lib/api/`; the browser never calls the API.
-- Styling is hand-written CSS in `web/src/styles/`: design tokens in `tokens.css`, light and dark themes, no CSS framework.
+- Styling is hand-written CSS in `web/src/styles/`, no CSS framework and **no client-side JavaScript** (tested):
+  - `tokens.css`: the "Sismographe" palette (light and dark, contrast-tested), type, space and motion tokens;
+  - `fonts.css`: self-hosted Bricolage Grotesque and Martian Mono (subset woff2, SIL OFL, see `web/public/fonts`) with metric-matched fallbacks, so the font swap does not shift layout;
+  - `motion.css`: keyframes and the motion grammar. Durations `--dur-micro` 120 ms to `--dur-long` 900 ms, `--ease-out` for entrances, `--ease-needle` (a `linear()` spring) for the gauge, 40 ms stagger capped at 8 items. Page changes morph with cross-document view transitions (`@view-transition`), lists enter with `.enter` and `--i`, tables reveal rows with `animation-timeline: view()` where supported;
+  - only `transform` and `opacity` are animated, plus two reviewed exceptions that repaint one small element and never move the layout: the gauge arc (`stroke-dashoffset`) and the score counter (`@property --n`). `web/tests/motion.test.ts` enforces it;
+  - `prefers-reduced-motion`: nothing travels, short fades remain, values appear at their final state.
 - Components are in `web/src/components/`.
 
 Dashboard tests render pages and components with Astro's **Container API** and a stubbed API client. They need no browser. See `web/tests/`.

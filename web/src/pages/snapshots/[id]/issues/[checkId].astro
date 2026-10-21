@@ -49,10 +49,10 @@ const links = occurrences && buildPaginationLinks(occurrences.page, occurrences.
       <p><a href={`/snapshots/${snapshotId}/issues`}>Retour aux problèmes</a></p>
       <p>{occurrences.total} occurrence(s), page {occurrences.page}.</p>
 
-      <ul>
-        {occurrences.items.map(({ pageUrl, info }) => (
-          <li data-testid="occurrence">
-            <span>{pageUrl ?? 'Ensemble du site'}</span>
+      <ul class="issue-list occurrence-list">
+        {occurrences.items.map(({ pageUrl, info }, index) => (
+          <li data-testid="occurrence" class="enter" style={`--i: ${String(index)}`}>
+            <span class="cell-url">{pageUrl ?? 'Ensemble du site'}</span>
             {formatOccurrenceInfo(info) !== '' && <small> – {formatOccurrenceInfo(info)}</small>}
           </li>
         ))}

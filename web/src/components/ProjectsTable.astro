@@ -16,25 +16,38 @@ const { projects, canRelaunch } = Astro.props;
   <table>
     <thead>
       <tr>
-        <th>Site</th><th>Santé</th><th>Dernier audit</th><th>Statut</th>
-        {canRelaunch && <th>Action</th>}
+        <th scope="col">Site</th><th scope="col">Santé</th><th scope="col">Dernier audit</th><th scope="col">Statut</th>
+        {canRelaunch && <th scope="col">Action</th>}
       </tr>
     </thead>
-    <tbody>
+    <tbody class="reveal-on-scroll">
       {projects.map(({ id, rootUrl, latestSnapshot, latestRun }) => (
         <tr data-testid={`project-${id}`}>
-          <td>{rootUrl}</td>
+          <td class="cell-site">{rootUrl}</td>
           {latestSnapshot ? (
             <>
-              <td>{latestSnapshot.health ?? 'Non calculable'}</td>
+              <td class="cell-health">
+                {latestSnapshot.health === null ? (
+                  'Non calculable'
+                ) : (
+                  <>
+                    <span class="mini-meter" aria-hidden="true">
+                      <i style={`--v: ${String(latestSnapshot.health / 100)}`} />
+                    </span>
+                    {latestSnapshot.health}
+                  </>
+                )}
+              </td>
               <td><a href={`/snapshots/${latestSnapshot.id}`}>{formatDateFr(latestSnapshot.finishedAt)}</a></td>
             </>
           ) : (
             <td colspan="2">Aucun audit terminé</td>
           )}
           <td>
-            {latestRun?.status === 'running' && <a href={`/audits/${latestRun.id}`}>en cours…</a>}
-            {latestRun?.status === 'failed' && 'échoué'}
+            {latestRun?.status === 'running' && (
+              <a class="chip chip-running" href={`/audits/${latestRun.id}`}>en cours…</a>
+            )}
+            {latestRun?.status === 'failed' && <span class="chip chip-failed">échoué</span>}
           </td>
           {canRelaunch && (
             <td><RelaunchForm url={rootUrl} limit={DEFAULT_LIMIT} ariaLabel={`Relancer l'audit de ${new URL(rootUrl).host}`} /></td>

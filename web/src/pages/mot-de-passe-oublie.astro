@@ -38,7 +38,7 @@ if (Astro.request.method === 'POST') {
       <h1>Mot de passe oublié</h1>
       <FormAlert message={message} />
       <FormAlert message={notice} kind="info" />
-      <form method="post" action="/mot-de-passe-oublie">
+      <form method="post" action="/mot-de-passe-oublie" class="form-stack panel">
         <label>
           Adresse e-mail
           <input type="email" name="email" value={email} autocomplete="email" required />

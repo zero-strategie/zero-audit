@@ -68,6 +68,30 @@ it.each([
   ).toBeGreaterThanOrEqual(MIN_GRAPHIC_RATIO);
 });
 
+it.each([
+  ['light', light],
+  ['dark', dark],
+])(
+  '%s mode: form field borders are visible against the page and the field (WCAG 1.4.11)',
+  (_, palette) => {
+    expect(ratioIn(palette, ['--color-input-border', '--color-bg'])).toBeGreaterThanOrEqual(
+      MIN_GRAPHIC_RATIO,
+    );
+    expect(ratioIn(palette, ['--color-input-border', '--color-input-bg'])).toBeGreaterThanOrEqual(
+      MIN_GRAPHIC_RATIO,
+    );
+  },
+);
+
+it.each([
+  ['light', light],
+  ['dark', dark],
+])('%s mode: the gauge arc stands out from the grid it is drawn over', (_, palette) => {
+  expect(ratioIn(palette, ['--color-gauge-arc', '--color-grid-major'])).toBeGreaterThanOrEqual(
+    MIN_GRAPHIC_RATIO,
+  );
+});
+
 it('redefines every light color token in dark mode', () => {
   expect(light.size).toBeGreaterThan(0);
   expect([...dark.keys()].sort()).toEqual([...light.keys()].sort());

@@ -30,6 +30,7 @@ it('lists each project with root URL, health, French date and a link to its late
 
   expect(html).toContain('https://alpha.test/');
   expect(html).toContain('82');
+  expect(html).toMatch(/class="mini-meter"[^>]*aria-hidden="true"[^>]*>\s*<i style="--v: 0.82"/);
   expect(html).toContain('05/03/2026');
   expect(html).toMatch(/href="\/snapshots\/s1"/);
   expect(html).toContain('https://beta.test/');

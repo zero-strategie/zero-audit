@@ -51,7 +51,7 @@ if (Astro.request.method === 'POST') {
       <h1>Créer un compte</h1>
       <FormAlert message={message} />
       <FormAlert message={notice} kind="info" />
-      <form method="post" action="/inscription">
+      <form method="post" action="/inscription" class="form-stack panel">
         <label>
           Adresse e-mail
           <input type="email" name="email" value={email} autocomplete="email" required />

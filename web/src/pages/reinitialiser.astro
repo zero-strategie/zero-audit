@@ -42,7 +42,7 @@ if (Astro.request.method === 'POST') {
     <Layout title="Nouveau mot de passe – zero-audit">
       <h1>Choisir un nouveau mot de passe</h1>
       <FormAlert message={message} />
-      <form method="post" action="/reinitialiser">
+      <form method="post" action="/reinitialiser" class="form-stack panel">
         <input type="hidden" name="token" value={token} />
         <label>
           Nouveau mot de passe (12 caractères minimum)

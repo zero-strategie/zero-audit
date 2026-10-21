@@ -36,6 +36,9 @@ try {
 }
 const healthA = snapshots.find(({ id }) => id === pair?.a)?.health ?? null;
 const rows = comparison ? changedChecks(comparison.checks) : [];
+/* More occurrences is worse, fewer is better: the table says it with a class, an arrow and a sign. */
+const deltaClass = (delta: number | null) =>
+  delta === null || delta === 0 ? 'delta-flat' : delta > 0 ? 'delta-worse' : 'delta-better';
 ---
 
 {
@@ -43,6 +46,7 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
     <ErrorView failure={failure} />
   ) : (
     <Layout title="Comparaison – zero-audit" projectId={projectId} snapshotId={pair?.b}>
+      <span class="eyebrow">Comparaison de deux relevés</span>
       <h1>Comparaison</h1>
 
       <form method="get">
@@ -71,18 +75,27 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
 
       {comparison && (
         <>
-          <section>
-            <h2>Santé du site</h2>
-            <p>
-              Audit A : <strong data-testid="health-score-a">{formatScoreWithVariation(healthA, null)}</strong>
-            </p>
-            <HealthGauge score={comparison.health.score} variation={comparison.health.variation} />
-            <ul class="theme-cards">
-              {Object.entries(comparison.themes).map(([theme, { score, variation }]) => (
-                <ThemeCard theme={theme as Theme} score={score} variation={variation} />
-              ))}
-            </ul>
-          </section>
+          <div class="report-grid">
+            <section class="report-dial panel">
+              <h2>Santé du site</h2>
+              <p class="compare-ab">
+                <span>
+                  Audit A <strong data-testid="health-score-a">{formatScoreWithVariation(healthA, null)}</strong>
+                </span>
+                <span aria-hidden="true">→</span>
+                <span>Audit B</span>
+              </p>
+              <HealthGauge score={comparison.health.score} variation={comparison.health.variation} />
+            </section>
+            <section class="report-readings">
+              <h2>Thèmes</h2>
+              <ul class="theme-cards">
+                {Object.entries(comparison.themes).map(([theme, { score, variation }], index) => (
+                  <ThemeCard theme={theme as Theme} score={score} variation={variation} index={index} />
+                ))}
+              </ul>
+            </section>
+          </div>
 
           <section>
             <h2>Problèmes</h2>
@@ -101,13 +114,15 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
                     <th>Corrigées</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="reveal-on-scroll">
                   {rows.map((row) => (
                     <tr data-testid={`check-${String(row.checkId)}`}>
                       <td>{row.label}</td>
                       <td data-testid="count-a">{row.countA}</td>
                       <td data-testid="count-b">{row.countB}</td>
-                      <td data-testid="delta">{formatVariation(row.delta)}</td>
+                      <td class:list={['delta', deltaClass(row.delta)]} data-testid="delta">
+                        {formatVariation(row.delta)}
+                      </td>
                       <td data-testid="new">{row.newCount}</td>
                       <td data-testid="fixed">{row.fixedCount}</td>
                     </tr>

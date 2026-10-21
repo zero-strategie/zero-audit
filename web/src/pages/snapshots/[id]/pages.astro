@@ -59,7 +59,7 @@ const pageHref = (page: number) => `?page=${String(page)}&sort=${sort}`;
             ))}
           </tr>
         </thead>
-        <tbody>
+        <tbody class="reveal-on-scroll">
           {listing.items.map((row) => (
             <tr data-testid={`row-${row.url}`}>
               <td>{row.url}</td>
