@@ -142,3 +142,17 @@ export class InvalidOrExpiredToken extends DomainError {
     this.name = 'InvalidOrExpiredToken';
   }
 }
+
+export class AuditInProgress extends DomainError {
+  constructor() {
+    super('An audit launched by this account is still running');
+    this.name = 'AuditInProgress';
+  }
+}
+
+export class TooManyAttempts extends DomainError {
+  constructor() {
+    super('Too many attempts, try again later');
+    this.name = 'TooManyAttempts';
+  }
+}
