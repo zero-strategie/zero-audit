@@ -64,12 +64,12 @@ describe('DeleteAccount', () => {
   it('refuses a missing or unknown session', async () => {
     const { deleteAccount } = await setup();
 
-    await expect(deleteAccount.execute({ sessionId: undefined, password: PASSWORD })).rejects.toThrow(
-      Unauthenticated,
-    );
-    await expect(deleteAccount.execute({ sessionId: 'unknown', password: PASSWORD })).rejects.toThrow(
-      Unauthenticated,
-    );
+    await expect(
+      deleteAccount.execute({ sessionId: undefined, password: PASSWORD }),
+    ).rejects.toThrow(Unauthenticated);
+    await expect(
+      deleteAccount.execute({ sessionId: 'unknown', password: PASSWORD }),
+    ).rejects.toThrow(Unauthenticated);
   });
 
   it('erases the account with its sessions, projects and snapshots once the password is right', async () => {

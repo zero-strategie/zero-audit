@@ -64,9 +64,9 @@ describe('ConfirmPasswordReset', () => {
     const { issue, passwordHash, confirm } = await setup();
     await issue('reset-token');
 
-    await expect(confirm.execute({ token: 'reset-token', password: 'elevenchars' })).rejects.toThrow(
-      InvalidPassword,
-    );
+    await expect(
+      confirm.execute({ token: 'reset-token', password: 'elevenchars' }),
+    ).rejects.toThrow(InvalidPassword);
     await confirm.execute({ token: 'reset-token', password: NEW_PASSWORD });
 
     expect(await passwordHash()).toBe(`hashed:${NEW_PASSWORD}`);
