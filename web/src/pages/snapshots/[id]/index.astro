@@ -40,7 +40,9 @@ const siteFileStatus = (status: number | null, error: string | null) =>
     <Layout title="Vue d'ensemble – zero-audit" projectId={report.snapshot.projectId} snapshotId={report.snapshot.id}>
       <h1>Vue d'ensemble</h1>
       <SnapshotSelector snapshots={snapshots} currentId={report.snapshot.id} />
-      <RelaunchForm url={report.snapshot.rootUrl} limit={relaunchLimit(report.snapshot.pagesLimit)} label="Relancer l'audit" />
+      {Astro.locals.user && (
+        <RelaunchForm url={report.snapshot.rootUrl} limit={relaunchLimit(report.snapshot.pagesLimit)} label="Relancer l'audit" />
+      )}
 
       <section>
         <h2>Santé du site</h2>

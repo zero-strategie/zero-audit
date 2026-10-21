@@ -9,6 +9,7 @@ import PagesPage from '../src/pages/snapshots/[id]/pages.astro';
 import ComparePage from '../src/pages/projects/[id]/compare.astro';
 import AuditPage from '../src/pages/audits/[id].astro';
 import NewAuditPage from '../src/pages/audits/new.astro';
+import PrivacyPage from '../src/pages/confidentialite.astro';
 import {
   aCheckComparison,
   aComparison,
@@ -16,6 +17,7 @@ import {
   aPageRow,
   aProject,
   aReport,
+  anAccount,
   aSnapshotListing,
   anAuditProgress,
   fakeApiClient,
@@ -80,6 +82,7 @@ const SCREENS = [
     table: true,
   },
   { name: 'new audit', component: NewAuditPage, url: '/audits/new', params: {}, table: false },
+  { name: 'privacy', component: PrivacyPage, url: '/confidentialite', params: {}, table: false },
   {
     name: 'audit progress',
     component: AuditPage,
@@ -97,7 +100,7 @@ const render = async (screen: (typeof SCREENS)[number]) => {
   const response = await container.renderToResponse(screen.component, {
     params: screen.params,
     request: new Request(`http://localhost${screen.url}`),
-    locals: { apiClient },
+    locals: { apiClient, user: anAccount() },
   });
   return response.text();
 };
@@ -130,6 +133,14 @@ describe.each(SCREENS)('$name screen', (screen) => {
 
     expect(html).toMatch(
       /<footer[^>]*data-testid="site-footer"[^>]*>[\s\S]*AGPL-3\.0[\s\S]*href="https:\/\/github\.com\/zero-strategie\/zero-audit"[\s\S]*<\/footer>/,
+    );
+  });
+
+  it('links to the privacy page from the footer', async () => {
+    const html = await render(screen);
+
+    expect(html).toMatch(
+      /<footer[^>]*data-testid="site-footer"[^>]*>[\s\S]*<a [^>]*href="\/confidentialite"[^>]*>\s*Confidentialité[\s\S]*<\/footer>/,
     );
   });
 

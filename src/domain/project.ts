@@ -2,6 +2,8 @@ export interface Project {
   readonly id: string;
   /** Normalized root URL entered by the user; `UNKNOWN_PROJECT_ROOT_URL` for pre-project snapshots. */
   readonly rootUrl: string;
+  /** Null for a showcase project, visible to everyone; otherwise only its owner sees it. */
+  readonly ownerId: string | null;
   readonly createdAt: Date;
 }
 

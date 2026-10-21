@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRepository } from '../../src/application/ports/project-repository.js';
+import type { UserRepository } from '../../src/application/ports/user-repository.js';
 import type { SnapshotRepository } from '../../src/application/ports/snapshot-repository.js';
 import type { CheckResult } from '../../src/domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../../src/domain/crawl.js';
@@ -63,6 +64,7 @@ const slashProbe = (overrides: Partial<SlashVariantProbe> = {}): SlashVariantPro
 export interface RepositoryPair {
   readonly snapshots: SnapshotRepository;
   readonly projects: ProjectRepository;
+  readonly users: UserRepository;
 }
 
 export const describeSnapshotRepositoryContract = (
@@ -77,9 +79,15 @@ export const describeSnapshotRepositoryContract = (
       const { snapshots: repo, projects } = await factory();
       const project = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://example.test/',
+        ownerId: null,
         createdAt: startedAt,
       });
-      const snapshot = await repo.create({ projectId: project.id, pagesLimit: 100, startedAt });
+      const snapshot = await repo.create({
+        launchedBy: null,
+        projectId: project.id,
+        pagesLimit: 100,
+        startedAt,
+      });
       return { repo, projectId: project.id, id: snapshot.id };
     };
 
@@ -336,6 +344,69 @@ export const describeSnapshotRepositoryContract = (
     });
   });
 
+  describe('SnapshotRepository launch counts', () => {
+    const NOW = new Date('2026-03-10T12:00:00.000Z');
+    const HOUR_MS = 60 * 60 * 1000;
+    const DAY_MS = 24 * HOUR_MS;
+    const since = new Date(NOW.getTime() - DAY_MS);
+
+    const setup = async () => {
+      const { snapshots, projects, users } = await factory();
+      const project = await projects.findOrCreateByRootUrl({
+        rootUrl: 'https://example.test/',
+        ownerId: null,
+        createdAt: startedAt,
+      });
+      const u = await users.create({
+        email: 'u@example.fr',
+        passwordHash: 'h',
+        createdAt: startedAt,
+      });
+      const v = await users.create({
+        email: 'v@example.fr',
+        passwordHash: 'h',
+        createdAt: startedAt,
+      });
+      const launch = (launchedBy: string | null, hoursAgo: number) =>
+        snapshots.create({
+          projectId: project.id,
+          launchedBy,
+          pagesLimit: 10,
+          startedAt: new Date(NOW.getTime() - hoursAgo * HOUR_MS),
+        });
+      await launch(u.id, 1);
+      await launch(u.id, 23);
+      await launch(u.id, 25);
+      await launch(v.id, 2);
+      await launch(null, 3);
+      return { snapshots, u: u.id, v: v.id };
+    };
+
+    it('lists, oldest first, only the launches of the given account in the last 24 hours', async () => {
+      const { snapshots, u, v } = await setup();
+      expect(await snapshots.listLaunchedAtBy(u, since)).toEqual([
+        new Date(NOW.getTime() - 23 * HOUR_MS),
+        new Date(NOW.getTime() - HOUR_MS),
+      ]);
+      expect(await snapshots.listLaunchedAtBy(v, since)).toEqual([
+        new Date(NOW.getTime() - 2 * HOUR_MS),
+      ]);
+    });
+
+    it('counts every API launch of the window, ignoring those without account', async () => {
+      const { snapshots } = await setup();
+      expect(await snapshots.countApiLaunchedSince(since)).toBe(3);
+    });
+
+    it('lists a failed launch too', async () => {
+      const { snapshots, u } = await setup();
+      const [latest] = await snapshots.listRunning();
+      if (!latest) throw new Error('expected a running snapshot');
+      await snapshots.fail(latest.id, NOW);
+      expect(await snapshots.listLaunchedAtBy(u, since)).toHaveLength(2);
+    });
+  });
+
   describe('SnapshotRepository project history', () => {
     const at = (offsetMs: number): Date => new Date(startedAt.getTime() + offsetMs);
 
@@ -343,10 +414,18 @@ export const describeSnapshotRepositoryContract = (
       const { snapshots, projects } = await factory();
       const project = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://example.test/',
+        ownerId: null,
         createdAt: startedAt,
       });
       const start = async (projectId: string, offsetMs: number) =>
-        (await snapshots.create({ projectId, pagesLimit: 10, startedAt: at(offsetMs) })).id;
+        (
+          await snapshots.create({
+            launchedBy: null,
+            projectId,
+            pagesLimit: 10,
+            startedAt: at(offsetMs),
+          })
+        ).id;
       return { snapshots, projects, project, start };
     };
 
@@ -365,6 +444,7 @@ export const describeSnapshotRepositoryContract = (
       const { snapshots, projects, project, start } = await setup();
       const other = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://other.test/',
+        ownerId: null,
         createdAt: startedAt,
       });
       const mine = await start(project.id, 1);
@@ -415,6 +495,7 @@ export const describeSnapshotRepositoryContract = (
       const { snapshots, projects, project, start } = await setup();
       const other = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://other.test/',
+        ownerId: null,
         createdAt: startedAt,
       });
       const mine = await start(project.id, 1);

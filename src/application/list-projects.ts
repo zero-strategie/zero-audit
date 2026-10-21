@@ -1,4 +1,5 @@
 import type { Project } from '../domain/project.js';
+import { readerUserId, type Reader } from '../domain/reader.js';
 import type { SnapshotStatus } from '../domain/snapshot.js';
 import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotRepository } from './ports/snapshot-repository.js';
@@ -29,8 +30,9 @@ export class ListProjects {
     private readonly snapshots: SnapshotRepository,
   ) {}
 
-  async execute(): Promise<ProjectOverview[]> {
-    const projects = await this.projects.list();
+  /** The showcase plus, for a signed-in reader, their own projects. */
+  async execute(reader: Reader): Promise<ProjectOverview[]> {
+    const projects = await this.projects.list(readerUserId(reader));
     return Promise.all(projects.map((project) => this.overview(project)));
   }
 

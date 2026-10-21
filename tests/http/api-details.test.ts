@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CheckResult } from '../../src/domain/check.js';
 import { allChecks } from '../../src/domain/checks/index.js';
 import { idleAuditDependencies } from '../support/audit-doubles.js';
+import { idleAccountDependencies } from '../support/auth-doubles.js';
 import { buildServer } from '../../src/http/server.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
@@ -34,6 +35,7 @@ describe('read-only HTTP API: issues, pages, compare and checks', () => {
     outcome: 'finished' | 'failed' = 'finished',
   ): Promise<string> => {
     const { id } = await snapshots.create({
+      launchedBy: null,
       projectId,
       pagesLimit: 10,
       startedAt: minutes(startMinute),
@@ -52,7 +54,7 @@ describe('read-only HTTP API: issues, pages, compare and checks', () => {
   };
 
   const newProject = (rootUrl: string) =>
-    projects.findOrCreateByRootUrl({ rootUrl, createdAt: minutes(0) });
+    projects.findOrCreateByRootUrl({ ownerId: null, rootUrl, createdAt: minutes(0) });
 
   const expectError = (
     response: { statusCode: number; json: () => unknown },
@@ -68,7 +70,13 @@ describe('read-only HTTP API: issues, pages, compare and checks', () => {
   beforeEach(() => {
     projects = new InMemoryProjectRepository();
     snapshots = new InMemorySnapshotRepository();
-    app = buildServer({ projects, snapshots, health: snapshots, ...idleAuditDependencies() });
+    app = buildServer({
+      ...idleAccountDependencies(),
+      projects,
+      snapshots,
+      health: snapshots,
+      ...idleAuditDependencies(),
+    });
   });
 
   afterEach(async () => {

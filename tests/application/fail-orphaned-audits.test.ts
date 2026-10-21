@@ -11,11 +11,13 @@ describe('FailOrphanedAudits', () => {
     const projects = new InMemoryProjectRepository();
     const snapshots = new InMemorySnapshotRepository();
     const project = await projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: 'https://exemple.com/',
       createdAt: new Date(NOW),
     });
     const start = (ageMs: number) =>
       snapshots.create({
+        launchedBy: null,
         projectId: project.id,
         pagesLimit: 100,
         startedAt: new Date(NOW - ageMs),

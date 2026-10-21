@@ -17,7 +17,12 @@ import type {
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
+import { hashToken } from '../hash-token.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
+import { SqliteAccountEraser } from './sqlite-account-eraser.js';
+import { SqliteEmailTokenRepository } from './sqlite-email-token-repository.js';
+import { SqliteSessionRepository } from './sqlite-session-repository.js';
+import { SqliteUserRepository } from './sqlite-user-repository.js';
 import { migrate } from './migrate.js';
 import { openDatabase } from './open-database.js';
 
@@ -155,9 +160,17 @@ const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
 
 export class SqliteSnapshotRepository implements SnapshotRepository {
   readonly projects: SqliteProjectRepository;
+  readonly users: SqliteUserRepository;
+  readonly sessions: SqliteSessionRepository;
+  readonly emailTokens: SqliteEmailTokenRepository;
+  readonly eraser: SqliteAccountEraser;
 
   private constructor(private readonly db: SqliteDatabase) {
     this.projects = new SqliteProjectRepository(db);
+    this.users = new SqliteUserRepository(db);
+    this.sessions = new SqliteSessionRepository(db);
+    this.emailTokens = new SqliteEmailTokenRepository(db);
+    this.eraser = new SqliteAccountEraser(db);
   }
 
   static open(path: string): SqliteSnapshotRepository {
@@ -176,22 +189,68 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     });
   }
 
-  create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
+  create(input: {
+    projectId: string;
+    launchedBy: string | null;
+    pagesLimit: number;
+    startedAt: Date;
+  }): Promise<Snapshot> {
     return this.run(() => {
-      const snapshot = Snapshot.start({ id: randomUUID(), ...input });
-      this.db
-        .prepare(
-          'INSERT INTO snapshots (id, project_id, status, started_at, pages_crawled, pages_limit) VALUES (?, ?, ?, ?, ?, ?)',
-        )
-        .run(
-          snapshot.id,
-          snapshot.projectId,
-          snapshot.status,
-          snapshot.startedAt.toISOString(),
-          0,
-          snapshot.pagesLimit,
-        );
+      const { launchedBy, ...props } = input;
+      const snapshot = Snapshot.start({ id: randomUUID(), ...props });
+      this.db.transaction(() => {
+        this.db
+          .prepare(
+            'INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            snapshot.id,
+            snapshot.projectId,
+            launchedBy,
+            snapshot.status,
+            snapshot.startedAt.toISOString(),
+            0,
+            snapshot.pagesLimit,
+          );
+        if (launchedBy !== null) this.journalLaunch(launchedBy, snapshot);
+      })();
       return snapshot;
+    });
+  }
+
+  private emailHashOf(userId: string): string | null {
+    const row = this.db.prepare('SELECT email FROM users WHERE id = ?').get(userId) as
+      { email: string } | undefined;
+    return row ? hashToken(row.email) : null;
+  }
+
+  private journalLaunch(userId: string, snapshot: Snapshot): void {
+    const emailHash = this.emailHashOf(userId);
+    if (emailHash === null) return;
+    this.db
+      .prepare('INSERT INTO api_launches (id, email_hash, launched_at) VALUES (?, ?, ?)')
+      .run(snapshot.id, emailHash, snapshot.startedAt.toISOString());
+  }
+
+  listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
+    return this.run(() => {
+      const emailHash = this.emailHashOf(userId);
+      if (emailHash === null) return [];
+      const rows = this.db
+        .prepare(
+          'SELECT launched_at FROM api_launches WHERE email_hash = ? AND launched_at >= ? ORDER BY launched_at',
+        )
+        .all(emailHash, since.toISOString()) as { launched_at: string }[];
+      return rows.map((row) => new Date(row.launched_at));
+    });
+  }
+
+  countApiLaunchedSince(since: Date): Promise<number> {
+    return this.run(() => {
+      const row = this.db
+        .prepare('SELECT COUNT(*) AS n FROM api_launches WHERE launched_at >= ?')
+        .get(since.toISOString()) as { n: number };
+      return row.n;
     });
   }
 

@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { GetAuditProgress } from '../../application/get-audit-progress.js';
 import type { GetSnapshotReport } from '../../application/get-snapshot-report.js';
 import { errorResponseSchema } from '../errors.js';
+import type { ReaderOf } from '../reader.js';
 import { presentSnapshotReport } from '../presenters.js';
 
 const scoreSchema = {
@@ -127,15 +128,21 @@ const progressSchema = {
 export const registerSnapshotRoutes = (
   app: FastifyInstance,
   useCases: { getSnapshotReport: GetSnapshotReport; getAuditProgress: GetAuditProgress },
+  readerOf: ReaderOf,
 ): void => {
   app.get<{ Params: { id: string } }>('/snapshots/:id', { schema: reportSchema }, async (request) =>
-    presentSnapshotReport(await useCases.getSnapshotReport.execute(request.params.id)),
+    presentSnapshotReport(
+      await useCases.getSnapshotReport.execute(await readerOf(request), request.params.id),
+    ),
   );
   app.get<{ Params: { id: string } }>(
     '/snapshots/:id/progress',
     { schema: progressSchema },
     async (request) => {
-      const progress = await useCases.getAuditProgress.execute(request.params.id);
+      const progress = await useCases.getAuditProgress.execute(
+        await readerOf(request),
+        request.params.id,
+      );
       return { ...progress, startedAt: progress.startedAt.toISOString() };
     },
   );

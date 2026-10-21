@@ -1,13 +1,21 @@
 ---
 import ErrorView from '../../components/ErrorView.astro';
 import Layout from '../../layouts/Layout.astro';
-import { ALLOWED_LIMITS, DEFAULT_LIMIT } from '../../lib/audit-limits';
-import { Conflict, InvalidRequest } from '../../lib/api/errors';
+import { DEFAULT_LIMIT, limitsUpTo } from '../../lib/audit-limits';
+import { Conflict, InvalidRequest, TooManyRequests, Unauthenticated } from '../../lib/api/errors';
 import { toFailure } from '../../lib/failure';
 import { isSameOrigin } from '../../lib/same-origin';
 
 const HTTP_FORBIDDEN = 403;
 const HTTP_SEE_OTHER = 303;
+const SIGN_IN_THEN_LAUNCH = '/connexion?retour=/audits/new';
+
+const user = Astro.locals.user;
+if (Astro.request.method === 'POST' && !isSameOrigin(Astro.request)) {
+  return new Response('Forbidden', { status: HTTP_FORBIDDEN });
+}
+if (!user) return Astro.redirect(SIGN_IN_THEN_LAUNCH, HTTP_SEE_OTHER);
+const offeredLimits = limitsUpTo(user.pagesLimitMax);
 
 let url = '';
 let limit: number = DEFAULT_LIMIT;
@@ -15,7 +23,6 @@ let message: string | null = null;
 let failure = null;
 
 if (Astro.request.method === 'POST') {
-  if (!isSameOrigin(Astro.request)) return new Response('Forbidden', { status: HTTP_FORBIDDEN });
   const form = await Astro.request.formData();
   url = String(form.get('url') ?? '').trim();
   const requestedLimit = Number(form.get('limit'));
@@ -24,7 +31,12 @@ if (Astro.request.method === 'POST') {
     const { snapshotId } = await Astro.locals.apiClient.startAudit({ url, limit });
     return Astro.redirect(`/audits/${encodeURIComponent(snapshotId)}`, HTTP_SEE_OTHER);
   } catch (error) {
-    if (error instanceof InvalidRequest || error instanceof Conflict) {
+    if (error instanceof Unauthenticated) return Astro.redirect(SIGN_IN_THEN_LAUNCH, HTTP_SEE_OTHER);
+    if (
+      error instanceof InvalidRequest ||
+      error instanceof Conflict ||
+      error instanceof TooManyRequests
+    ) {
       message = error.message;
     } else {
       failure = toFailure(error);
@@ -49,7 +61,7 @@ if (Astro.request.method === 'POST') {
         <label>
           Pages maximum
           <select name="limit">
-            {ALLOWED_LIMITS.map((allowed) => (
+            {offeredLimits.map((allowed) => (
               <option value={allowed} selected={allowed === limit}>{allowed}</option>
             ))}
           </select>

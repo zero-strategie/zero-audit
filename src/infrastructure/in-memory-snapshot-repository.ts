@@ -8,6 +8,8 @@ import type { CheckResult } from '../domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../domain/crawl.js';
 import { SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
+import type { UserRepository } from '../application/ports/user-repository.js';
+import { hashToken } from './hash-token.js';
 
 interface Stored {
   snapshot: Snapshot;
@@ -31,13 +33,26 @@ const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
 
 export class InMemorySnapshotRepository implements SnapshotRepository, StorageHealth {
   private readonly stored = new Map<string, Stored>();
+  private readonly launchJournal: { id: string; emailHash: string; launchedAt: Date }[] = [];
+
+  /**
+   * With `users`, launches are journaled by e-mail address like the SQL adapters, so they survive
+   * an account erasure; without, by account id, which is enough for tests that never erase.
+   */
+  constructor(private readonly users?: Pick<UserRepository, 'findById'>) {}
 
   ping(): Promise<void> {
     return Promise.resolve();
   }
 
-  create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
-    const snapshot = Snapshot.start({ id: randomUUID(), ...input });
+  async create(input: {
+    projectId: string;
+    launchedBy: string | null;
+    pagesLimit: number;
+    startedAt: Date;
+  }): Promise<Snapshot> {
+    const { launchedBy, ...props } = input;
+    const snapshot = Snapshot.start({ id: randomUUID(), ...props });
     this.stored.set(snapshot.id, {
       snapshot,
       pages: [],
@@ -47,7 +62,11 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
       hostProbe: null,
       slashProbes: [],
     });
-    return Promise.resolve(snapshot);
+    const emailHash = launchedBy === null ? null : await this.launchKeyOf(launchedBy);
+    if (emailHash !== null) {
+      this.launchJournal.push({ id: snapshot.id, emailHash, launchedAt: snapshot.startedAt });
+    }
+    return snapshot;
   }
 
   addPages(id: string, pages: readonly Page[]): Promise<void> {
@@ -102,6 +121,18 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
     });
   }
 
+  async listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
+    const emailHash = await this.launchKeyOf(userId);
+    return this.launchedSince(since)
+      .filter((launch) => launch.emailHash === emailHash)
+      .map((launch) => launch.launchedAt)
+      .sort((a, b) => a.getTime() - b.getTime());
+  }
+
+  countApiLaunchedSince(since: Date): Promise<number> {
+    return Promise.resolve(this.launchedSince(since).length);
+  }
+
   listByProject(projectId: string): Promise<readonly Snapshot[]> {
     const snapshots = [...this.stored.values()]
       .map(({ snapshot }) => snapshot)
@@ -127,6 +158,30 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
           snapshot.startedAt.getTime() < beforeStartedAt.getTime(),
       ) ?? null
     );
+  }
+
+  /** For `InMemoryAccountEraser` only: the port itself stays append-only. */
+  eraseOfProjects(projectIds: readonly string[]): void {
+    for (const [id, { snapshot }] of [...this.stored]) {
+      if (projectIds.includes(snapshot.projectId)) this.stored.delete(id);
+    }
+  }
+
+  /** For `InMemoryAccountEraser` only: returns how many entries were dropped. */
+  purgeLaunchesBefore(date: Date): number {
+    const kept = this.launchJournal.filter(({ launchedAt }) => launchedAt >= date);
+    const dropped = this.launchJournal.length - kept.length;
+    this.launchJournal.splice(0, this.launchJournal.length, ...kept);
+    return dropped;
+  }
+
+  private async launchKeyOf(userId: string): Promise<string> {
+    const user = await this.users?.findById(userId);
+    return hashToken(user?.email ?? userId);
+  }
+
+  private launchedSince(since: Date): readonly { emailHash: string; launchedAt: Date }[] {
+    return this.launchJournal.filter(({ launchedAt }) => launchedAt >= since);
   }
 
   private write(id: string, mutate: (entry: Stored) => void): Promise<void> {

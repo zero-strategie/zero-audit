@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,15 +8,45 @@ import { SnapshotImmutable } from '../../src/domain/errors.js';
 import { UNKNOWN_PROJECT_ROOT_URL } from '../../src/domain/project.js';
 import { SqliteSnapshotRepository } from '../../src/infrastructure/sqlite/sqlite-snapshot-repository.js';
 import { describeProjectRepositoryContract } from '../support/project-repository-contract.js';
+import {
+  type AccountStorage,
+  describeAccountEraserContract,
+  seedAccount,
+  seedProject,
+} from '../support/account-eraser-contract.js';
+import { describeEmailTokenRepositoryContract } from '../support/email-token-repository-contract.js';
+import { describeSessionRepositoryContract } from '../support/session-repository-contract.js';
 import { describeSnapshotRepositoryContract } from '../support/snapshot-repository-contract.js';
+import { describeUserRepositoryContract } from '../support/user-repository-contract.js';
 
 const openInMemory = (): SqliteSnapshotRepository => SqliteSnapshotRepository.open(':memory:');
 
 describeSnapshotRepositoryContract(() => {
   const repository = openInMemory();
-  return { snapshots: repository, projects: repository.projects };
+  return { snapshots: repository, projects: repository.projects, users: repository.users };
 });
-describeProjectRepositoryContract(() => openInMemory().projects);
+describeProjectRepositoryContract(() => {
+  const repository = openInMemory();
+  return { projects: repository.projects, users: repository.users };
+});
+describeUserRepositoryContract(() => openInMemory().users);
+describeSessionRepositoryContract(() => {
+  const repository = openInMemory();
+  return { sessions: repository.sessions, users: repository.users };
+});
+describeEmailTokenRepositoryContract(() => {
+  const repository = openInMemory();
+  return { emailTokens: repository.emailTokens, users: repository.users };
+});
+const storageOf = (repository: SqliteSnapshotRepository): AccountStorage => ({
+  users: repository.users,
+  projects: repository.projects,
+  snapshots: repository,
+  sessions: repository.sessions,
+  emailTokens: repository.emailTokens,
+  eraser: repository.eraser,
+});
+describeAccountEraserContract(() => storageOf(openInMemory()));
 
 describe('SqliteSnapshotRepository ping', () => {
   it('resolves while the database is open', async () => {
@@ -46,17 +77,23 @@ describe('SqliteSnapshotRepository file handling', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'nested', 'deeper', 'audit.db');
     SqliteSnapshotRepository.open(path).close();
     expect(existsSync(path)).toBe(true);
-    expect(schemaVersion(path)).toBe(8);
+    expect(schemaVersion(path)).toBe(10);
   });
 
   it('does not replay migrations and keeps existing snapshots readable', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
     const first = SqliteSnapshotRepository.open(path);
     const project = await first.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: 'https://x.test/',
       createdAt: startedAt,
     });
-    const { id } = await first.create({ projectId: project.id, pagesLimit: 5, startedAt });
+    const { id } = await first.create({
+      launchedBy: null,
+      projectId: project.id,
+      pagesLimit: 5,
+      startedAt,
+    });
     first.close();
 
     const second = SqliteSnapshotRepository.open(path);
@@ -64,17 +101,23 @@ describe('SqliteSnapshotRepository file handling', () => {
     second.close();
 
     expect(details?.snapshot.pagesLimit).toBe(5);
-    expect(schemaVersion(path)).toBe(8);
+    expect(schemaVersion(path)).toBe(10);
   });
 
   it('leaves the row count unchanged when a write on a finished snapshot is refused', async () => {
     const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
     const repo = SqliteSnapshotRepository.open(path);
     const project = await repo.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: 'https://x.test/',
       createdAt: startedAt,
     });
-    const { id } = await repo.create({ projectId: project.id, pagesLimit: 5, startedAt });
+    const { id } = await repo.create({
+      launchedBy: null,
+      projectId: project.id,
+      pagesLimit: 5,
+      startedAt,
+    });
     await repo.finish(id, { finishedAt: startedAt, pagesCrawled: 0 });
     await expect(
       repo.addLinks(id, [
@@ -172,14 +215,14 @@ describe('migration 002 on a milestone 1 database', () => {
     SqliteSnapshotRepository.open(path).close();
     SqliteSnapshotRepository.open(path).close();
 
-    expect(schemaVersion(path)).toBe(8);
+    expect(schemaVersion(path)).toBe(10);
     expect(count(path, 'projects')).toBe(2);
   });
 
   it('exposes the adopted snapshots through the repositories', async () => {
     const path = buildMilestone1Database();
     const repo = SqliteSnapshotRepository.open(path);
-    const [project] = (await repo.projects.list()).filter(
+    const [project] = (await repo.projects.list(null)).filter(
       ({ rootUrl }) => rootUrl === 'https://x.test/',
     );
     const listed = await repo.listByProject(project?.id ?? '');
@@ -261,7 +304,211 @@ describe('migration 008 on a database at migration 007', () => {
     expect(after.slice(0, before.length)).toEqual(before);
     expect(after).toHaveLength(before.length + 1);
     expect(after.at(-1)).toMatchObject({ name: 'text_ratio', type: 'REAL', notnull: 0 });
-    expect(schemaVersion(path)).toBe(8);
+    expect(schemaVersion(path)).toBe(10);
     expect(details?.pages[0]?.textRatio).toBeNull();
+  });
+});
+
+describe('migration 009 on a database at migration 008', () => {
+  const MIGRATIONS_DIR = join(import.meta.dirname, '../../src/infrastructure/sqlite/migrations');
+  const LAST_VERSION_BEFORE_ACCOUNTS = 8;
+
+  const buildPopulatedDatabaseAt008 = (): string => {
+    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
+    const db = new Database(path);
+    db.pragma('foreign_keys = ON');
+    db.exec('CREATE TABLE schema_version (version INTEGER PRIMARY KEY)');
+    for (const [index, file] of readdirSync(MIGRATIONS_DIR).sort().entries()) {
+      if (index >= LAST_VERSION_BEFORE_ACCOUNTS) break;
+      db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
+      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(index + 1);
+    }
+    db.exec(
+      `INSERT INTO projects (id, root_url, created_at) VALUES
+         ('project-a', 'https://a.test/', '2025-12-01T10:00:00.000Z'),
+         ('project-b', 'https://b.test/', '2025-12-02T10:00:00.000Z');
+       INSERT INTO snapshots (id, project_id, status, started_at, pages_limit) VALUES
+         ('snapshot-a1', 'project-a', 'finished', '2025-12-01T10:00:00.000Z', 10),
+         ('snapshot-a2', 'project-a', 'failed', '2025-12-03T10:00:00.000Z', 10),
+         ('snapshot-b1', 'project-b', 'finished', '2025-12-02T10:00:00.000Z', 10);
+       INSERT INTO pages (snapshot_id, url, depth, redirect_chain, headers, response_time_ms, is_html, h1)
+       VALUES ('snapshot-a1', 'https://a.test/', 0, '[]', '{}', 5, 1, '[]')`,
+    );
+    db.close();
+    return path;
+  };
+
+  const inspect = <T>(path: string, work: (db: Database.Database) => T): T => {
+    const db = new Database(path);
+    db.pragma('foreign_keys = ON');
+    try {
+      return work(db);
+    } finally {
+      db.close();
+    }
+  };
+
+  it('keeps project ids and snapshot links, with no owner and no foreign key violation', () => {
+    const path = buildPopulatedDatabaseAt008();
+    SqliteSnapshotRepository.open(path).close();
+
+    inspect(path, (db) => {
+      expect(db.prepare('SELECT id, root_url, owner_id FROM projects ORDER BY id').all()).toEqual([
+        { id: 'project-a', root_url: 'https://a.test/', owner_id: null },
+        { id: 'project-b', root_url: 'https://b.test/', owner_id: null },
+      ]);
+      expect(db.prepare('SELECT id, project_id FROM snapshots ORDER BY id').all()).toEqual([
+        { id: 'snapshot-a1', project_id: 'project-a' },
+        { id: 'snapshot-a2', project_id: 'project-a' },
+        { id: 'snapshot-b1', project_id: 'project-b' },
+      ]);
+      expect(db.prepare('SELECT COUNT(*) AS n FROM pages').get()).toEqual({ n: 1 });
+      expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      expect(schemaVersion(path)).toBe(10);
+    });
+  });
+
+  it('lets two projects with the same URL coexist under different owners only', () => {
+    const path = buildPopulatedDatabaseAt008();
+    SqliteSnapshotRepository.open(path).close();
+
+    inspect(path, (db) => {
+      db.exec(
+        `INSERT INTO users (id, email, password_hash, created_at) VALUES
+           ('u', 'u@example.fr', 'h', '2026-01-01T00:00:00.000Z'),
+           ('v', 'v@example.fr', 'h', '2026-01-01T00:00:00.000Z')`,
+      );
+      const insert = db.prepare(
+        "INSERT INTO projects (id, root_url, owner_id, created_at) VALUES (?, 'https://a.test/', ?, '2026-01-01T00:00:00.000Z')",
+      );
+      insert.run('a-for-u', 'u');
+      insert.run('a-for-v', 'v');
+      expect(() => insert.run('a-for-u-again', 'u')).toThrow(/UNIQUE/);
+      expect(() => insert.run('a-public-again', null)).toThrow(/UNIQUE/);
+    });
+  });
+});
+
+describe('SqliteSnapshotRepository secrets at rest', () => {
+  const openOnFile = (): { path: string; repository: SqliteSnapshotRepository } => {
+    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
+    return { path, repository: SqliteSnapshotRepository.open(path) };
+  };
+
+  const dump = (path: string, table: string): string => {
+    const db = new Database(path, { readonly: true });
+    const rows = JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all());
+    db.close();
+    return rows;
+  };
+
+  it('stores the SHA-256 of a session identifier, never the identifier', async () => {
+    const { path, repository } = openOnFile();
+    const user = await repository.users.create({
+      email: 'u@example.fr',
+      passwordHash: 'h',
+      createdAt: startedAt,
+    });
+    await repository.sessions.create({
+      id: 'raw-session-id',
+      userId: user.id,
+      createdAt: startedAt,
+      expiresAt: startedAt,
+    });
+    repository.close();
+
+    const stored = dump(path, 'sessions');
+    expect(stored).toContain(createHash('sha256').update('raw-session-id').digest('hex'));
+    expect(stored).not.toContain('raw-session-id');
+  });
+
+  it('stores the SHA-256 of an e-mail token, never the token', async () => {
+    const { path, repository } = openOnFile();
+    const user = await repository.users.create({
+      email: 'u@example.fr',
+      passwordHash: 'h',
+      createdAt: startedAt,
+    });
+    await repository.emailTokens.create({
+      token: 'raw-email-token',
+      userId: user.id,
+      email: user.email,
+      kind: 'verify',
+      createdAt: startedAt,
+      expiresAt: startedAt,
+    });
+    repository.close();
+
+    const stored = dump(path, 'email_tokens');
+    expect(stored).toContain(createHash('sha256').update('raw-email-token').digest('hex'));
+    expect(stored).not.toContain('raw-email-token');
+  });
+});
+
+describe('SqliteAccountEraser', () => {
+  const ALL_TABLES = [
+    'users',
+    'sessions',
+    'email_tokens',
+    'projects',
+    'snapshots',
+    'pages',
+    'links',
+    'site_files',
+    'host_probes',
+    'slash_probes',
+    'check_results',
+    'issue_occurrences',
+  ];
+
+  const openOnFile = (): { path: string; repository: SqliteSnapshotRepository } => {
+    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
+    return { path, repository: SqliteSnapshotRepository.open(path) };
+  };
+
+  const rowCounts = (path: string): Record<string, number> => {
+    const db = new Database(path, { readonly: true });
+    const counts = Object.fromEntries(
+      ALL_TABLES.map((table) => [
+        table,
+        (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n,
+      ]),
+    );
+    db.close();
+    return counts;
+  };
+
+  const seedOthers = async (repository: SqliteSnapshotRepository): Promise<void> => {
+    await seedAccount(storageOf(repository), { email: 'v@example.fr' });
+    await seedProject(storageOf(repository), { ownerId: null, rootUrl: 'https://showcase.test/' });
+  };
+
+  it('leaves exactly the rows of the other accounts and of the showcase', async () => {
+    const { path, repository } = openOnFile();
+    await seedOthers(repository);
+    const baseline = rowCounts(path);
+    const u = await seedAccount(storageOf(repository), { email: 'u@example.fr' });
+
+    await repository.eraser.eraseAccount(u.userId);
+
+    expect(rowCounts(path)).toEqual(baseline);
+    repository.close();
+  });
+
+  it('rolls back every deletion when the erasure fails midway', async () => {
+    const { path, repository } = openOnFile();
+    await seedOthers(repository);
+    const u = await seedAccount(storageOf(repository), { email: 'u@example.fr' });
+    const before = rowCounts(path);
+    const saboteur = new Database(path);
+    saboteur.exec(
+      "CREATE TRIGGER fail_user_erasure BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'boom'); END",
+    );
+    saboteur.close();
+
+    await expect(repository.eraser.eraseAccount(u.userId)).rejects.toThrow('boom');
+
+    expect(rowCounts(path)).toEqual(before);
+    repository.close();
   });
 });

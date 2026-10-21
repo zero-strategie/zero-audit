@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -12,11 +13,26 @@ import {
   TEST_DATABASE_URL,
   type TestDatabase,
 } from '../support/postgres-test-database.js';
+import {
+  type AccountStorage,
+  describeAccountEraserContract,
+  seedAccount,
+  seedProject,
+} from '../support/account-eraser-contract.js';
+import { describeEmailTokenRepositoryContract } from '../support/email-token-repository-contract.js';
+import { describeSessionRepositoryContract } from '../support/session-repository-contract.js';
 import { describeSnapshotRepositoryContract } from '../support/snapshot-repository-contract.js';
+import { describeUserRepositoryContract } from '../support/user-repository-contract.js';
 
 const startedAt = new Date('2026-01-01T10:00:00.123Z');
+
+interface ProjectRow {
+  id: string;
+  root_url: string;
+  owner_id: string | null;
+}
 const CONTENT_TABLES =
-  'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects';
+  'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects, email_tokens, sessions, users, api_launches';
 
 const readMigration = (file: string): string =>
   readFileSync(
@@ -54,8 +70,75 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
   describeSnapshotRepositoryContract(() => ({
     snapshots: repository,
     projects: repository.projects,
+    users: repository.users,
   }));
-  describeProjectRepositoryContract(() => repository.projects);
+  describeProjectRepositoryContract(() => ({
+    projects: repository.projects,
+    users: repository.users,
+  }));
+  describeUserRepositoryContract(() => repository.users);
+  describeSessionRepositoryContract(() => ({
+    sessions: repository.sessions,
+    users: repository.users,
+  }));
+  describeEmailTokenRepositoryContract(() => ({
+    emailTokens: repository.emailTokens,
+    users: repository.users,
+  }));
+
+  const storage = (): AccountStorage => ({
+    users: repository.users,
+    projects: repository.projects,
+    snapshots: repository,
+    sessions: repository.sessions,
+    emailTokens: repository.emailTokens,
+    eraser: repository.eraser,
+  });
+  describeAccountEraserContract(storage);
+
+  describe('secrets at rest', () => {
+    const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
+
+    it('stores the SHA-256 of a session identifier, never the identifier', async () => {
+      const user = await repository.users.create({
+        email: 'u@example.fr',
+        passwordHash: 'h',
+        createdAt: startedAt,
+      });
+      await repository.sessions.create({
+        id: 'raw-session-id',
+        userId: user.id,
+        createdAt: startedAt,
+        expiresAt: startedAt,
+      });
+
+      const { rows } = await database.pool.query('SELECT * FROM sessions');
+
+      expect(JSON.stringify(rows)).toContain(sha256('raw-session-id'));
+      expect(JSON.stringify(rows)).not.toContain('raw-session-id');
+    });
+
+    it('stores the SHA-256 of an e-mail token, never the token', async () => {
+      const user = await repository.users.create({
+        email: 'u@example.fr',
+        passwordHash: 'h',
+        createdAt: startedAt,
+      });
+      await repository.emailTokens.create({
+        token: 'raw-email-token',
+        userId: user.id,
+        email: user.email,
+        kind: 'verify',
+        createdAt: startedAt,
+        expiresAt: startedAt,
+      });
+
+      const { rows } = await database.pool.query('SELECT * FROM email_tokens');
+
+      expect(JSON.stringify(rows)).toContain(sha256('raw-email-token'));
+      expect(JSON.stringify(rows)).not.toContain('raw-email-token');
+    });
+  });
 
   describe('ping', () => {
     it('resolves when the database answers', async () => {
@@ -72,10 +155,13 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
 
   const createRunning = async (): Promise<string> => {
     const project = await repository.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: 'https://x.test/',
       createdAt: startedAt,
     });
-    return (await repository.create({ projectId: project.id, pagesLimit: 5, startedAt })).id;
+    return (
+      await repository.create({ launchedBy: null, projectId: project.id, pagesLimit: 5, startedAt })
+    ).id;
   };
 
   const count = async (table: string): Promise<number> => {
@@ -157,7 +243,8 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       const columnsOf = async (): Promise<unknown[]> => {
         const { rows } = await legacy.pool.query<Record<string, string>>(
           `SELECT table_name, column_name, data_type FROM information_schema.columns
-           WHERE table_schema = current_schema() AND table_name <> 'slash_probes' AND column_name <> 'text_ratio'
+           WHERE table_schema = current_schema() AND table_name NOT IN ('slash_probes', 'users', 'sessions', 'email_tokens', 'api_launches')
+             AND column_name NOT IN ('text_ratio', 'owner_id', 'launched_by')
            ORDER BY table_name, column_name`,
         );
         return rows;
@@ -168,7 +255,13 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
 
       expect(await columnsOf()).toEqual(before);
       const versions = await legacy.pool.query('SELECT version FROM schema_migrations ORDER BY 1');
-      expect(versions.rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      expect(versions.rows).toEqual([
+        { version: 1 },
+        { version: 2 },
+        { version: 3 },
+        { version: 4 },
+        { version: 5 },
+      ]);
       await expect(legacy.pool.query('SELECT * FROM slash_probes')).resolves.toBeDefined();
     } finally {
       await legacy.dispose();
@@ -204,9 +297,112 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         is_nullable: 'YES',
       });
       const versions = await legacy.pool.query('SELECT version FROM schema_migrations ORDER BY 1');
-      expect(versions.rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      expect(versions.rows).toEqual([
+        { version: 1 },
+        { version: 2 },
+        { version: 3 },
+        { version: 4 },
+        { version: 5 },
+      ]);
     } finally {
       await legacy.dispose();
     }
+  });
+  it('replaces the unique root_url constraint by two partial indexes without touching rows', async () => {
+    const legacy = await createTestDatabase(TEST_DATABASE_URL ?? '');
+    try {
+      for (const file of ['001_init.sql', '002_slash_probes.sql', '003_page_text_ratio.sql']) {
+        await legacy.pool.query(readMigration(file));
+      }
+      await legacy.pool.query(
+        'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+      );
+      await legacy.pool.query('INSERT INTO schema_migrations (version) VALUES (1), (2), (3)');
+      await legacy.pool.query(
+        `INSERT INTO projects (id, root_url, created_at) VALUES ('p1', 'https://a.test/', now()), ('p2', 'https://b.test/', now())`,
+      );
+      const rowsBefore = (await legacy.pool.query<ProjectRow>('SELECT * FROM projects ORDER BY id'))
+        .rows;
+
+      await migrate(legacy.pool);
+
+      const constraints = await legacy.pool.query(
+        `SELECT conname FROM pg_constraint WHERE conname = 'projects_root_url_key'`,
+      );
+      const indexes = await legacy.pool.query<{ indexdef: string }>(
+        `SELECT indexdef FROM pg_indexes
+         WHERE schemaname = current_schema() AND tablename = 'projects' AND indexdef LIKE '%UNIQUE%WHERE%'
+         ORDER BY indexname`,
+      );
+      const rowsAfter = (await legacy.pool.query<ProjectRow>('SELECT * FROM projects ORDER BY id'))
+        .rows;
+      expect(constraints.rows).toEqual([]);
+      expect(indexes.rows.map(({ indexdef }) => indexdef.replace(/^.* WHERE /, ''))).toEqual([
+        '(owner_id IS NOT NULL)',
+        '(owner_id IS NULL)',
+      ]);
+      expect(rowsAfter.map(({ owner_id: ownerId }) => ownerId)).toEqual([null, null]);
+      expect(rowsAfter.map(({ id, root_url: rootUrl }) => [id, rootUrl])).toEqual(
+        rowsBefore.map(({ id, root_url: rootUrl }) => [id, rootUrl]),
+      );
+    } finally {
+      await legacy.dispose();
+    }
+  });
+  describe('account erasure', () => {
+    const ALL_TABLES = [
+      'users',
+      'sessions',
+      'email_tokens',
+      'projects',
+      'snapshots',
+      'pages',
+      'links',
+      'site_files',
+      'host_probes',
+      'slash_probes',
+      'check_results',
+      'issue_occurrences',
+    ];
+
+    const rowCounts = async (): Promise<Record<string, number>> =>
+      Object.fromEntries(
+        await Promise.all(ALL_TABLES.map(async (table) => [table, await count(table)] as const)),
+      );
+
+    const seedOthers = async (): Promise<void> => {
+      await seedAccount(storage(), { email: 'v@example.fr' });
+      await seedProject(storage(), { ownerId: null, rootUrl: 'https://showcase.test/' });
+    };
+
+    it('leaves exactly the rows of the other accounts and of the showcase', async () => {
+      await seedOthers();
+      const baseline = await rowCounts();
+      const u = await seedAccount(storage(), { email: 'u@example.fr' });
+
+      await repository.eraser.eraseAccount(u.userId);
+
+      expect(await rowCounts()).toEqual(baseline);
+    });
+
+    it('rolls back every deletion when the erasure fails midway', async () => {
+      await seedOthers();
+      const u = await seedAccount(storage(), { email: 'u@example.fr' });
+      const before = await rowCounts();
+      await database.pool.query(
+        `CREATE FUNCTION fail_user_erasure() RETURNS trigger LANGUAGE plpgsql AS
+         $$ BEGIN RAISE EXCEPTION 'boom'; END $$`,
+      );
+      await database.pool.query(
+        'CREATE TRIGGER fail_user_erasure BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION fail_user_erasure()',
+      );
+      try {
+        await expect(repository.eraser.eraseAccount(u.userId)).rejects.toThrow('boom');
+        expect(await rowCounts()).toEqual(before);
+      } finally {
+        await database.pool.query('DROP TRIGGER fail_user_erasure ON users');
+        await database.pool.query('DROP FUNCTION fail_user_erasure()');
+      }
+    });
   });
 });

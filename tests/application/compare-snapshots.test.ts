@@ -6,6 +6,8 @@ import {
   SnapshotNotFound,
   SnapshotsFromDifferentProjects,
 } from '../../src/domain/errors.js';
+import { ANONYMOUS_READER } from '../../src/domain/reader.js';
+import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 
 const minutes = (n: number): Date => new Date(Date.UTC(2026, 0, 1, 10, n));
@@ -21,13 +23,20 @@ const check15 = (...paths: string[]): CheckResult => ({
 
 const build = () => {
   const repository = new InMemorySnapshotRepository();
+  const projects = new InMemoryProjectRepository();
   const record = async (
-    projectId: string,
+    projectName: string,
     startMinute: number,
     outcome: 'finished' | 'failed' | 'running',
     results: CheckResult[] = [],
   ): Promise<string> => {
+    const { id: projectId } = await projects.findOrCreateByRootUrl({
+      rootUrl: `https://${projectName}.test/`,
+      ownerId: null,
+      createdAt: minutes(0),
+    });
     const snapshot = await repository.create({
+      launchedBy: null,
       projectId,
       pagesLimit: 10,
       startedAt: minutes(startMinute),
@@ -43,7 +52,7 @@ const build = () => {
     }
     return snapshot.id;
   };
-  return { record, useCase: new CompareSnapshots(repository) };
+  return { record, useCase: new CompareSnapshots(repository, projects) };
 };
 
 describe('CompareSnapshots', () => {
@@ -52,7 +61,7 @@ describe('CompareSnapshots', () => {
     const b = await record('p', 0, 'finished', [check15('o1', 'o2', 'o3')]);
     const a = await record('p', 10, 'finished', [check15('o1')]);
 
-    const comparison = await useCase.execute(a, b);
+    const comparison = await useCase.execute(ANONYMOUS_READER, a, b);
 
     expect(comparison.base.id).toBe(a);
     expect(comparison.target.id).toBe(b);
@@ -64,23 +73,33 @@ describe('CompareSnapshots', () => {
   it('rejects an unknown snapshot', async () => {
     const { record, useCase } = build();
     const a = await record('p', 0, 'finished');
-    await expect(useCase.execute(a, 'missing')).rejects.toBeInstanceOf(SnapshotNotFound);
-    await expect(useCase.execute('missing', a)).rejects.toBeInstanceOf(SnapshotNotFound);
+    await expect(useCase.execute(ANONYMOUS_READER, a, 'missing')).rejects.toBeInstanceOf(
+      SnapshotNotFound,
+    );
+    await expect(useCase.execute(ANONYMOUS_READER, 'missing', a)).rejects.toBeInstanceOf(
+      SnapshotNotFound,
+    );
   });
 
   it('rejects snapshots of different projects', async () => {
     const { record, useCase } = build();
     const a = await record('p1', 0, 'finished');
     const b = await record('p2', 1, 'finished');
-    await expect(useCase.execute(a, b)).rejects.toBeInstanceOf(SnapshotsFromDifferentProjects);
+    await expect(useCase.execute(ANONYMOUS_READER, a, b)).rejects.toBeInstanceOf(
+      SnapshotsFromDifferentProjects,
+    );
   });
 
   it.each(['running', 'failed'] as const)('rejects a %s snapshot', async (outcome) => {
     const { record, useCase } = build();
     const a = await record('p', 0, 'finished');
     const b = await record('p', 5, outcome);
-    await expect(useCase.execute(a, b)).rejects.toBeInstanceOf(SnapshotNotFinished);
-    await expect(useCase.execute(b, a)).rejects.toBeInstanceOf(SnapshotNotFinished);
+    await expect(useCase.execute(ANONYMOUS_READER, a, b)).rejects.toBeInstanceOf(
+      SnapshotNotFinished,
+    );
+    await expect(useCase.execute(ANONYMOUS_READER, b, a)).rejects.toBeInstanceOf(
+      SnapshotNotFinished,
+    );
   });
 
   it('scores B with its variation against A', async () => {
@@ -88,7 +107,7 @@ describe('CompareSnapshots', () => {
     const a = await record('p', 0, 'finished', [check15('o1')]);
     const b = await record('p', 10, 'finished', [check15('o1', 'o2')]);
 
-    const comparison = await useCase.execute(a, b);
+    const comparison = await useCase.execute(ANONYMOUS_READER, a, b);
 
     expect(comparison.scores.health).toEqual({ score: 60, variation: -20 });
     expect(comparison.scores.themes['on-page']).toEqual({ score: 60, variation: -20 });

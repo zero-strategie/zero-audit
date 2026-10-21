@@ -1,0 +1,73 @@
+---
+import ErrorView from '../components/ErrorView.astro';
+import FormAlert from '../components/FormAlert.astro';
+import HoneypotField from '../components/HoneypotField.astro';
+import Layout from '../layouts/Layout.astro';
+import { ServiceUnavailable } from '../lib/api/errors';
+import { toFailure } from '../lib/failure';
+import { isSameOrigin } from '../lib/same-origin';
+import { isUserFacingError } from '../lib/user-facing-error';
+
+const HTTP_FORBIDDEN = 403;
+const PASSWORD_MISMATCH = 'Les deux mots de passe ne correspondent pas';
+const SIGNUP_UNAVAILABLE = 'Les inscriptions sont momentanément indisponibles';
+
+let email = '';
+let notice: string | null = null;
+let message: string | null = null;
+let failure = null;
+
+if (Astro.request.method === 'POST') {
+  if (!isSameOrigin(Astro.request)) return new Response('Forbidden', { status: HTTP_FORBIDDEN });
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim();
+  const password = String(form.get('password') ?? '');
+  if (password !== String(form.get('password_confirm') ?? '')) {
+    message = PASSWORD_MISMATCH;
+  } else try {
+    notice = await Astro.locals.apiClient.register({
+      email,
+      password,
+      website: String(form.get('website') ?? ''),
+    });
+  } catch (error) {
+    if (error instanceof ServiceUnavailable) {
+      message = SIGNUP_UNAVAILABLE;
+    } else if (isUserFacingError(error)) {
+      message = error.message;
+    } else {
+      failure = toFailure(error);
+      Astro.response.status = failure.status;
+    }
+  }
+}
+---
+
+{
+  failure ? (
+    <ErrorView failure={failure} />
+  ) : (
+    <Layout title="Créer un compte – zero-audit">
+      <h1>Créer un compte</h1>
+      <FormAlert message={message} />
+      <FormAlert message={notice} kind="info" />
+      <form method="post" action="/inscription">
+        <label>
+          Adresse e-mail
+          <input type="email" name="email" value={email} autocomplete="email" required />
+        </label>
+        <label>
+          Mot de passe (12 caractères minimum)
+          <input type="password" name="password" autocomplete="new-password" minlength="12" required />
+        </label>
+        <label>
+          Confirmer le mot de passe
+          <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" required />
+        </label>
+        <HoneypotField />
+        <button type="submit" class="button-primary">Créer mon compte</button>
+      </form>
+      <p>Déjà inscrit ? <a href="/connexion">Se connecter</a></p>
+    </Layout>
+  )
+}

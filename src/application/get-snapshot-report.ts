@@ -1,16 +1,17 @@
 import type { CheckResult } from '../domain/check.js';
-import { ProjectNotFound, SnapshotNotFound } from '../domain/errors.js';
 import {
   classifyPages,
   groupVariation,
   type GroupCounts,
   type GroupVariation,
 } from '../domain/page-groups.js';
+import type { Reader } from '../domain/reader.js';
 import { buildScoreCard, type ScoreCard } from '../domain/scoring.js';
 import { diffChecks, type CheckDiff } from '../domain/snapshot-diff.js';
 import { countBySeverity, topIssues, type SeverityCounts } from '../domain/top-issues.js';
 import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotDetails, SnapshotRepository } from './ports/snapshot-repository.js';
+import { loadReadableSnapshot } from './readable-snapshot.js';
 
 const TOP_ISSUES_LIMIT = 5;
 
@@ -33,12 +34,14 @@ export class GetSnapshotReport {
     private readonly projects: ProjectRepository,
   ) {}
 
-  async execute(snapshotId: string): Promise<SnapshotReport> {
-    const details = await this.repository.getById(snapshotId);
-    if (!details) throw new SnapshotNotFound(snapshotId);
+  async execute(reader: Reader, snapshotId: string): Promise<SnapshotReport> {
+    const { details, project } = await loadReadableSnapshot(
+      this.repository,
+      this.projects,
+      reader,
+      snapshotId,
+    );
     const { snapshot } = details;
-    const project = await this.projects.getById(snapshot.projectId);
-    if (!project) throw new ProjectNotFound(snapshot.projectId);
     const previous = await this.repository.findPreviousFinished(
       snapshot.projectId,
       snapshot.startedAt,

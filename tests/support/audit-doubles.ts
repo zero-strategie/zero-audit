@@ -1,16 +1,33 @@
-import type { AuditProgress, StartedAudit } from '../../src/application/audit-runner.js';
+import type {
+  AuditProgress,
+  AuditStartRequest,
+  StartedAudit,
+} from '../../src/application/audit-runner.js';
+import type { SnapshotRepository } from '../../src/application/ports/snapshot-repository.js';
 import type { HostResolver } from '../../src/application/ports/host-resolver.js';
 
+/**
+ * Stands for the real runner: runs the admission like it does under its lock, and records a
+ * snapshot when it is given a repository, so that quotas count the launches.
+ */
 export class FakeAuditRunner {
-  readonly requests: { rootUrl: string; limit: number }[] = [];
+  readonly requests: Omit<AuditStartRequest, 'admit'>[] = [];
   startOutcome: StartedAudit | Error = { snapshotId: 'snap-1', projectId: 'proj-1' };
   progressOutcome: AuditProgress | null = null;
 
-  start(request: { rootUrl: string; limit: number }): Promise<StartedAudit> {
+  constructor(private readonly recording?: { snapshots: SnapshotRepository; now: () => number }) {}
+
+  async start({ admit, ...request }: AuditStartRequest): Promise<StartedAudit> {
+    await admit?.();
     this.requests.push(request);
-    return this.startOutcome instanceof Error
-      ? Promise.reject(this.startOutcome)
-      : Promise.resolve(this.startOutcome);
+    if (this.startOutcome instanceof Error) throw this.startOutcome;
+    await this.recording?.snapshots.create({
+      projectId: this.startOutcome.projectId,
+      launchedBy: request.launchedBy ?? null,
+      pagesLimit: request.limit,
+      startedAt: new Date(this.recording.now()),
+    });
+    return this.startOutcome;
   }
 
   progress(): Promise<AuditProgress | null> {
@@ -33,4 +50,5 @@ export const idleAuditDependencies = () => ({
   auditRunner: new FakeAuditRunner(),
   hostResolver: new FakeHostResolver(),
   allowPrivateTargets: false,
+  launchesPerDay: 30,
 });

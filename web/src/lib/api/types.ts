@@ -7,6 +7,8 @@ export type SiteFileKind = 'robots' | 'sitemap' | 'llms';
 export interface ProjectOverview {
   id: string;
   rootUrl: string;
+  /** True for a project of the signed-in reader, false for a showcase project. */
+  owned: boolean;
   createdAt: string;
   latestSnapshot: { id: string; finishedAt: string | null; health: number | null } | null;
   /** The most recent snapshot, whatever its status. */
@@ -127,4 +129,13 @@ export interface Comparison {
   health: Score;
   themes: Record<Theme, Score>;
   checks: CheckComparison[];
+}
+
+export interface CurrentAccount {
+  email: string;
+  isAdmin: boolean;
+  pagesLimitMax: number;
+  /** `null` when the account has no quota (administrators). */
+  auditsRemaining: number | null;
+  nextAuditAt: string | null;
 }

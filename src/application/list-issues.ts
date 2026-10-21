@@ -1,7 +1,9 @@
 import type { Check, CheckResult, Severity, Theme } from '../domain/check.js';
-import { SnapshotNotFound } from '../domain/errors.js';
+import type { Reader } from '../domain/reader.js';
 import { diffChecks } from '../domain/snapshot-diff.js';
+import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotRepository } from './ports/snapshot-repository.js';
+import { loadReadableSnapshot } from './readable-snapshot.js';
 
 export interface IssueRow {
   readonly checkId: number;
@@ -18,12 +20,21 @@ export interface IssueRow {
 export class ListIssues {
   constructor(
     private readonly repository: SnapshotRepository,
+    private readonly projects: ProjectRepository,
     private readonly checks: readonly Check[],
   ) {}
 
-  async execute(snapshotId: string, filter: { severity?: Severity }): Promise<IssueRow[]> {
-    const details = await this.repository.getById(snapshotId);
-    if (!details) throw new SnapshotNotFound(snapshotId);
+  async execute(
+    reader: Reader,
+    snapshotId: string,
+    filter: { severity?: Severity },
+  ): Promise<IssueRow[]> {
+    const { details } = await loadReadableSnapshot(
+      this.repository,
+      this.projects,
+      reader,
+      snapshotId,
+    );
     const { snapshot } = details;
     const previous = await this.repository.findPreviousFinished(
       snapshot.projectId,

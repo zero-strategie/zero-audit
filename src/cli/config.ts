@@ -1,4 +1,6 @@
 import { parseArgs } from 'node:util';
+import { InvalidEmail } from '../domain/errors.js';
+import { normalizeEmail } from '../domain/user.js';
 
 export const STORE_KINDS = ['sqlite', 'postgres'] as const;
 export type StoreKind = (typeof STORE_KINDS)[number];
@@ -23,6 +25,14 @@ export interface CompareConfig extends StoreSelection {
   dbPath: string;
 }
 
+export const MAILER_KINDS = ['console', 'brevo'] as const;
+export const DEFAULT_MAIL_FROM = 'no-reply@agents.zero-strategie.dev';
+
+/** `disabled` is the default: sign-up and resets answer 503 until a mailer is chosen. */
+export type MailConfig =
+  | { kind: 'disabled' | 'console'; from: string; publicUrl: string | null }
+  | { kind: 'brevo'; from: string; publicUrl: string; apiKey: string };
+
 export interface ServeConfig extends StoreSelection {
   host: string;
   port: number;
@@ -30,6 +40,11 @@ export interface ServeConfig extends StoreSelection {
   /** Disables the SSRF guard; only the exact value `true` of the environment variable does. */
   allowPrivateTargets: boolean;
   delayMs: number;
+  mail: MailConfig;
+  /** Normalized with `normalizeEmail`. */
+  adminEmails: string[];
+  /** Ceiling of audits launched through the API per 24 hours, all accounts together. */
+  launchesPerDay: number;
 }
 
 export interface MigrateConfig extends StoreSelection {
@@ -50,12 +65,19 @@ export const DEFAULT_LIMIT = 100;
 export const DEFAULT_DELAY_MS = 1000;
 export const DEFAULT_HOST = '127.0.0.1';
 export const DEFAULT_PORT = 3000;
+export const DEFAULT_LAUNCHES_PER_DAY = 30;
 export const DEFAULT_DB_PATH = './.zero-audit/audit.db';
 
 const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
 const DB_ENV = 'ZERO_AUDIT_DB_PATH';
 const ALLOW_PRIVATE_TARGETS_ENV = 'ZERO_AUDIT_ALLOW_PRIVATE_TARGETS';
 const STORE_ENV = 'ZERO_AUDIT_STORE';
+const MAILER_ENV = 'ZERO_AUDIT_MAILER';
+const BREVO_API_KEY_ENV = 'ZERO_AUDIT_BREVO_API_KEY';
+const MAIL_FROM_ENV = 'ZERO_AUDIT_MAIL_FROM';
+const ADMIN_EMAILS_ENV = 'ZERO_AUDIT_ADMIN_EMAILS';
+const LAUNCHES_PER_DAY_ENV = 'ZERO_AUDIT_LAUNCHES_PER_DAY';
+const PUBLIC_URL_ENV = 'ZERO_AUDIT_PUBLIC_URL';
 const HOST_ENV = 'HOST';
 const PORT_ENV = 'PORT';
 const DATABASE_URL_ENV = 'DATABASE_URL';
@@ -102,6 +124,56 @@ const parseRootUrl = (raw: string | undefined): string => {
   }
   return raw;
 };
+
+const parsePublicUrl = (raw: string | undefined): string | null => {
+  if (raw === undefined) return null;
+  const parsed = URL.parse(raw);
+  const isHttp = parsed?.protocol === 'http:' || parsed?.protocol === 'https:';
+  if (!isHttp || raw.endsWith('/')) {
+    throw new UsageError(
+      `${PUBLIC_URL_ENV} must be an absolute http(s) URL without trailing slash (received "${raw}")`,
+    );
+  }
+  return raw;
+};
+
+const requireEnv = (env: Environment, name: string, reason: string): string => {
+  const value = env[name];
+  if (!value) throw new UsageError(`${name} is required ${reason}`);
+  return value;
+};
+
+const parseMail = (env: Environment): MailConfig => {
+  const kind = env[MAILER_ENV];
+  const from = env[MAIL_FROM_ENV] ?? DEFAULT_MAIL_FROM;
+  const publicUrl = parsePublicUrl(env[PUBLIC_URL_ENV]);
+  if (kind === undefined) return { kind: 'disabled', from, publicUrl };
+  if (kind === 'console') return { kind, from, publicUrl };
+  if (kind !== 'brevo') {
+    throw new UsageError(
+      `${MAILER_ENV} must be one of: ${MAILER_KINDS.join(', ')} (received "${kind}")`,
+    );
+  }
+  const reason = `when ${MAILER_ENV}=brevo`;
+  const apiKey = requireEnv(env, BREVO_API_KEY_ENV, reason);
+  if (publicUrl === null) throw new UsageError(`${PUBLIC_URL_ENV} is required ${reason}`);
+  return { kind, from, publicUrl, apiKey };
+};
+
+const parseAdminEmails = (raw: string | undefined): string[] =>
+  (raw ?? '')
+    .split(',')
+    .filter((entry) => entry.trim() !== '')
+    .map((entry) => {
+      try {
+        return normalizeEmail(entry);
+      } catch (error) {
+        if (!(error instanceof InvalidEmail)) throw error;
+        throw new UsageError(
+          `${ADMIN_EMAILS_ENV} must list e-mail addresses (received "${entry}")`,
+        );
+      }
+    });
 
 const buildConfig = (argv: readonly string[], env: Environment): AuditConfig => {
   const { values, positionals } = parseArgs({
@@ -161,6 +233,13 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
     dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
     allowPrivateTargets: env[ALLOW_PRIVATE_TARGETS_ENV] === 'true',
     delayMs: parseInteger(env[DELAY_ENV] ?? String(DEFAULT_DELAY_MS), DELAY_ENV, 0),
+    mail: parseMail(env),
+    adminEmails: parseAdminEmails(env[ADMIN_EMAILS_ENV]),
+    launchesPerDay: parseInteger(
+      env[LAUNCHES_PER_DAY_ENV] ?? String(DEFAULT_LAUNCHES_PER_DAY),
+      LAUNCHES_PER_DAY_ENV,
+      1,
+    ),
     ...parseStore(values.store, env),
   };
 };

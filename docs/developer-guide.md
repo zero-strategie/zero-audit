@@ -163,7 +163,7 @@ Migrations are **additive**: never edit one that has shipped. Add a new file to 
 
 ## HTTP API
 
-The API has no authentication (**no authentication, loopback only**): it listens on `HOST:PORT`, `127.0.0.1:3000` by default. Apart from `POST /audits`, it is read-only. Routes live in `src/http/routes/`. Their inputs are validated by JSON schemas, and the response bodies are shaped by `presenters.ts`.
+The API listens on `HOST:PORT`, `127.0.0.1:3000` by default and must never be exposed publicly: it trusts the web server, which relays the visitor's session in `X-Session-Id` (and the address in `X-Real-IP`). See [Accounts and security](#accounts-and-security). Apart from `POST /audits` and the `/auth/*` routes, it is read-only. Routes live in `src/http/routes/`. Their inputs are validated by JSON schemas, and the response bodies are shaped by `presenters.ts`.
 
 | Route | Answer |
 |---|---|
@@ -203,6 +203,18 @@ Errors share one format: `{ "error": { "code": "not_found" | "invalid_request" |
 - **500**: unexpected failure, returned with a generic message.
 
 Tests use `fastify.inject()` and never open a port. See `tests/http/`.
+
+## Accounts and security
+
+- **Sessions**: opened by `POST /auth/login` or an e-mail confirmation. Only the hash of the session id and of e-mail tokens is stored. A session lasts 30 days, absolute (`SESSION_TTL_MS`). The web keeps the id in an HTTP-only cookie and sends it to the API as `X-Session-Id` (`src/http/reader.ts`). Logout deletes the current session; a password reset or an account deletion deletes all of them. Passwords are hashed with scrypt from `node:crypto`.
+- **Mailer** (`ZERO_AUDIT_MAILER`): unset means disabled (sign-up, resend and reset answer 503); `console` writes links to the output and is forbidden in production (`serve` warns); `brevo` calls the Brevo HTTP API with undici, and needs `ZERO_AUDIT_BREVO_API_KEY` and `ZERO_AUDIT_PUBLIC_URL`. Only the console adapter ever writes a link to a log.
+- **Authorization**: every read goes through a `Reader`. A project without owner belongs to the showcase and is readable by everyone; a private project is readable by its owner only. Another account's resource answers **404**, never 403, so ids cannot be probed. Administrators (`ZERO_AUDIT_ADMIN_EMAILS`, compared case-insensitively, address still verified) get no access to other accounts' data.
+- **Quotas** (`src/domain/quota.ts`): regular accounts 100 pages and 3 audits per rolling 24 hours; administrators 500 pages. `ZERO_AUDIT_LAUNCHES_PER_DAY` is a global ceiling on 24 hours. Refusals are 429 `quota_exceeded` with a French message. The CLI is not limited. Counts come from the `api_launches` journal (SQLite migration 010, Postgres 005): one row per API launch, written by `SnapshotRepository.create` in the same transaction as the snapshot, keyed by the SHA-256 of the address and without foreign key to `users`, so erasing an account never lowers a quota. The daily purge drops rows older than 24 hours (`AccountEraser.purgeLaunchesBefore`).
+- **Abuse limits** (`src/domain/abuse-limits.ts`): login failures per account (5) and per IP (20) over 15 minutes, 5 sign-ups per IP per hour, 3 e-mailed links per address per hour (counted in the database). The in-memory `RateLimiter` fits the single API instance. The sign-up form has a honeypot field. Messages stay generic wherever they could reveal whether an account exists.
+- **Purge**: `serve` runs `PurgeStaleAccounts` at startup then daily (`src/cli/daily-purge.ts`): unverified accounts older than 7 days, expired sessions and tokens, and launch journal rows older than 24 hours. Erasure goes through the separate `AccountEraser` port, table by table in a transaction, with no `ON DELETE CASCADE`.
+- **Web**: pages redirect anonymous visitors to `/connexion?retour=<path>` (`safeReturnPath` only accepts local paths). `checkOrigin` and `isSameOrigin` stay on for every POST. The privacy page is `web/src/pages/confidentialite.astro`; its contact address is the single constant in `web/src/lib/contact.ts`.
+- **Variables**: `ZERO_AUDIT_PUBLIC_URL`, `ZERO_AUDIT_MAILER`, `ZERO_AUDIT_BREVO_API_KEY`, `ZERO_AUDIT_MAIL_FROM`, `ZERO_AUDIT_ADMIN_EMAILS`, `ZERO_AUDIT_LAUNCHES_PER_DAY`; see `.env.example`.
+- **Removing the basic auth**: the Caddy `basic_auth` block lives in zero-infra. It is removed there, in a separate PR, after this one is deployed and the mailer is configured; nothing in this repository changes it.
 
 ## SSRF guard
 
@@ -275,7 +287,7 @@ POSTGRES_PASSWORD=change-me docker compose up --build   # full local stack
 - **`build-and-push`** runs on `main` only. It publishes `ghcr.io/<owner>/zero-audit-api` and `-web`, tagged with the 12-character commit SHA and `latest`.
 - **`deploy`** runs on `main` only and is disabled until the repository variable `DEPLOY_ENABLED` is `true`. It connects over SSH and runs `/opt/zero-audit/deploy.sh <tag>` on the server, which pulls, migrates, health-checks and rolls back on failure. It then polls the public `/health`. It needs the secrets `DEPLOY_SSH_KEY`, `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_PORT` and `DEPLOY_KNOWN_HOSTS`, in a `production` environment.
 
-Server provisioning (reverse proxy, TLS, authentication, scheduled audits, backups) is outside this repository. The user guide shows a minimal Caddy setup.
+Server provisioning (reverse proxy, TLS, scheduled audits, backups) is outside this repository. The user guide shows a minimal Caddy setup.
 
 ## Conventions
 

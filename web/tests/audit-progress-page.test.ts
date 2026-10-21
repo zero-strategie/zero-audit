@@ -2,15 +2,18 @@ import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { expect, it } from 'vitest';
 import AuditPage from '../src/pages/audits/[id].astro';
 import { NotFound } from '../src/lib/api/errors';
-import type { AuditProgress } from '../src/lib/api/types';
-import { anAuditProgress, fakeApiClient } from './fake-api-client';
+import type { AuditProgress, CurrentAccount } from '../src/lib/api/types';
+import { anAccount, anAuditProgress, fakeApiClient } from './fake-api-client';
 
-const render = async (progress: Promise<AuditProgress>) => {
+const render = async (
+  progress: Promise<AuditProgress>,
+  user: CurrentAccount | null = anAccount(),
+) => {
   const container = await AstroContainer.create();
   return container.renderToResponse(AuditPage, {
     params: { id: 's2' },
     request: new Request('http://localhost/audits/s2'),
-    locals: { apiClient: fakeApiClient({ getAuditProgress: () => progress }) },
+    locals: { apiClient: fakeApiClient({ getAuditProgress: () => progress }), user },
   });
 };
 
@@ -64,4 +67,14 @@ it('relaunches with 100 pages when the failed audit used an unlisted limit', asy
   ).text();
 
   expect(html).toMatch(/name="limit" value="100"/);
+});
+
+it('shows no relaunch form to an anonymous visitor of a failed audit', async () => {
+  const html = await (
+    await render(Promise.resolve(anAuditProgress({ status: 'failed' })), null)
+  ).text();
+
+  expect(html).toContain('a échoué');
+  expect(html).not.toContain('Relancer');
+  expect(html).not.toContain('action="/audits/new"');
 });

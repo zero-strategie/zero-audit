@@ -17,8 +17,13 @@ import type {
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
+import { hashToken } from '../hash-token.js';
 import { withTransaction } from './pool.js';
 import { PostgresProjectRepository } from './postgres-project-repository.js';
+import { PostgresAccountEraser } from './postgres-account-eraser.js';
+import { PostgresEmailTokenRepository } from './postgres-email-token-repository.js';
+import { PostgresSessionRepository } from './postgres-session-repository.js';
+import { PostgresUserRepository } from './postgres-user-repository.js';
 
 type Queryable = pg.Pool | pg.PoolClient;
 
@@ -154,9 +159,17 @@ const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
 
 export class PostgresSnapshotRepository implements SnapshotRepository {
   readonly projects: PostgresProjectRepository;
+  readonly users: PostgresUserRepository;
+  readonly sessions: PostgresSessionRepository;
+  readonly emailTokens: PostgresEmailTokenRepository;
+  readonly eraser: PostgresAccountEraser;
 
   constructor(private readonly pool: pg.Pool) {
     this.projects = new PostgresProjectRepository(pool);
+    this.users = new PostgresUserRepository(pool);
+    this.sessions = new PostgresSessionRepository(pool);
+    this.emailTokens = new PostgresEmailTokenRepository(pool);
+    this.eraser = new PostgresAccountEraser(pool);
   }
 
   async ping(): Promise<void> {
@@ -165,16 +178,60 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
 
   async create(input: {
     projectId: string;
+    launchedBy: string | null;
     pagesLimit: number;
     startedAt: Date;
   }): Promise<Snapshot> {
-    const snapshot = Snapshot.start({ id: randomUUID(), ...input });
-    await this.pool.query(
-      `INSERT INTO snapshots (id, project_id, status, started_at, pages_crawled, pages_limit)
-       VALUES ($1, $2, $3, $4, 0, $5)`,
-      [snapshot.id, snapshot.projectId, snapshot.status, snapshot.startedAt, snapshot.pagesLimit],
-    );
+    const { launchedBy, ...props } = input;
+    const snapshot = Snapshot.start({ id: randomUUID(), ...props });
+    await withTransaction(this.pool, async (client) => {
+      await client.query(
+        `INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit)
+         VALUES ($1, $2, $3, $4, $5, 0, $6)`,
+        [
+          snapshot.id,
+          snapshot.projectId,
+          launchedBy,
+          snapshot.status,
+          snapshot.startedAt,
+          snapshot.pagesLimit,
+        ],
+      );
+      if (launchedBy === null) return;
+      const emailHash = await this.emailHashOf(client, launchedBy);
+      if (emailHash === null) return;
+      await client.query(
+        'INSERT INTO api_launches (id, email_hash, launched_at) VALUES ($1, $2, $3)',
+        [snapshot.id, emailHash, snapshot.startedAt],
+      );
+    });
     return snapshot;
+  }
+
+  private async emailHashOf(db: pg.Pool | pg.PoolClient, userId: string): Promise<string | null> {
+    const { rows } = await db.query<{ email: string }>('SELECT email FROM users WHERE id = $1', [
+      userId,
+    ]);
+    const email = rows[0]?.email;
+    return email === undefined ? null : hashToken(email);
+  }
+
+  async listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
+    const emailHash = await this.emailHashOf(this.pool, userId);
+    if (emailHash === null) return [];
+    const { rows } = await this.pool.query<{ launched_at: Date }>(
+      'SELECT launched_at FROM api_launches WHERE email_hash = $1 AND launched_at >= $2 ORDER BY launched_at',
+      [emailHash, since],
+    );
+    return rows.map((row) => row.launched_at);
+  }
+
+  async countApiLaunchedSince(since: Date): Promise<number> {
+    const { rows } = await this.pool.query<{ n: string }>(
+      'SELECT COUNT(*) AS n FROM api_launches WHERE launched_at >= $1',
+      [since],
+    );
+    return Number(rows[0]?.n);
   }
 
   addPages(id: string, pages: readonly Page[]): Promise<void> {

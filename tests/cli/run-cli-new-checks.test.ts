@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type StorageConfig } from '../../src/cli/storage-factory.js';
 import { idleAuditDependencies } from '../support/audit-doubles.js';
+import { idleAccountDependencies } from '../support/auth-doubles.js';
 import { buildServer } from '../../src/http/server.js';
 import { startFixtureServer, type FixtureServer } from '../support/fixture-server.js';
 import { TEST_DATABASE_URL } from '../support/postgres-test-database.js';
@@ -66,6 +67,7 @@ describe('checks 105, 137 and 205 end to end', () => {
       expect(code).toBe(0);
       const storage = await createStorage(configs[0] as StorageConfig);
       const app = buildServer({
+        ...idleAccountDependencies(),
         projects: storage.projects,
         snapshots: storage.snapshots,
         health: storage.health,

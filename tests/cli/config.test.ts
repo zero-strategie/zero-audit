@@ -120,6 +120,9 @@ describe('parseCommand subcommands', () => {
       databaseUrl: null,
       allowPrivateTargets: false,
       delayMs: 1000,
+      mail: { kind: 'disabled', from: 'no-reply@agents.zero-strategie.dev', publicUrl: null },
+      adminEmails: [],
+      launchesPerDay: 30,
     });
   });
 
@@ -242,5 +245,108 @@ describe('parseCommand migrate', () => {
 
   it('is listed in the usage', () => {
     expect(USAGE).toContain('migrate');
+  });
+});
+
+describe('parseCommand mailer configuration', () => {
+  const PUBLIC_URL = 'https://audit.exemple.test';
+  const mailOf = (env: Record<string, string>) => {
+    const command = parseCommand(['serve'], env);
+    if (command.kind !== 'serve') throw new Error(`expected serve, got ${command.kind}`);
+    return command.mail;
+  };
+  const messageOf = (env: Record<string, string>): string => {
+    const command = parseCommand(['serve'], env);
+    if (command.kind !== 'usage-error')
+      throw new Error(`expected usage-error, got ${command.kind}`);
+    return command.message;
+  };
+
+  it('uses the disabled mailer when ZERO_AUDIT_MAILER is not set', () => {
+    expect(mailOf({}).kind).toBe('disabled');
+  });
+
+  it('uses the console mailer when ZERO_AUDIT_MAILER=console', () => {
+    expect(mailOf({ ZERO_AUDIT_MAILER: 'console' }).kind).toBe('console');
+  });
+
+  it('reads the Brevo key, the sender and the public URL for ZERO_AUDIT_MAILER=brevo', () => {
+    expect(
+      mailOf({
+        ZERO_AUDIT_MAILER: 'brevo',
+        ZERO_AUDIT_BREVO_API_KEY: 'key',
+        ZERO_AUDIT_PUBLIC_URL: PUBLIC_URL,
+        ZERO_AUDIT_MAIL_FROM: 'moi@exemple.test',
+      }),
+    ).toEqual({ kind: 'brevo', apiKey: 'key', publicUrl: PUBLIC_URL, from: 'moi@exemple.test' });
+  });
+
+  it('defaults the sender to no-reply@agents.zero-strategie.dev', () => {
+    expect(mailOf({}).from).toBe('no-reply@agents.zero-strategie.dev');
+  });
+
+  it.each([
+    ['ZERO_AUDIT_BREVO_API_KEY', { ZERO_AUDIT_PUBLIC_URL: PUBLIC_URL }],
+    ['ZERO_AUDIT_PUBLIC_URL', { ZERO_AUDIT_BREVO_API_KEY: 'key' }],
+  ])('fails naming %s when it is missing with the brevo mailer', (name, env) => {
+    expect(messageOf({ ZERO_AUDIT_MAILER: 'brevo', ...env })).toContain(name);
+  });
+
+  it('refuses an unknown ZERO_AUDIT_MAILER value', () => {
+    expect(messageOf({ ZERO_AUDIT_MAILER: 'smtp' })).toContain('ZERO_AUDIT_MAILER');
+  });
+
+  it.each(['audit.exemple.test', 'ftp://audit.exemple.test', `${PUBLIC_URL}/`])(
+    'refuses the public URL "%s"',
+    (url) => {
+      expect(messageOf({ ZERO_AUDIT_PUBLIC_URL: url })).toContain('ZERO_AUDIT_PUBLIC_URL');
+    },
+  );
+});
+
+describe('parseCommand administrator addresses', () => {
+  const adminsOf = (env: Record<string, string>) => {
+    const command = parseCommand(['serve'], env);
+    if (command.kind !== 'serve') throw new Error(`expected serve, got ${command.kind}`);
+    return command.adminEmails;
+  };
+
+  it('has no administrator by default', () => {
+    expect(adminsOf({})).toEqual([]);
+  });
+
+  it('reads a comma-separated list, trimmed and lowercased, ignoring empty entries', () => {
+    expect(
+      adminsOf({ ZERO_AUDIT_ADMIN_EMAILS: ' Admin@Exemple.test, ,boss@exemple.test,' }),
+    ).toEqual(['admin@exemple.test', 'boss@exemple.test']);
+  });
+
+  it('refuses an entry that is not an e-mail address, naming the variable', () => {
+    const command = parseCommand(['serve'], { ZERO_AUDIT_ADMIN_EMAILS: 'admin@exemple.test,oops' });
+
+    expect(command).toMatchObject({ kind: 'usage-error' });
+    expect(JSON.stringify(command)).toContain('ZERO_AUDIT_ADMIN_EMAILS');
+  });
+});
+
+describe('parseCommand serve: ZERO_AUDIT_LAUNCHES_PER_DAY', () => {
+  const launchesOf = (env: Record<string, string>) => {
+    const command = parseCommand(['serve'], env);
+    return command.kind === 'serve' ? command.launchesPerDay : command;
+  };
+
+  it('defaults to 30 launches per day', () => {
+    expect(launchesOf({})).toBe(30);
+  });
+
+  it('reads a positive integer', () => {
+    expect(launchesOf({ ZERO_AUDIT_LAUNCHES_PER_DAY: '12' })).toBe(12);
+  });
+
+  it.each(['0', '-3', 'many', '2.5', ''])('refuses %j, naming the variable', (value) => {
+    const command = parseCommand(['serve'], { ZERO_AUDIT_LAUNCHES_PER_DAY: value });
+
+    expect(command).toMatchObject({ kind: 'usage-error' });
+    expect(JSON.stringify(command)).toContain('ZERO_AUDIT_LAUNCHES_PER_DAY');
   });
 });

@@ -84,3 +84,87 @@ export class InvalidAuditUrl extends DomainError {
     this.name = 'InvalidAuditUrl';
   }
 }
+
+export class InvalidEmail extends DomainError {
+  constructor() {
+    super('E-mail address is invalid');
+    this.name = 'InvalidEmail';
+  }
+}
+
+export class EmailAlreadyRegistered extends DomainError {
+  constructor() {
+    super('An account already exists for this e-mail address');
+    this.name = 'EmailAlreadyRegistered';
+  }
+}
+
+export class InvalidPassword extends DomainError {
+  constructor() {
+    super('Password must be between 12 and 128 characters long');
+    this.name = 'InvalidPassword';
+  }
+}
+
+export class MailDeliveryFailed extends DomainError {
+  constructor(reason: string) {
+    super(`E-mail delivery failed: ${reason}`);
+    this.name = 'MailDeliveryFailed';
+  }
+}
+
+export class MailerUnavailable extends DomainError {
+  constructor() {
+    super('No mailer is configured');
+    this.name = 'MailerUnavailable';
+  }
+}
+
+export type UnauthenticatedReason = 'bad-credentials' | 'no-session';
+
+export class Unauthenticated extends DomainError {
+  constructor(readonly reason: UnauthenticatedReason = 'bad-credentials') {
+    super('Authentication is required or the credentials are wrong');
+    this.name = 'Unauthenticated';
+  }
+}
+
+export class EmailNotVerified extends DomainError {
+  constructor() {
+    super('The e-mail address of this account is not verified');
+    this.name = 'EmailNotVerified';
+  }
+}
+
+export class InvalidOrExpiredToken extends DomainError {
+  constructor() {
+    super('The token is unknown, already used or expired');
+    this.name = 'InvalidOrExpiredToken';
+  }
+}
+
+export class AuditInProgress extends DomainError {
+  constructor() {
+    super('An audit launched by this account is still running');
+    this.name = 'AuditInProgress';
+  }
+}
+
+export class TooManyAttempts extends DomainError {
+  constructor() {
+    super('Too many attempts, try again later');
+    this.name = 'TooManyAttempts';
+  }
+}
+
+export type QuotaDenial =
+  | { readonly reason: 'pages'; readonly maxPages: number }
+  | { readonly reason: 'account'; readonly nextAvailableAt: Date }
+  | { readonly reason: 'global' };
+
+export class QuotaExceeded extends DomainError {
+  constructor(readonly denial: QuotaDenial) {
+    super(`Audit quota exceeded (${denial.reason})`);
+    this.name = 'QuotaExceeded';
+  }
+}

@@ -3,6 +3,8 @@ import { ListIssues } from '../../src/application/list-issues.js';
 import { ListOccurrences } from '../../src/application/list-occurrences.js';
 import type { Check, CheckResult } from '../../src/domain/check.js';
 import { SnapshotNotFound, UnknownCheck } from '../../src/domain/errors.js';
+import { ANONYMOUS_READER } from '../../src/domain/reader.js';
+import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 
 const checks: Check[] = [
@@ -24,9 +26,16 @@ const minutes = (n: number): Date => new Date(Date.UTC(2026, 0, 1, 10, n));
 
 const setup = () => {
   const repository = new InMemorySnapshotRepository();
+  const projects = new InMemoryProjectRepository();
   const record = async (minute: number, results: CheckResult[]): Promise<string> => {
+    const project = await projects.findOrCreateByRootUrl({
+      rootUrl: 'https://e.com/',
+      ownerId: null,
+      createdAt: minutes(0),
+    });
     const { id } = await repository.create({
-      projectId: 'p',
+      launchedBy: null,
+      projectId: project.id,
       pagesLimit: 10,
       startedAt: minutes(minute),
     });
@@ -36,8 +45,8 @@ const setup = () => {
   };
   return {
     record,
-    issues: new ListIssues(repository, checks),
-    occurrences: new ListOccurrences(repository, checks),
+    issues: new ListIssues(repository, projects, checks),
+    occurrences: new ListOccurrences(repository, projects, checks),
   };
 };
 
@@ -46,7 +55,7 @@ describe('ListIssues', () => {
     const { record, issues } = setup();
     const id = await record(0, [result(15, ['a', 'b'])]);
 
-    const rows = await issues.execute(id, {});
+    const rows = await issues.execute(ANONYMOUS_READER, id, {});
 
     expect(rows.map((row) => [row.checkId, row.count, row.examined])).toEqual([
       [2, 0, 0],
@@ -61,7 +70,9 @@ describe('ListIssues', () => {
     await record(0, [result(15, ['a', 'b'])]);
     const id = await record(10, [result(15, ['b', 'c', 'd'])]);
 
-    const row = (await issues.execute(id, {})).find(({ checkId }) => checkId === 15);
+    const row = (await issues.execute(ANONYMOUS_READER, id, {})).find(
+      ({ checkId }) => checkId === 15,
+    );
 
     expect(row).toMatchObject({ delta: 1, newCount: 2, fixedCount: 1 });
   });
@@ -70,7 +81,7 @@ describe('ListIssues', () => {
     const { record, issues } = setup();
     const id = await record(0, []);
 
-    const rows = await issues.execute(id, { severity: 'warning' });
+    const rows = await issues.execute(ANONYMOUS_READER, id, { severity: 'warning' });
 
     expect(rows.map(({ checkId }) => checkId)).toEqual([15]);
   });
@@ -78,7 +89,7 @@ describe('ListIssues', () => {
   it('fails for an unknown snapshot', async () => {
     const { issues } = setup();
 
-    await expect(issues.execute('nope', {})).rejects.toThrow(SnapshotNotFound);
+    await expect(issues.execute(ANONYMOUS_READER, 'nope', {})).rejects.toThrow(SnapshotNotFound);
   });
 });
 
@@ -89,7 +100,7 @@ describe('ListOccurrences', () => {
     const { record, occurrences } = setup();
     const id = await record(0, [result(15, [...urls].reverse())]);
 
-    const page = await occurrences.execute(id, 15, { page: 2, limit: 10 });
+    const page = await occurrences.execute(ANONYMOUS_READER, id, 15, { page: 2, limit: 10 });
 
     expect(page.items.map(({ pageUrl }) => pageUrl)).toEqual(urls.slice(10, 20));
     expect(page).toMatchObject({ total: 25, page: 2, limit: 10 });
@@ -99,7 +110,9 @@ describe('ListOccurrences', () => {
     const { record, occurrences } = setup();
     const id = await record(0, []);
 
-    expect(await occurrences.execute(id, 9, { page: 1, limit: 50 })).toMatchObject({
+    expect(
+      await occurrences.execute(ANONYMOUS_READER, id, 9, { page: 1, limit: 50 }),
+    ).toMatchObject({
       items: [],
       total: 0,
     });
@@ -109,8 +122,8 @@ describe('ListOccurrences', () => {
     const { record, occurrences } = setup();
     const id = await record(0, []);
 
-    await expect(occurrences.execute(id, 9999, { page: 1, limit: 50 })).rejects.toThrow(
-      UnknownCheck,
-    );
+    await expect(
+      occurrences.execute(ANONYMOUS_READER, id, 9999, { page: 1, limit: 50 }),
+    ).rejects.toThrow(UnknownCheck);
   });
 });

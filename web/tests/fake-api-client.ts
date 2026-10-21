@@ -3,6 +3,7 @@ import type {
   AuditProgress,
   CheckComparison,
   Comparison,
+  CurrentAccount,
   IssueRow,
   PageRow,
   ProjectOverview,
@@ -26,12 +27,22 @@ export const fakeApiClient = (overrides: Partial<ApiClient>): ApiClient => ({
   startAudit: unexpected,
   getAuditProgress: unexpected,
   checkHealth: unexpected,
+  register: unexpected,
+  resendVerification: unexpected,
+  verifyEmail: unexpected,
+  login: unexpected,
+  logout: unexpected,
+  getCurrentAccount: unexpected,
+  requestPasswordReset: unexpected,
+  confirmPasswordReset: unexpected,
+  deleteAccount: unexpected,
   ...overrides,
 });
 
 export const aProject = (overrides: Partial<ProjectOverview> = {}): ProjectOverview => ({
   id: 'p1',
   rootUrl: 'https://alpha.test/',
+  owned: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   latestSnapshot: { id: 's1', finishedAt: '2026-03-05T10:00:00.000Z', health: 82 },
   latestRun: { id: 's1', status: 'finished', startedAt: '2026-03-05T09:00:00.000Z' },
@@ -151,5 +162,14 @@ export const anAuditProgress = (overrides: Partial<AuditProgress> = {}): AuditPr
   pagesLimit: 100,
   startedAt: '2026-03-05T09:00:00.000Z',
   rootUrl: 'https://alpha.test/',
+  ...overrides,
+});
+
+export const anAccount = (overrides: Partial<CurrentAccount> = {}): CurrentAccount => ({
+  email: 'ada@example.test',
+  isAdmin: false,
+  pagesLimitMax: 100,
+  auditsRemaining: 2,
+  nextAuditAt: '2026-03-06T09:00:00.000Z',
   ...overrides,
 });

@@ -39,6 +39,7 @@ describe('createStorage', () => {
       dbPath: join(dir, 'audit.db'),
     });
     const project = await storage.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: 'https://x.test/',
       createdAt: new Date(),
     });

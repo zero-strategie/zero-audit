@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ListProjectSnapshots } from '../../application/list-project-snapshots.js';
 import type { ListProjects } from '../../application/list-projects.js';
 import { errorResponseSchema } from '../errors.js';
+import type { ReaderOf } from '../reader.js';
 import { presentProjectOverview, presentSnapshotListing } from '../presenters.js';
 
 const nullableDate = { type: ['string', 'null'], format: 'date-time' } as const;
@@ -12,10 +13,11 @@ const projectListSchema = {
       type: 'array',
       items: {
         type: 'object',
-        required: ['id', 'rootUrl', 'createdAt', 'latestSnapshot', 'latestRun'],
+        required: ['id', 'rootUrl', 'owned', 'createdAt', 'latestSnapshot', 'latestRun'],
         properties: {
           id: { type: 'string' },
           rootUrl: { type: 'string' },
+          owned: { type: 'boolean' },
           createdAt: { type: 'string' },
           latestSnapshot: {
             type: ['object', 'null'],
@@ -71,14 +73,17 @@ const snapshotListSchema = {
 export const registerProjectRoutes = (
   app: FastifyInstance,
   useCases: { listProjects: ListProjects; listProjectSnapshots: ListProjectSnapshots },
+  readerOf: ReaderOf,
 ): void => {
-  app.get('/projects', { schema: projectListSchema }, async () =>
-    (await useCases.listProjects.execute()).map(presentProjectOverview),
+  app.get('/projects', { schema: projectListSchema }, async (request) =>
+    (await useCases.listProjects.execute(await readerOf(request))).map(presentProjectOverview),
   );
   app.get<{ Params: { id: string } }>(
     '/projects/:id/snapshots',
     { schema: snapshotListSchema },
     async (request) =>
-      (await useCases.listProjectSnapshots.execute(request.params.id)).map(presentSnapshotListing),
+      (await useCases.listProjectSnapshots.execute(await readerOf(request), request.params.id)).map(
+        presentSnapshotListing,
+      ),
   );
 };

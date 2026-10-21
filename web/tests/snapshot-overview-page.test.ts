@@ -3,12 +3,13 @@ import { expect, it } from 'vitest';
 import OverviewPage from '../src/pages/snapshots/[id]/index.astro';
 import { ApiUnreachable, NotFound } from '../src/lib/api/errors';
 import type { SnapshotReport } from '../src/lib/api/types';
-import type { SnapshotListing } from '../src/lib/api/types';
-import { aReport, aSnapshotListing, fakeApiClient } from './fake-api-client';
+import type { CurrentAccount, SnapshotListing } from '../src/lib/api/types';
+import { anAccount, aReport, aSnapshotListing, fakeApiClient } from './fake-api-client';
 
 const render = async (
   getSnapshotReport: (id: string) => Promise<SnapshotReport>,
   snapshots: SnapshotListing[] = [aSnapshotListing()],
+  user: CurrentAccount | null = anAccount(),
 ) => {
   const container = await AstroContainer.create();
   return container.renderToResponse(OverviewPage, {
@@ -18,6 +19,7 @@ const render = async (
         getSnapshotReport,
         listProjectSnapshots: () => Promise.resolve(snapshots),
       }),
+      user,
     },
   });
 };
@@ -154,7 +156,8 @@ it('draws the health gauge, one card per theme and severity badges for top issue
   expect(html).toContain('severity-badge severity-warning');
 });
 
-const relaunchFormOf = (html: string) => html.match(/<form[^>]*action="\/audits\/new"[^]*?<\/form>/)?.[0] ?? '';
+const relaunchFormOf = (html: string) =>
+  html.match(/<form[^>]*action="\/audits\/new"[^]*?<\/form>/)?.[0] ?? '';
 
 it('offers to relaunch the audit with the snapshot page limit when it is allowed', async () => {
   const base = aReport();
@@ -171,4 +174,12 @@ it('relaunches with 100 pages when the snapshot limit is not offered', async () 
   const html = await renderReport(aReport({ snapshot: { ...base.snapshot, pagesLimit: 30 } }));
 
   expect(relaunchFormOf(html)).toContain('name="limit" value="100"');
+});
+
+it('hides the relaunch form from an anonymous visitor of a showcase audit', async () => {
+  const response = await render(() => Promise.resolve(aReport()), [aSnapshotListing()], null);
+  const html = await response.text();
+
+  expect(relaunchFormOf(html)).toBe('');
+  expect(html).not.toMatch(/Relancer l(?:'|&#39;)audit/);
 });

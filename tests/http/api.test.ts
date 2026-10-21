@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { CheckResult, Severity, Theme } from '../../src/domain/check.js';
 import type { SiteFile } from '../../src/domain/crawl.js';
 import { idleAuditDependencies } from '../support/audit-doubles.js';
+import { idleAccountDependencies } from '../support/auth-doubles.js';
 import { buildServer } from '../../src/http/server.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
@@ -39,6 +40,7 @@ describe('read-only HTTP API', () => {
     siteFiles: SiteFile[] = [],
   ): Promise<string> => {
     const { id } = await snapshots.create({
+      launchedBy: null,
       projectId,
       pagesLimit: 10,
       startedAt: minutes(startMinute),
@@ -55,12 +57,18 @@ describe('read-only HTTP API', () => {
   };
 
   const newProject = (rootUrl: string, createdAt = minutes(0)) =>
-    projects.findOrCreateByRootUrl({ rootUrl, createdAt });
+    projects.findOrCreateByRootUrl({ ownerId: null, rootUrl, createdAt });
 
   beforeEach(() => {
     projects = new InMemoryProjectRepository();
     snapshots = new InMemorySnapshotRepository();
-    app = buildServer({ projects, snapshots, health: snapshots, ...idleAuditDependencies() });
+    app = buildServer({
+      ...idleAccountDependencies(),
+      projects,
+      snapshots,
+      health: snapshots,
+      ...idleAuditDependencies(),
+    });
   });
 
   afterEach(async () => {
@@ -87,6 +95,7 @@ describe('read-only HTTP API', () => {
         {
           id: first.id,
           rootUrl: 'https://e.com/',
+          owned: false,
           createdAt: minutes(0).toISOString(),
           latestSnapshot: { id: latest, finishedAt: minutes(11).toISOString(), health: 90 },
           latestRun: { id: latest, status: 'finished', startedAt: minutes(10).toISOString() },
@@ -94,6 +103,7 @@ describe('read-only HTTP API', () => {
         {
           id: expect.any(String) as string,
           rootUrl: 'https://other.com/',
+          owned: false,
           createdAt: minutes(5).toISOString(),
           latestSnapshot: null,
           latestRun: null,
@@ -104,6 +114,7 @@ describe('read-only HTTP API', () => {
     it('gives a running snapshot as latest run of the project', async () => {
       const project = await newProject('https://e.com/');
       const { id } = await snapshots.create({
+        launchedBy: null,
         projectId: project.id,
         pagesLimit: 10,
         startedAt: minutes(20),

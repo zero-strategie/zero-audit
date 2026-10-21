@@ -1,5 +1,7 @@
 import { AuditRunner } from '../application/audit-runner.js';
+import { PurgeStaleAccounts } from '../application/purge-stale-accounts.js';
 import { FailOrphanedAudits } from '../application/fail-orphaned-audits.js';
+import { ANONYMOUS_READER } from '../domain/reader.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetSnapshotReport } from '../application/get-snapshot-report.js';
 import {
@@ -8,8 +10,11 @@ import {
   SnapshotsFromDifferentProjects,
 } from '../domain/errors.js';
 import { allChecks } from '../domain/checks/index.js';
+import { RandomTokenGenerator } from '../infrastructure/crypto/random-token-generator.js';
+import { ScryptPasswordHasher } from '../infrastructure/crypto/scrypt-password-hasher.js';
 import { JsonLinesAuditEvents } from '../infrastructure/json-lines-audit-events.js';
 import { DnsHostResolver } from '../infrastructure/dns-host-resolver.js';
+import { InMemoryRateLimiter } from '../infrastructure/rate-limit/in-memory-rate-limiter.js';
 import { SystemClock } from '../infrastructure/system-clock.js';
 import { buildServer, type HttpServer, type ServerDependencies } from '../http/server.js';
 import {
@@ -19,7 +24,9 @@ import {
   type MigrateConfig,
   type ServeConfig,
 } from './config.js';
+import { CONSOLE_MAILER_WARNING, createMailer } from './mailer-factory.js';
 import { createRunAudit } from './audit-factory.js';
+import { startDailyPurge } from './daily-purge.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
 import { renderComparison } from './render-compare.js';
@@ -31,6 +38,9 @@ import {
   type StorageFactory,
 } from './storage-factory.js';
 import { USAGE } from './usage.js';
+
+/** Where the dashboard listens locally: links in e-mails point there when no public URL is set. */
+const DEFAULT_PUBLIC_URL = 'http://127.0.0.1:4321';
 
 export const EXIT_SUCCESS = 0;
 export const EXIT_CRAWL_FAILED = 1;
@@ -100,6 +110,7 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
     });
     progress.finish();
     const report = await new GetSnapshotReport(opened.snapshots, opened.projects).execute(
+      ANONYMOUS_READER,
       details.snapshot.id,
     );
     io.stdout(renderSummary(report, labelsById()));
@@ -129,12 +140,31 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
   let storage: Storage | null = null;
   let server: HttpServer | null = null;
   let runner: AuditRunner | null = null;
+  let stopPurge: (() => void) | null = null;
   try {
+    if (config.mail.kind === 'console') io.stderr(`Avertissement, ${CONSOLE_MAILER_WARNING}\n`);
     const opened = await (hooks.storageFactory ?? createStorage)(config);
     storage = opened;
     hooks.onStorageOpened?.(opened);
     const clock = new SystemClock();
     await new FailOrphanedAudits(opened.snapshots, clock).execute();
+    const logger = {
+      info: (message: string) => {
+        io.stderr(`${message}\n`);
+      },
+      error: (message: string) => {
+        io.stderr(`${message}\n`);
+      },
+    };
+    stopPurge = await startDailyPurge(
+      new PurgeStaleAccounts({
+        eraser: opened.eraser,
+        sessions: opened.sessions,
+        emailTokens: opened.emailTokens,
+        clock,
+      }),
+      logger,
+    );
     runner = new AuditRunner({
       createRunAudit: (events) =>
         createRunAudit({
@@ -145,14 +175,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
       snapshots: opened.snapshots,
       projects: opened.projects,
       clock,
-      logger: {
-        info: (message) => {
-          io.stderr(`${message}\n`);
-        },
-        error: (message) => {
-          io.stderr(`${message}\n`);
-        },
-      },
+      logger,
       delayMs: config.delayMs,
     });
     hooks.onAuditRunnerStarted?.(runner);
@@ -163,6 +186,20 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
       auditRunner: runner,
       hostResolver: new DnsHostResolver(),
       allowPrivateTargets: config.allowPrivateTargets,
+      users: opened.users,
+      sessions: opened.sessions,
+      emailTokens: opened.emailTokens,
+      eraser: opened.eraser,
+      rateLimiter: new InMemoryRateLimiter(clock),
+      passwordHasher: new ScryptPasswordHasher(),
+      mailer: createMailer(config.mail, logger, (text) => {
+        io.stderr(text);
+      }),
+      tokenGenerator: new RandomTokenGenerator(),
+      clock,
+      publicUrl: config.mail.publicUrl ?? DEFAULT_PUBLIC_URL,
+      adminEmails: config.adminEmails,
+      launchesPerDay: config.launchesPerDay,
     });
     hooks.onServerStarted?.(server);
     await server.listen({ host: config.host, port: config.port });
@@ -173,6 +210,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
     io.stderr(`Démarrage du serveur échoué : ${errorMessage(error)}\n`);
     return EXIT_CRAWL_FAILED;
   } finally {
+    stopPurge?.();
     await server?.close();
     await runner?.stop();
     await storage?.close();
@@ -193,7 +231,8 @@ const compare = async (config: CompareConfig, io: CliIo, hooks: CliHooks): Promi
   try {
     storage = await (hooks.storageFactory ?? createStorage)(config);
     hooks.onStorageOpened?.(storage);
-    const comparison = await new CompareSnapshots(storage.snapshots).execute(
+    const comparison = await new CompareSnapshots(storage.snapshots, storage.projects).execute(
+      ANONYMOUS_READER,
       config.baseId,
       config.targetId,
     );

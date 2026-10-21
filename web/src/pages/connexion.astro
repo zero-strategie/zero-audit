@@ -1,0 +1,86 @@
+---
+import ErrorView from '../components/ErrorView.astro';
+import FormAlert from '../components/FormAlert.astro';
+import Layout from '../layouts/Layout.astro';
+import { Forbidden } from '../lib/api/errors';
+import { toFailure } from '../lib/failure';
+import { isSameOrigin } from '../lib/same-origin';
+import { safeReturnPath } from '../lib/safe-return-path';
+import { SESSION_COOKIE, SESSION_COOKIE_OPTIONS } from '../lib/session-cookie';
+import { isUserFacingError } from '../lib/user-facing-error';
+
+const HTTP_FORBIDDEN = 403;
+const HTTP_SEE_OTHER = 303;
+const RESEND_INTENT = 'resend';
+
+let email = '';
+let returnPath = safeReturnPath(Astro.url.searchParams.get('retour'));
+let notice: string | null = Astro.url.searchParams.has('reinitialise')
+  ? 'Votre mot de passe a été modifié : vous pouvez vous connecter'
+  : null;
+let message: string | null = null;
+let unverified = false;
+let failure = null;
+
+if (Astro.request.method === 'POST') {
+  if (!isSameOrigin(Astro.request)) return new Response('Forbidden', { status: HTTP_FORBIDDEN });
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim();
+  returnPath = safeReturnPath(String(form.get('retour') ?? '') || null);
+  try {
+    if (form.get('intent') === RESEND_INTENT) {
+      notice = await Astro.locals.apiClient.resendVerification(email);
+    } else {
+      const sessionId = await Astro.locals.apiClient.login({
+        email,
+        password: String(form.get('password') ?? ''),
+      });
+      Astro.cookies.set(SESSION_COOKIE, sessionId, SESSION_COOKIE_OPTIONS);
+      return Astro.redirect(returnPath, HTTP_SEE_OTHER);
+    }
+  } catch (error) {
+    if (isUserFacingError(error)) {
+      message = error.message;
+      unverified = error instanceof Forbidden;
+    } else {
+      failure = toFailure(error);
+      Astro.response.status = failure.status;
+    }
+  }
+}
+---
+
+{
+  failure ? (
+    <ErrorView failure={failure} />
+  ) : (
+    <Layout title="Se connecter – zero-audit">
+      <h1>Se connecter</h1>
+      <FormAlert message={message} />
+      <FormAlert message={notice} kind="info" />
+      {
+        unverified && (
+          <form method="post" action="/connexion">
+            <input type="hidden" name="intent" value={RESEND_INTENT} />
+            <input type="hidden" name="email" value={email} />
+            <button type="submit">Renvoyer le lien de confirmation</button>
+          </form>
+        )
+      }
+      <form method="post" action="/connexion">
+        <input type="hidden" name="retour" value={returnPath} />
+        <label>
+          Adresse e-mail
+          <input type="email" name="email" value={email} autocomplete="email" required />
+        </label>
+        <label>
+          Mot de passe
+          <input type="password" name="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit" class="button-primary">Se connecter</button>
+      </form>
+      <p><a href="/mot-de-passe-oublie">Mot de passe oublié ?</a></p>
+      <p>Pas encore de compte ? <a href="/inscription">S'inscrire</a></p>
+    </Layout>
+  )
+}

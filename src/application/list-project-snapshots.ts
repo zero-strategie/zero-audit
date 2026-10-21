@@ -1,4 +1,5 @@
 import { ProjectNotFound } from '../domain/errors.js';
+import { canRead, type Reader } from '../domain/reader.js';
 import type { Snapshot } from '../domain/snapshot.js';
 import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotRepository } from './ports/snapshot-repository.js';
@@ -16,8 +17,9 @@ export class ListProjectSnapshots {
   ) {}
 
   /** Most recent first. */
-  async execute(projectId: string): Promise<SnapshotListing[]> {
-    if (!(await this.projects.getById(projectId))) throw new ProjectNotFound(projectId);
+  async execute(reader: Reader, projectId: string): Promise<SnapshotListing[]> {
+    const project = await this.projects.getById(projectId);
+    if (!project || !canRead(reader, project)) throw new ProjectNotFound(projectId);
     const snapshots = await this.snapshots.listByProject(projectId);
     return Promise.all(
       snapshots.map(async (snapshot) => ({

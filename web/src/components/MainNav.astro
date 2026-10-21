@@ -1,9 +1,12 @@
 ---
+import type { CurrentAccount } from '../lib/api/types';
+
 interface Props {
+  user?: CurrentAccount | null | undefined;
   projectId?: string | undefined;
   snapshotId?: string | undefined;
 }
-const { projectId, snapshotId } = Astro.props;
+const { user, projectId, snapshotId } = Astro.props;
 const compareHref = projectId
   ? `/projects/${projectId}/compare`
   : snapshotId && `/snapshots/${snapshotId}/compare`;
@@ -22,4 +25,21 @@ const compareHref = projectId
     )
   }
   {compareHref && <a href={compareHref}>Comparaison</a>}
+  <div class="nav-account">
+    {
+      user ? (
+        <>
+          <a href="/compte">Mon compte</a>
+          <form method="post" action="/deconnexion">
+            <button type="submit">Se déconnecter</button>
+          </form>
+        </>
+      ) : (
+        <>
+          <a href="/connexion">Se connecter</a>
+          <a href="/inscription">S'inscrire</a>
+        </>
+      )
+    }
+  </div>
 </nav>

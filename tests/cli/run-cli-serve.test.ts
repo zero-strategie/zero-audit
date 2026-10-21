@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInterruptController } from '../../src/cli/interrupt-controller.js';
 import { runCli, type CliHooks, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type Storage, type StorageFactory } from '../../src/cli/storage-factory.js';
-import type { HttpServer } from '../../src/http/server.js';
+import type { HttpServer, ServerDependencies } from '../../src/http/server.js';
 import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../src/domain/snapshot.js';
 import type { AuditRunner } from '../../src/application/audit-runner.js';
 import { startFixtureServer } from '../support/fixture-server.js';
@@ -65,6 +65,10 @@ describe('runCli serve', () => {
       projects: real.projects,
       snapshots: real.snapshots,
       health: real.health,
+      users: real.users,
+      sessions: real.sessions,
+      emailTokens: real.emailTokens,
+      eraser: real.eraser,
       close: () => {
         storageCloses += 1;
         const result = real.close();
@@ -122,6 +126,86 @@ describe('runCli serve', () => {
     await serve(['--port', '4000'], server);
 
     expect(server.calls).toEqual([{ host: '127.0.0.1', port: 4000 }]);
+  });
+
+  describe('account dependencies given to the server', () => {
+    const dependenciesOf = async (
+      env: Record<string, string> = {},
+    ): Promise<ServerDependencies> => {
+      const received: ServerDependencies[] = [];
+      await serve(
+        [],
+        fakeServer(events),
+        {
+          createServer: (dependencies) => {
+            received.push(dependencies);
+            return fakeServer(events);
+          },
+        },
+        capture().io,
+        env,
+      );
+      const [dependencies] = received;
+      if (!dependencies) throw new Error('the server was not built');
+      return dependencies;
+    };
+
+    it('keeps the mailer disabled and has no administrator by default', async () => {
+      const dependencies = await dependenciesOf();
+
+      expect(dependencies.mailer.enabled).toBe(false);
+      expect(dependencies.adminEmails).toEqual([]);
+    });
+
+    it('wires the console mailer, the administrators and the public URL from the environment', async () => {
+      const dependencies = await dependenciesOf({
+        ZERO_AUDIT_MAILER: 'console',
+        ZERO_AUDIT_ADMIN_EMAILS: 'Admin@Exemple.test',
+        ZERO_AUDIT_PUBLIC_URL: 'https://audit.exemple.test',
+      });
+
+      expect(dependencies.mailer.enabled).toBe(true);
+      expect(dependencies.adminEmails).toEqual(['admin@exemple.test']);
+      expect(dependencies.publicUrl).toBe('https://audit.exemple.test');
+    });
+
+    it('points the links at the local dashboard when no public URL is set', async () => {
+      expect((await dependenciesOf()).publicUrl).toBe('http://127.0.0.1:4321');
+    });
+
+    it('stores accounts in the opened storage', async () => {
+      const opened: Storage[] = [];
+      const received: ServerDependencies[] = [];
+
+      await serve([], fakeServer(events), {
+        onStorageOpened: (storage) => opened.push(storage),
+        createServer: (dependencies) => {
+          received.push(dependencies);
+          return fakeServer(events);
+        },
+      });
+
+      expect(received[0]?.users).toBe(opened[0]?.users);
+      expect(received[0]?.sessions).toBe(opened[0]?.sessions);
+      expect(received[0]?.emailTokens).toBe(opened[0]?.emailTokens);
+      expect(received[0]?.eraser).toBe(opened[0]?.eraser);
+    });
+  });
+
+  it('warns that the console mailer is forbidden in production', async () => {
+    const run = capture();
+
+    await serve([], fakeServer(events), {}, run.io, { ZERO_AUDIT_MAILER: 'console' });
+
+    expect(run.err()).toContain('mailer console : interdit en production');
+  });
+
+  it('does not warn about the mailer by default', async () => {
+    const run = capture();
+
+    await serve([], fakeServer(events), {}, run.io);
+
+    expect(run.err()).not.toContain('mailer');
   });
 
   it('prints an error and exits non-zero for an invalid port, without starting anything', async () => {
@@ -211,11 +295,13 @@ describe('runCli serve', () => {
       databaseUrl: null,
     });
     const project = await seeded.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: 'https://exemple.com/',
       createdAt: new Date(),
     });
     const start = (ageMs: number) =>
       seeded.snapshots.create({
+        launchedBy: null,
         projectId: project.id,
         pagesLimit: 100,
         startedAt: new Date(Date.now() - ageMs),
@@ -242,6 +328,70 @@ describe('runCli serve', () => {
     });
 
     expect(statuses).toEqual(['failed', 'running']);
+  });
+
+  describe('purge of stale accounts', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    const seed = async () => {
+      const seeded = await createStorage({ store: 'sqlite', dbPath, databaseUrl: null });
+      const now = Date.now();
+      const stale = await seeded.users.create({
+        email: 'stale@exemple.test',
+        passwordHash: 'h',
+        createdAt: new Date(now - 8 * DAY_MS),
+      });
+      const recent = await seeded.users.create({
+        email: 'recent@exemple.test',
+        passwordHash: 'h',
+        createdAt: new Date(now - DAY_MS),
+      });
+      await seeded.sessions.create({
+        id: 'expired-session',
+        userId: recent.id,
+        createdAt: new Date(now - 2 * DAY_MS),
+        expiresAt: new Date(now - DAY_MS),
+      });
+      await seeded.close();
+      return { stale, recent };
+    };
+
+    it('removes unverified accounts older than 7 days and expired sessions at startup', async () => {
+      const { stale, recent } = await seed();
+      let outcome: unknown = null;
+
+      await serve([], fakeServer(events), {
+        storageFactory: async (config) => {
+          const storage = await storageFactory(config);
+          return {
+            ...storage,
+            close: async () => {
+              outcome = [
+                await storage.users.findById(stale.id),
+                (await storage.users.findById(recent.id))?.email,
+                await storage.sessions.deleteExpired(new Date()),
+              ];
+              await storage.close();
+            },
+          };
+        },
+      });
+
+      expect(outcome).toEqual([null, 'recent@exemple.test', 0]);
+    });
+
+    it('schedules the purge every day and stops the schedule when the server stops', async () => {
+      const setTimer = vi.spyOn(globalThis, 'setInterval');
+      const clearTimer = vi.spyOn(globalThis, 'clearInterval');
+
+      await serve([], fakeServer(events));
+
+      const index = setTimer.mock.calls.findIndex(([, delay]) => delay === DAY_MS);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(clearTimer).toHaveBeenCalledWith(setTimer.mock.results[index]?.value);
+      setTimer.mockRestore();
+      clearTimer.mockRestore();
+    });
   });
 
   it('hands over a runner that audits a local target once private targets are allowed', async () => {

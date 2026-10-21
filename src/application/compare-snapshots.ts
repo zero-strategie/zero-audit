@@ -1,12 +1,11 @@
-import {
-  SnapshotNotFinished,
-  SnapshotNotFound,
-  SnapshotsFromDifferentProjects,
-} from '../domain/errors.js';
+import { SnapshotNotFinished, SnapshotsFromDifferentProjects } from '../domain/errors.js';
 import type { Snapshot } from '../domain/snapshot.js';
+import type { Reader } from '../domain/reader.js';
 import { buildScoreCard, type ScoreCard } from '../domain/scoring.js';
 import { diffChecks, type CheckDiff } from '../domain/snapshot-diff.js';
+import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotDetails, SnapshotRepository } from './ports/snapshot-repository.js';
+import { loadReadableSnapshot } from './readable-snapshot.js';
 
 export interface SnapshotComparison {
   readonly base: Snapshot;
@@ -18,11 +17,14 @@ export interface SnapshotComparison {
 }
 
 export class CompareSnapshots {
-  constructor(private readonly repository: SnapshotRepository) {}
+  constructor(
+    private readonly repository: SnapshotRepository,
+    private readonly projects: ProjectRepository,
+  ) {}
 
-  async execute(baseId: string, targetId: string): Promise<SnapshotComparison> {
-    const base = await this.load(baseId);
-    const target = await this.load(targetId);
+  async execute(reader: Reader, baseId: string, targetId: string): Promise<SnapshotComparison> {
+    const base = await this.load(reader, baseId);
+    const target = await this.load(reader, targetId);
     if (base.snapshot.projectId !== target.snapshot.projectId) {
       throw new SnapshotsFromDifferentProjects(baseId, targetId);
     }
@@ -38,9 +40,7 @@ export class CompareSnapshots {
     };
   }
 
-  private async load(id: string): Promise<SnapshotDetails> {
-    const details = await this.repository.getById(id);
-    if (!details) throw new SnapshotNotFound(id);
-    return details;
+  private async load(reader: Reader, id: string): Promise<SnapshotDetails> {
+    return (await loadReadableSnapshot(this.repository, this.projects, reader, id)).details;
   }
 }

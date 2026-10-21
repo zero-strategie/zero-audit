@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { PAGE_SORTS, type ListPages, type PageSort } from '../../application/list-pages.js';
 import { PAGE_GROUPS } from '../../domain/page-groups.js';
 import { errorResponseSchema } from '../errors.js';
+import type { ReaderOf } from '../reader.js';
 import {
   pageEnvelope,
   paginationProperties,
@@ -41,10 +42,12 @@ const pageListSchema = {
 export const registerPageRoutes = (
   app: FastifyInstance,
   useCases: { listPages: ListPages },
+  readerOf: ReaderOf,
 ): void => {
   app.get<{ Params: { id: string }; Querystring: PaginationQuery & { sort: PageSort } }>(
     '/snapshots/:id/pages',
     { schema: pageListSchema },
-    (request) => useCases.listPages.execute(request.params.id, request.query),
+    async (request) =>
+      useCases.listPages.execute(await readerOf(request), request.params.id, request.query),
   );
 };

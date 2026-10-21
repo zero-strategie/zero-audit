@@ -22,6 +22,10 @@ export interface AuditRequest {
   rootUrl: string;
   limit: number;
   delayMs: number;
+  /** The account owning the audited project; absent for the command line (showcase project). */
+  ownerId?: string;
+  /** The account behind an API launch; absent for the command line. */
+  launchedBy?: string;
   onProgress?: (crawled: number, limit: number) => void;
   onSnapshotCreated?: (snapshotId: string) => void;
 }
@@ -34,10 +38,12 @@ export class RunAudit {
     const startedAt = new Date(clock.now());
     const project = await projects.findOrCreateByRootUrl({
       rootUrl: normalizeUrl(request.rootUrl),
+      ownerId: request.ownerId ?? null,
       createdAt: startedAt,
     });
     const snapshot = await repository.create({
       projectId: project.id,
+      launchedBy: request.launchedBy ?? null,
       pagesLimit: request.limit,
       startedAt,
     });
