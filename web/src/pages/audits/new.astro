@@ -53,7 +53,7 @@ if (Astro.request.method === 'POST') {
     <Layout title="Lancer un audit – zero-audit">
       <h1>Lancer un audit</h1>
       {message && <p class="alert alert-error" role="alert">{message}</p>}
-      <form method="post" action="/audits/new">
+      <form method="post" action="/audits/new" class="form-launch panel">
         <label>
           Adresse du site
           <input type="url" name="url" value={url} placeholder="https://exemple.fr/" required />
