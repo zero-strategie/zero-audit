@@ -1,13 +1,17 @@
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import ProjectsPage from '../src/pages/index.astro';
 import { ApiUnreachable } from '../src/lib/api/errors';
-import { aProject, fakeApiClient } from './fake-api-client';
+import type { CurrentAccount } from '../src/lib/api/types';
+import { anAccount, aProject, fakeApiClient } from './fake-api-client';
 
-const render = async (listProjects: () => Promise<ReturnType<typeof aProject>[]>) => {
+const render = async (
+  listProjects: () => Promise<ReturnType<typeof aProject>[]>,
+  user: CurrentAccount | null = anAccount(),
+) => {
   const container = await AstroContainer.create();
   return container.renderToResponse(ProjectsPage, {
-    locals: { apiClient: fakeApiClient({ listProjects }) },
+    locals: { apiClient: fakeApiClient({ listProjects }), user },
   });
 };
 
@@ -71,7 +75,7 @@ it('names the site in each relaunch button for screen readers', async () => {
   expect(html).toContain(`aria-label="Relancer l'audit de alpha.test"`);
 });
 
-it('invites to run a first audit when there is no project', async () => {
+it('invites a signed-in account without project of its own to run a first audit', async () => {
   const html = await (await render(() => Promise.resolve([]))).text();
 
   expect(html).toContain("Aucun audit n'a encore été lancé");
@@ -87,4 +91,63 @@ it('renders a 502 error page when the API is unreachable', async () => {
   expect(html).toContain("L'API ne répond pas");
   expect(html).toContain('ZERO_AUDIT_API_URL');
   expect(html).toContain('pnpm zero-audit serve');
+});
+
+describe('for an anonymous visitor', () => {
+  const anonymous = async (projects = [aProject()]) =>
+    (await render(() => Promise.resolve(projects), null)).text();
+
+  it('lists the showcase projects', async () => {
+    const html = await anonymous();
+
+    expect(html).toContain('Vitrine');
+    expect(html).toContain('https://alpha.test/');
+    expect(html).toMatch(/href="\/snapshots\/s1"/);
+  });
+
+  it('offers to create an account and shows no relaunch button', async () => {
+    const html = await anonymous();
+
+    expect(html).toMatch(/<a [^>]*href="\/inscription"/);
+    expect(html).not.toContain('Relancer');
+    expect(html).not.toMatch(/action="\/audits\/new"/);
+  });
+
+  it('says the showcase is empty when it has no project', async () => {
+    const html = await anonymous([]);
+
+    expect(html).toContain('La vitrine est vide');
+    expect(html).toMatch(/href="\/inscription"/);
+  });
+});
+
+describe('for a signed-in account', () => {
+  const projects = [
+    aProject({ id: 'mine', rootUrl: 'https://mine.test/', owned: true }),
+    aProject({ id: 'shared', rootUrl: 'https://showcase.test/' }),
+  ];
+
+  it('puts "Mes projets" before the showcase, each project in its own section', async () => {
+    const html = await (await render(() => Promise.resolve(projects))).text();
+
+    const mine = html.indexOf('Mes projets');
+    const showcase = html.indexOf('Vitrine');
+    expect(mine).toBeGreaterThan(-1);
+    expect(showcase).toBeGreaterThan(mine);
+    expect(html.indexOf('https://mine.test/')).toBeLessThan(showcase);
+    expect(html.indexOf('https://showcase.test/')).toBeGreaterThan(showcase);
+  });
+
+  it('offers the relaunch button on both sections', async () => {
+    const html = await (await render(() => Promise.resolve(projects))).text();
+
+    expect(html).toContain(`aria-label="Relancer l'audit de mine.test"`);
+    expect(html).toContain(`aria-label="Relancer l'audit de showcase.test"`);
+  });
+
+  it('does not offer to create an account', async () => {
+    const html = await (await render(() => Promise.resolve(projects))).text();
+
+    expect(html).not.toMatch(/href="\/inscription"/);
+  });
 });

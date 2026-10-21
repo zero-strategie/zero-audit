@@ -1,0 +1,46 @@
+---
+import type { ProjectOverview } from '../lib/api/types';
+import { DEFAULT_LIMIT } from '../lib/audit-limits';
+import { formatDateFr } from '../lib/presentation';
+import RelaunchForm from './RelaunchForm.astro';
+
+interface Props {
+  projects: ProjectOverview[];
+  /** A relaunch needs an account: the button is hidden from visitors. */
+  canRelaunch: boolean;
+}
+const { projects, canRelaunch } = Astro.props;
+---
+
+<div class="table-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Site</th><th>Santé</th><th>Dernier audit</th><th>Statut</th>
+        {canRelaunch && <th>Action</th>}
+      </tr>
+    </thead>
+    <tbody>
+      {projects.map(({ id, rootUrl, latestSnapshot, latestRun }) => (
+        <tr data-testid={`project-${id}`}>
+          <td>{rootUrl}</td>
+          {latestSnapshot ? (
+            <>
+              <td>{latestSnapshot.health ?? 'Non calculable'}</td>
+              <td><a href={`/snapshots/${latestSnapshot.id}`}>{formatDateFr(latestSnapshot.finishedAt)}</a></td>
+            </>
+          ) : (
+            <td colspan="2">Aucun audit terminé</td>
+          )}
+          <td>
+            {latestRun?.status === 'running' && <a href={`/audits/${latestRun.id}`}>en cours…</a>}
+            {latestRun?.status === 'failed' && 'échoué'}
+          </td>
+          {canRelaunch && (
+            <td><RelaunchForm url={rootUrl} limit={DEFAULT_LIMIT} ariaLabel={`Relancer l'audit de ${new URL(rootUrl).host}`} /></td>
+          )}
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>

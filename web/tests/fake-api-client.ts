@@ -42,6 +42,7 @@ export const fakeApiClient = (overrides: Partial<ApiClient>): ApiClient => ({
 export const aProject = (overrides: Partial<ProjectOverview> = {}): ProjectOverview => ({
   id: 'p1',
   rootUrl: 'https://alpha.test/',
+  owned: false,
   createdAt: '2026-01-01T00:00:00.000Z',
   latestSnapshot: { id: 's1', finishedAt: '2026-03-05T10:00:00.000Z', health: 82 },
   latestRun: { id: 's1', status: 'finished', startedAt: '2026-03-05T09:00:00.000Z' },
