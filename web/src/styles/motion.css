@@ -42,6 +42,13 @@
   }
 }
 
+@keyframes drop {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
 @keyframes grow-x {
   from {
     transform: scaleX(0);
@@ -102,6 +109,7 @@
   }
 
   .enter,
+  .delta,
   .reveal-on-scroll > * {
     animation-name: fade;
     animation-timeline: auto;

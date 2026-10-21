@@ -1044,6 +1044,52 @@ a.button-primary {
   color: var(--color-notice-text);
 }
 
+/* Comparison: A and B side by side; each change drops into place, worse or better said three ways
+   (sign, arrow, color). */
+.compare-ab {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+}
+
+.compare-ab strong {
+  color: var(--color-text);
+  font-size: var(--text-sm);
+}
+
+.delta {
+  font-family: var(--font-data);
+  font-weight: 600;
+  white-space: nowrap;
+  animation: drop var(--dur-medium) var(--ease-out) both;
+  animation-delay: 420ms;
+}
+
+.delta-worse {
+  color: var(--color-error-text);
+}
+
+.delta-worse::before {
+  content: '↑ ' / '';
+}
+
+.delta-better {
+  color: var(--color-success-text);
+}
+
+.delta-better::before {
+  content: '↓ ' / '';
+}
+
+.delta-flat {
+  color: var(--color-text-muted);
+}
+
 /* Passed checks */
 .passed {
   margin-left: var(--space-1);

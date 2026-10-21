@@ -151,3 +151,11 @@ it.each([
   expect(html).toMatch(/data-testid="health-score"[^>]*>\s*77 \(\+3\)\s*</);
   expect(html).not.toContain('770');
 });
+
+it('marks each change as worse or better, with an arrow drawn in CSS, not by color alone', async () => {
+  const html = await (await render(changed)).text();
+
+  expect(html).toMatch(
+    /data-testid="check-15"[^]*?<td(?=[^>]*class="delta delta-worse")(?=[^>]*data-testid="delta")[^>]*>\s*\+3\s*</,
+  );
+});
