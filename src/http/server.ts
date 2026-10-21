@@ -1,9 +1,12 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import { ConfirmPasswordReset } from '../application/auth/confirm-password-reset.js';
+import { DeleteAccount } from '../application/auth/delete-account.js';
 import { GetCurrentAccount } from '../application/auth/get-current-account.js';
 import { Login } from '../application/auth/login.js';
 import { Logout } from '../application/auth/logout.js';
 import { OpenSession } from '../application/auth/open-session.js';
 import { RegisterAccount } from '../application/auth/register-account.js';
+import { RequestPasswordReset } from '../application/auth/request-password-reset.js';
 import { ResendVerification } from '../application/auth/resend-verification.js';
 import { ResolveSession } from '../application/auth/resolve-session.js';
 import { SendVerificationLink } from '../application/auth/send-verification-link.js';
@@ -19,11 +22,13 @@ import { ListOccurrences } from '../application/list-occurrences.js';
 import { ListPages } from '../application/list-pages.js';
 import { ListProjectSnapshots } from '../application/list-project-snapshots.js';
 import { ListProjects } from '../application/list-projects.js';
+import type { AccountEraser } from '../application/ports/account-eraser.js';
 import type { Clock } from '../application/ports/clock.js';
 import type { EmailTokenRepository } from '../application/ports/email-token-repository.js';
 import type { HostResolver } from '../application/ports/host-resolver.js';
 import type { Mailer } from '../application/ports/mailer.js';
 import type { PasswordHasher } from '../application/ports/password-hasher.js';
+import type { RateLimiter } from '../application/ports/rate-limiter.js';
 import type { SessionRepository } from '../application/ports/session-repository.js';
 import type { TokenGenerator } from '../application/ports/token-generator.js';
 import type { UserRepository } from '../application/ports/user-repository.js';
@@ -57,6 +62,8 @@ export interface ServerDependencies {
   readonly mailer: Mailer;
   readonly tokenGenerator: TokenGenerator;
   readonly clock: Clock;
+  readonly rateLimiter: RateLimiter;
+  readonly eraser: AccountEraser;
   /** Base of the links sent by e-mail, without trailing slash. */
   readonly publicUrl: string;
   /** Administrator addresses, normalized with `normalizeEmail`. */
@@ -70,7 +77,7 @@ export interface HttpServer {
 }
 
 const buildAuthUseCases = (dependencies: ServerDependencies): AuthUseCases => {
-  const { users, sessions, passwordHasher, mailer, clock, adminEmails } = dependencies;
+  const { users, sessions, passwordHasher, mailer, clock, adminEmails, rateLimiter } = dependencies;
   const sendVerificationLink = new SendVerificationLink(dependencies);
   const openSession = new OpenSession(dependencies);
   const resolveSession = new ResolveSession(dependencies);
@@ -81,12 +88,16 @@ const buildAuthUseCases = (dependencies: ServerDependencies): AuthUseCases => {
       mailer,
       clock,
       sendVerificationLink,
+      rateLimiter,
     }),
     resendVerification: new ResendVerification({ users, mailer, sendVerificationLink }),
     verifyEmail: new VerifyEmail({ ...dependencies, openSession }),
-    login: new Login({ users, passwordHasher, openSession }),
+    login: new Login({ users, passwordHasher, openSession, rateLimiter }),
     logout: new Logout({ resolveSession, sessions }),
     getCurrentAccount: new GetCurrentAccount({ resolveSession, adminEmails }),
+    requestPasswordReset: new RequestPasswordReset(dependencies),
+    confirmPasswordReset: new ConfirmPasswordReset(dependencies),
+    deleteAccount: new DeleteAccount({ ...dependencies, resolveSession }),
   };
 };
 

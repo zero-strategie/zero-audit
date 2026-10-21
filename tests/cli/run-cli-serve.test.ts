@@ -68,6 +68,7 @@ describe('runCli serve', () => {
       users: real.users,
       sessions: real.sessions,
       emailTokens: real.emailTokens,
+      eraser: real.eraser,
       close: () => {
         storageCloses += 1;
         const result = real.close();
@@ -187,6 +188,7 @@ describe('runCli serve', () => {
       expect(received[0]?.users).toBe(opened[0]?.users);
       expect(received[0]?.sessions).toBe(opened[0]?.sessions);
       expect(received[0]?.emailTokens).toBe(opened[0]?.emailTokens);
+      expect(received[0]?.eraser).toBe(opened[0]?.eraser);
     });
   });
 

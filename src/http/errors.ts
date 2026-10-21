@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   AuditAlreadyRunning,
+  AuditInProgress,
   EmailNotVerified,
   HostNotResolved,
   InvalidAuditUrl,
@@ -13,6 +14,7 @@ import {
   SnapshotNotFinished,
   SnapshotNotFound,
   SnapshotsFromDifferentProjects,
+  TooManyAttempts,
   Unauthenticated,
   UnknownCheck,
 } from '../domain/errors.js';
@@ -23,6 +25,7 @@ export type ApiErrorCode =
   | 'unauthenticated'
   | 'forbidden'
   | 'conflict'
+  | 'too_many_attempts'
   | 'unavailable'
   | 'internal_error';
 
@@ -31,6 +34,7 @@ const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
 const HTTP_NOT_FOUND = 404;
 const HTTP_CONFLICT = 409;
+const HTTP_TOO_MANY_REQUESTS = 429;
 const HTTP_INTERNAL_ERROR = 500;
 const HTTP_SERVICE_UNAVAILABLE = 503;
 const INTERNAL_MESSAGE = 'Internal server error';
@@ -49,6 +53,8 @@ const BAD_CREDENTIALS_MESSAGE = 'E-mail ou mot de passe incorrect';
 const SESSION_REQUIRED_MESSAGE = 'Connexion requise';
 const EMAIL_NOT_VERIFIED_MESSAGE = "Confirmez d'abord votre adresse e-mail";
 const INVALID_TOKEN_MESSAGE = 'Ce lien est invalide ou a expiré';
+const AUDIT_IN_PROGRESS_MESSAGE = 'Un audit est en cours, réessayez à la fin';
+const TOO_MANY_ATTEMPTS_MESSAGE = 'Trop de tentatives, réessayez dans quelques minutes';
 const SIGN_UP_UNAVAILABLE_MESSAGE = 'Les inscriptions sont momentanément indisponibles';
 
 /** Message of a body validation failure, in French for the fields filled in by visitors. */
@@ -79,6 +85,7 @@ export const errorResponseSchema = {
             'unauthenticated',
             'forbidden',
             'conflict',
+            'too_many_attempts',
             'unavailable',
             'internal_error',
           ],
@@ -135,6 +142,12 @@ export const registerErrorHandlers = (app: FastifyInstance): void => {
     }
     if (error instanceof MailerUnavailable) {
       return send(reply, HTTP_SERVICE_UNAVAILABLE, 'unavailable', SIGN_UP_UNAVAILABLE_MESSAGE);
+    }
+    if (error instanceof TooManyAttempts) {
+      return send(reply, HTTP_TOO_MANY_REQUESTS, 'too_many_attempts', TOO_MANY_ATTEMPTS_MESSAGE);
+    }
+    if (error instanceof AuditInProgress) {
+      return send(reply, HTTP_CONFLICT, 'conflict', AUDIT_IN_PROGRESS_MESSAGE);
     }
     if (error instanceof AuditAlreadyRunning) {
       return send(reply, HTTP_CONFLICT, 'conflict', auditAlreadyRunningMessage(error));

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { buildServer } from '../../src/http/server.js';
+import { InMemoryAccountEraser } from '../../src/infrastructure/in-memory-account-eraser.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 import { idleAuditDependencies } from '../support/audit-doubles.js';
@@ -11,10 +12,12 @@ export const GENERIC_REGISTER_MESSAGE =
 
 export const buildAuthServer = (adminEmails: string[] = []) => {
   const kit = buildAuthKit();
+  const projects = new InMemoryProjectRepository();
   const snapshots = new InMemorySnapshotRepository();
   const app: FastifyInstance = buildServer({
-    projects: new InMemoryProjectRepository(),
+    projects,
     snapshots,
+    eraser: new InMemoryAccountEraser({ ...kit, projects, snapshots }),
     health: snapshots,
     ...idleAuditDependencies(),
     ...kit,
@@ -24,7 +27,9 @@ export const buildAuthServer = (adminEmails: string[] = []) => {
     app.inject({ method: 'POST', url, payload, headers });
   const get = (url: string, headers: Record<string, string> = {}) =>
     app.inject({ method: 'GET', url, headers });
-  return { app, kit, post, get };
+  const del = (url: string, payload: object = {}, headers: Record<string, string> = {}) =>
+    app.inject({ method: 'DELETE', url, payload, headers });
+  return { app, kit, projects, snapshots, post, get, del };
 };
 
 export const seedAccount = async (

@@ -12,6 +12,7 @@ import { RandomTokenGenerator } from '../infrastructure/crypto/random-token-gene
 import { ScryptPasswordHasher } from '../infrastructure/crypto/scrypt-password-hasher.js';
 import { JsonLinesAuditEvents } from '../infrastructure/json-lines-audit-events.js';
 import { DnsHostResolver } from '../infrastructure/dns-host-resolver.js';
+import { InMemoryRateLimiter } from '../infrastructure/rate-limit/in-memory-rate-limiter.js';
 import { SystemClock } from '../infrastructure/system-clock.js';
 import { buildServer, type HttpServer, type ServerDependencies } from '../http/server.js';
 import {
@@ -174,6 +175,8 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
       users: opened.users,
       sessions: opened.sessions,
       emailTokens: opened.emailTokens,
+      eraser: opened.eraser,
+      rateLimiter: new InMemoryRateLimiter(clock),
       passwordHasher: new ScryptPasswordHasher(),
       mailer: createMailer(config.mail, logger, (text) => {
         io.stderr(text);

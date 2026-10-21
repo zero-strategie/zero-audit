@@ -1,3 +1,4 @@
+import type { AccountEraser } from '../application/ports/account-eraser.js';
 import type { EmailTokenRepository } from '../application/ports/email-token-repository.js';
 import type { SessionRepository } from '../application/ports/session-repository.js';
 import type { UserRepository } from '../application/ports/user-repository.js';
@@ -20,6 +21,7 @@ export interface Storage {
   readonly users: UserRepository;
   readonly sessions: SessionRepository;
   readonly emailTokens: EmailTokenRepository;
+  readonly eraser: AccountEraser;
   /** Idempotent: releasing the connection twice (end of command and SIGINT) is harmless. */
   close(): Promise<void>;
 }
@@ -60,6 +62,7 @@ const openSqlite = (dbPath: string): Storage => {
     users: repository.users,
     sessions: repository.sessions,
     emailTokens: repository.emailTokens,
+    eraser: repository.eraser,
     close: once(() => {
       repository.close();
       return Promise.resolve();
@@ -91,6 +94,7 @@ const openPostgres = async (databaseUrl: string): Promise<Storage> => {
     users: repository.users,
     sessions: repository.sessions,
     emailTokens: repository.emailTokens,
+    eraser: repository.eraser,
     close: once(() => pool.end()),
   };
 };
