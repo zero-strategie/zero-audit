@@ -110,8 +110,12 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
     });
   }
 
-  countLaunchedBy(userId: string, since: Date): Promise<number> {
-    return Promise.resolve(this.launchedSince(since).filter(([, id]) => id === userId).length);
+  listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
+    const dates = this.launchedSince(since)
+      .filter(([, id]) => id === userId)
+      .map(([snapshot]) => snapshot.startedAt)
+      .sort((a, b) => a.getTime() - b.getTime());
+    return Promise.resolve(dates);
   }
 
   countApiLaunchedSince(since: Date): Promise<number> {

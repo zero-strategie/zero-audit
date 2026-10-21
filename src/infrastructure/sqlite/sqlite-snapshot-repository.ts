@@ -214,12 +214,14 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     });
   }
 
-  countLaunchedBy(userId: string, since: Date): Promise<number> {
+  listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
     return this.run(() => {
-      const row = this.db
-        .prepare('SELECT COUNT(*) AS n FROM snapshots WHERE launched_by = ? AND started_at >= ?')
-        .get(userId, since.toISOString()) as { n: number };
-      return row.n;
+      const rows = this.db
+        .prepare(
+          'SELECT started_at FROM snapshots WHERE launched_by = ? AND started_at >= ? ORDER BY started_at',
+        )
+        .all(userId, since.toISOString()) as { started_at: string }[];
+      return rows.map((row) => new Date(row.started_at));
     });
   }
 

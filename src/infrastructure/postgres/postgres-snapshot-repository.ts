@@ -198,12 +198,12 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
     return snapshot;
   }
 
-  async countLaunchedBy(userId: string, since: Date): Promise<number> {
-    const { rows } = await this.pool.query<{ n: string }>(
-      'SELECT COUNT(*) AS n FROM snapshots WHERE launched_by = $1 AND started_at >= $2',
+  async listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
+    const { rows } = await this.pool.query<{ started_at: Date }>(
+      'SELECT started_at FROM snapshots WHERE launched_by = $1 AND started_at >= $2 ORDER BY started_at',
       [userId, since],
     );
-    return Number(rows[0]?.n);
+    return rows.map((row) => row.started_at);
   }
 
   async countApiLaunchedSince(since: Date): Promise<number> {

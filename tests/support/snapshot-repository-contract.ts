@@ -382,10 +382,15 @@ export const describeSnapshotRepositoryContract = (
       return { snapshots, u: u.id, v: v.id };
     };
 
-    it('counts only the launches of the given account in the last 24 hours', async () => {
+    it('lists, oldest first, only the launches of the given account in the last 24 hours', async () => {
       const { snapshots, u, v } = await setup();
-      expect(await snapshots.countLaunchedBy(u, since)).toBe(2);
-      expect(await snapshots.countLaunchedBy(v, since)).toBe(1);
+      expect(await snapshots.listLaunchedAtBy(u, since)).toEqual([
+        new Date(NOW.getTime() - 23 * HOUR_MS),
+        new Date(NOW.getTime() - HOUR_MS),
+      ]);
+      expect(await snapshots.listLaunchedAtBy(v, since)).toEqual([
+        new Date(NOW.getTime() - 2 * HOUR_MS),
+      ]);
     });
 
     it('counts every API launch of the window, ignoring those without account', async () => {
@@ -393,12 +398,12 @@ export const describeSnapshotRepositoryContract = (
       expect(await snapshots.countApiLaunchedSince(since)).toBe(3);
     });
 
-    it('counts a failed launch too', async () => {
+    it('lists a failed launch too', async () => {
       const { snapshots, u } = await setup();
       const [latest] = await snapshots.listRunning();
       if (!latest) throw new Error('expected a running snapshot');
       await snapshots.fail(latest.id, NOW);
-      expect(await snapshots.countLaunchedBy(u, since)).toBe(2);
+      expect(await snapshots.listLaunchedAtBy(u, since)).toHaveLength(2);
     });
   });
 

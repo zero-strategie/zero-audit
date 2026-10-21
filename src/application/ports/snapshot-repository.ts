@@ -37,8 +37,8 @@ export interface SnapshotRepository {
   listByProject(projectId: string): Promise<readonly Snapshot[]>;
   /** Snapshots still `running`, every project included, most recent first. */
   listRunning(): Promise<readonly Snapshot[]>;
-  /** Snapshots launched by the account since the date, whatever their status. */
-  countLaunchedBy(userId: string, since: Date): Promise<number>;
+  /** Start dates, oldest first, of the snapshots launched by the account since the date, whatever their status. */
+  listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]>;
   /** Snapshots launched through the API (by any account) since the date; CLI launches are ignored. */
   countApiLaunchedSince(since: Date): Promise<number>;
   /** Latest `finished` snapshot of the project whose `startedAt` is strictly before the given date. */
