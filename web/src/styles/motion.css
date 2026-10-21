@@ -111,7 +111,9 @@
     animation-duration: 0ms;
   }
 
-  .sweep {
+  .sweep,
+  .chip-running::after,
+  .progress-bar::after {
     display: none;
   }
 }

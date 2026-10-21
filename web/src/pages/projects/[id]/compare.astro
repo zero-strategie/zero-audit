@@ -101,7 +101,7 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
                     <th>Corrigées</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody class="reveal-on-scroll">
                   {rows.map((row) => (
                     <tr data-testid={`check-${String(row.checkId)}`}>
                       <td>{row.label}</td>

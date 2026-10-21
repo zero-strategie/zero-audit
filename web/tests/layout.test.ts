@@ -195,3 +195,11 @@ describe('snapshot navigation', () => {
     expect(html).toMatch(/data-testid="main-nav"[\s\S]*href="\/projects\/p1\/compare"/);
   });
 });
+
+describe.each(SCREENS_WITH_TABLE)('$name table', (screen) => {
+  it('reveals its rows while scrolling (CSS only, rows are visible without support)', async () => {
+    const html = await render(screen);
+
+    expect(html).toMatch(/<tbody[^>]*class="reveal-on-scroll"/);
+  });
+});
