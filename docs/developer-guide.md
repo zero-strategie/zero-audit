@@ -94,7 +94,7 @@ This way, past audits benefit from formula changes.
 | Table | Content |
 |---|---|
 | `projects` | one row per normalised start URL |
-| `snapshots` | one audit: project, status (`running`, `finished`, `failed`), start and end dates, pages crawled, limit |
+| `snapshots` | one audit: project, status (`queued`, `running`, `finished`, `failed`), start and end dates, pages crawled, limit, plus the queue columns `queued_at`, `attempts` and the worker heartbeat |
 | `pages` | crawled and blocked pages: URL, depth, status, headers, response time, content type, title, meta description, canonical, h1, word count, text ratio, error |
 | `links` | links found on each page: source, target, type, `rel`, anchor text |
 | `site_files` | `robots.txt`, sitemaps, `llms.txt`: URL, status, error |
@@ -200,7 +200,7 @@ Errors share one format: `{ "error": { "code": "not_found" | "invalid_request" |
 
 - **404**: unknown id or route.
 - **400**: invalid parameter, or a comparison across sites.
-- **409**: an audit is already running.
+- **409**: the account already has an audit queued or running (also: account deletion while an audit is active).
 - **500**: unexpected failure, returned with a generic message.
 
 Tests use `fastify.inject()` and never open a port. See `tests/http/`.
@@ -219,13 +219,13 @@ Tests use `fastify.inject()` and never open a port. See `tests/http/`.
 
 ## SSRF guard
 
-The server (`serve`) crawls any public site on request, so its HTTP client must never reach an internal service such as Postgres or the API on the Docker network. `UndiciHttpClient` enforces this when built with `blockPrivateAddresses: true`; the `audit` command does not enable it.
+The server (`serve`) crawls any public site on request, so its HTTP client must never reach an internal service such as Postgres or the API on the Docker network. `UndiciHttpClient` enforces this when built with `blockPrivateAddresses: true`; the `audit --direct` command does not enable it, and audits queued by the CLI go through the worker's guard.
 
 - **Refused ranges** (`src/domain/network-address.ts`, `isPublicAddress`): `0.0.0.0/8`, `10/8`, `100.64/10`, `127/8`, `169.254/16`, `172.16/12`, `192.168/16`, `224/4` and `240/4` (including `255.255.255.255`), plus `::`, `::1`, `fc00::/7`, `fe80::/10` and every IPv4-mapped address (`::ffff:0:0/96`).
 - **Name resolution**: the undici agent has a custom `connect.lookup`. It keeps only public addresses and fails if none is left, so a host with one internal and one public address is still reachable on the public one. Node 22 calls `lookup` with `all: true` (autoSelectFamily), others with the simple form; both are handled. Checking at connection time also covers DNS rebinding and every redirect hop, because redirects are not followed by the client: each hop is a new request.
 - **Literal IPs**: `lookup` is not called for an IP in the URL, so `get` checks `new URL(url).hostname` before `fetch` (`new URL` already normalises forms such as `0x7f.1` to `127.0.0.1`).
 - **`blocked`**: a refused request is a `NetworkFailure` of kind `blocked`. The crawler records it like any other network error; if the root itself is blocked the audit fails with `RootUnreachable`.
-- **`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`**: read by `serve` only. The exact value `true` turns the guard off (`allowPrivateTargets`); `TRUE`, `1` or `yes` do not.
+- **`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`**: read by `serve` and `worker`. The exact value `true` turns the guard off (`allowPrivateTargets`); `TRUE`, `1` or `yes` do not.
 
 ## Worker and queue
 
@@ -244,7 +244,7 @@ The server (`serve`) crawls any public site on request, so its HTTP client must 
 - **Orphans**: `RecoverStaleAudits` (worker loop, and `serve` at startup) puts back in the queue every `running` audit whose heartbeat is older than 2 minutes, keeping its original `queued_at` (so it is resumed first). The audit restarts from zero.
 - **Two attempts at most**: after the second interruption the audit is marked `failed`. Two deployments during the same audit therefore fail it. A `SIGTERM` during attempt 2/2 also ends in `failed`. `heartbeat`, `finish` and `fail` are conditional on `status = 'running' AND attempts = <claimed attempt>`: a refused write makes the worker abandon the attempt.
 - **Legacy audits** without a heartbeat (`--direct`, rows older than the migration) are marked `failed` once they are 6 hours old (`LEGACY_ORPHAN_AGE_MS`), never earlier.
-- **Rollback with queued audits (R5)**: rolling back to a version without a worker leaves the `queued` audits untouched; the old version ignores them and the migration stays compatible (the snapshots table was rebuilt to allow the `queued` status). They are processed again at the next deployment. Until then they count against the account's single audit.
+- **Rollback with queued audits (R5)**: rolling back to a version without a worker leaves the `queued` audits untouched; the old version does not process them and its dashboard shows them as interrupted; the migration stays compatible (the snapshots table was rebuilt to allow the `queued` status). They are processed after the new version is redeployed.
 - **Weekly timer without `--wait` (R6)**: a timer that runs `zero-audit <url>` now only queues the audit and returns 0 at once, with no summary. Add `--wait` (or `--direct`) to keep the old behaviour of a command that ends with the audit. A worker must be running (`embedded` serve or `external`).
 - **`stop_grace_period` (R7)**: give the worker container a `stop_grace_period` of at least 30 s so that it can put its audit back in the queue before `SIGKILL`. After a `kill -9` the heartbeat expires after 2 minutes and the audit is recovered anyway.
 - **Exception to append-only (R4)**: finished snapshots stay immutable, but `requeue` and `recoverStale` delete the child rows (pages, links, issues) of an interrupted attempt so that the restart begins clean.
