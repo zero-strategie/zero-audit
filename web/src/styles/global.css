@@ -468,7 +468,7 @@ a.button-primary {
 /* Theme cards: instrument labels with a notched corner and a meter. They enter in reading order. */
 .theme-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(7.25rem, 1fr));
   gap: var(--space-2);
   margin: var(--space-3) 0;
   padding: 0;
@@ -501,6 +501,15 @@ a.button-primary {
   font-weight: 750;
   letter-spacing: -0.02em;
   line-height: 1;
+}
+
+.theme-score-na {
+  color: var(--color-text-muted);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.4;
 }
 
 .theme-meter {
@@ -571,6 +580,342 @@ a.button-primary {
 
 .severity-notice::before {
   border-radius: 50%;
+}
+
+/* Shapes shared by counters and legends: square error, triangle warning, circle notice. */
+.shape {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.shape::before {
+  width: 0.6rem;
+  height: 0.6rem;
+  flex: none;
+  background: var(--color-text-muted);
+  content: '';
+}
+
+.shape-errors::before {
+  background: var(--color-error-text);
+}
+
+.shape-warnings::before {
+  background: var(--color-warning-text);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.shape-notices::before {
+  border-radius: 50%;
+  background: var(--color-notice-text);
+}
+
+/* Audit overview: masthead, then the dial on 5 columns spilling into the margin and the readings
+   on 7; one column on small screens. */
+.report-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3) var(--space-5);
+  align-items: end;
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-text);
+}
+
+.report-head h1 {
+  margin-bottom: var(--space-2);
+}
+
+.report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+}
+
+.report-meta strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.report-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: flex-end;
+}
+
+.report-actions form {
+  margin: 0;
+}
+
+.report-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+.report-dial {
+  grid-column: span 5;
+  align-self: start;
+  margin-left: calc(-1 * var(--space-4));
+}
+
+.report-readings {
+  display: grid;
+  grid-column: span 7;
+  gap: var(--space-2);
+  align-content: start;
+}
+
+.report-readings h2,
+.report-lower h2 {
+  margin-top: var(--space-3);
+}
+
+@media (max-width: 860px) {
+  .report-head {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .report-dial,
+  .report-readings {
+    grid-column: 1 / -1;
+    margin-left: 0;
+  }
+}
+
+/* A panel: the instrument casing, with a notched corner. */
+.panel {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 0 100%);
+}
+
+.panel h2 {
+  margin-top: 0;
+  color: var(--color-text-muted);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.14em;
+}
+
+.panel .health-gauge {
+  margin-inline: auto;
+}
+
+.heading-with-link {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.heading-with-link a {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  border-block: 1px solid var(--color-text);
+  list-style: none;
+}
+
+.count {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+}
+
+.count + .count {
+  border-left: 1px solid var(--color-border);
+}
+
+/* On a phone the three counters become rows: the labels never squeeze into each other. */
+@media (max-width: 520px) {
+  .counts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .count {
+    grid-template-columns: 4rem minmax(0, 1fr);
+    align-items: baseline;
+    padding: var(--space-2) 0;
+  }
+
+  .count + .count {
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+}
+
+.count b {
+  font-size: 2.4rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.count span {
+  color: var(--color-text-muted);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+}
+
+.top-issues {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--color-border);
+  list-style: none;
+}
+
+.top-issues li {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.top-issues a {
+  min-width: 0;
+  color: var(--color-text);
+  font-weight: 500;
+  text-decoration-color: var(--color-border);
+}
+
+.top-issues a:hover {
+  text-decoration-color: var(--color-link);
+}
+
+.occurrences {
+  font-family: var(--font-data);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .top-issues li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .top-issues .severity-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+.report-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--space-4);
+  margin-top: var(--space-4);
+}
+
+@media (max-width: 860px) {
+  .report-lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Page groups: one stacked bar sized by counts; it grows in from the left as a whole. */
+.group-bar {
+  display: flex;
+  height: 2.2rem;
+  border: 1px solid var(--color-text);
+  background: var(--color-surface);
+  transform-origin: left;
+  animation: grow-x var(--dur-long) var(--ease-out) both;
+  animation-delay: 500ms;
+}
+
+.group-healthy,
+.group-legend [data-group='healthy']::before {
+  background: var(--color-success-text);
+}
+
+.group-have-issues,
+.group-legend [data-group='have-issues']::before {
+  background: var(--color-warning-text);
+}
+
+.group-broken,
+.group-legend [data-group='broken']::before {
+  background: var(--color-error-text);
+}
+
+.group-redirect,
+.group-legend [data-group='redirect']::before {
+  background: var(--color-notice-text);
+}
+
+.group-blocked,
+.group-legend [data-group='blocked']::before {
+  background: var(--color-text-muted);
+}
+
+.group-legend {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  list-style: none;
+}
+
+.group-legend li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.group-legend li::before {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: none;
+  content: '';
+}
+
+.cell-url {
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.status-bad,
+.status-ok,
+.status-redirect {
+  font-family: var(--font-data);
+  font-weight: 600;
+}
+
+.status-bad {
+  color: var(--color-error-text);
+}
+
+.status-ok {
+  color: var(--color-success-text);
+}
+
+.status-redirect {
+  color: var(--color-notice-text);
 }
 
 /* Passed checks */

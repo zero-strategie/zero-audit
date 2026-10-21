@@ -20,7 +20,9 @@ const { theme, score, variation, index = 0 } = Astro.props;
   style={`--i: ${String(index)}; view-transition-name: theme-${theme}`}
 >
   <span class="theme-name">{THEME_LABELS[theme]}</span>
-  <strong class="theme-score">{formatScoreWithVariation(score, variation)}</strong>
+  <strong class:list={['theme-score', { 'theme-score-na': score === null }]}>
+    {formatScoreWithVariation(score, variation)}
+  </strong>
   {
     score === null ? (
       <span class="theme-meter theme-meter-na" aria-hidden="true" />
