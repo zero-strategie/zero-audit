@@ -23,7 +23,7 @@ const sourceUrl = resolveSourceUrl(process.env);
     <slot name="head" />
   </head>
   <body>
-    <header class="site-header"><MainNav projectId={projectId} snapshotId={snapshotId} /></header>
+    <header class="site-header"><MainNav user={Astro.locals.user} projectId={projectId} snapshotId={snapshotId} /></header>
     <main><slot /></main>
     <footer class="site-footer" data-testid="site-footer">
       zero-audit · licence AGPL-3.0 ·
