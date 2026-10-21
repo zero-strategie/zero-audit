@@ -19,6 +19,8 @@ import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { withTransaction } from './pool.js';
 import { PostgresProjectRepository } from './postgres-project-repository.js';
+import { PostgresEmailTokenRepository } from './postgres-email-token-repository.js';
+import { PostgresSessionRepository } from './postgres-session-repository.js';
 import { PostgresUserRepository } from './postgres-user-repository.js';
 
 type Queryable = pg.Pool | pg.PoolClient;
@@ -156,10 +158,14 @@ const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
 export class PostgresSnapshotRepository implements SnapshotRepository {
   readonly projects: PostgresProjectRepository;
   readonly users: PostgresUserRepository;
+  readonly sessions: PostgresSessionRepository;
+  readonly emailTokens: PostgresEmailTokenRepository;
 
   constructor(private readonly pool: pg.Pool) {
     this.projects = new PostgresProjectRepository(pool);
     this.users = new PostgresUserRepository(pool);
+    this.sessions = new PostgresSessionRepository(pool);
+    this.emailTokens = new PostgresEmailTokenRepository(pool);
   }
 
   async ping(): Promise<void> {

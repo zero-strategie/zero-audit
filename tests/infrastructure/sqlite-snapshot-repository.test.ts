@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -7,6 +8,8 @@ import { SnapshotImmutable } from '../../src/domain/errors.js';
 import { UNKNOWN_PROJECT_ROOT_URL } from '../../src/domain/project.js';
 import { SqliteSnapshotRepository } from '../../src/infrastructure/sqlite/sqlite-snapshot-repository.js';
 import { describeProjectRepositoryContract } from '../support/project-repository-contract.js';
+import { describeEmailTokenRepositoryContract } from '../support/email-token-repository-contract.js';
+import { describeSessionRepositoryContract } from '../support/session-repository-contract.js';
 import { describeSnapshotRepositoryContract } from '../support/snapshot-repository-contract.js';
 import { describeUserRepositoryContract } from '../support/user-repository-contract.js';
 
@@ -21,6 +24,14 @@ describeProjectRepositoryContract(() => {
   return { projects: repository.projects, users: repository.users };
 });
 describeUserRepositoryContract(() => openInMemory().users);
+describeSessionRepositoryContract(() => {
+  const repository = openInMemory();
+  return { sessions: repository.sessions, users: repository.users };
+});
+describeEmailTokenRepositoryContract(() => {
+  const repository = openInMemory();
+  return { emailTokens: repository.emailTokens, users: repository.users };
+});
 
 describe('SqliteSnapshotRepository ping', () => {
   it('resolves while the database is open', async () => {
@@ -360,5 +371,61 @@ describe('migration 009 on a database at migration 008', () => {
       expect(() => insert.run('a-for-u-again', 'u')).toThrow(/UNIQUE/);
       expect(() => insert.run('a-public-again', null)).toThrow(/UNIQUE/);
     });
+  });
+});
+
+describe('SqliteSnapshotRepository secrets at rest', () => {
+  const openOnFile = (): { path: string; repository: SqliteSnapshotRepository } => {
+    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
+    return { path, repository: SqliteSnapshotRepository.open(path) };
+  };
+
+  const dump = (path: string, table: string): string => {
+    const db = new Database(path, { readonly: true });
+    const rows = JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all());
+    db.close();
+    return rows;
+  };
+
+  it('stores the SHA-256 of a session identifier, never the identifier', async () => {
+    const { path, repository } = openOnFile();
+    const user = await repository.users.create({
+      email: 'u@example.fr',
+      passwordHash: 'h',
+      createdAt: startedAt,
+    });
+    await repository.sessions.create({
+      id: 'raw-session-id',
+      userId: user.id,
+      createdAt: startedAt,
+      expiresAt: startedAt,
+    });
+    repository.close();
+
+    const stored = dump(path, 'sessions');
+    expect(stored).toContain(createHash('sha256').update('raw-session-id').digest('hex'));
+    expect(stored).not.toContain('raw-session-id');
+  });
+
+  it('stores the SHA-256 of an e-mail token, never the token', async () => {
+    const { path, repository } = openOnFile();
+    const user = await repository.users.create({
+      email: 'u@example.fr',
+      passwordHash: 'h',
+      createdAt: startedAt,
+    });
+    await repository.emailTokens.create({
+      token: 'raw-email-token',
+      userId: user.id,
+      email: user.email,
+      kind: 'verify',
+      createdAt: startedAt,
+      expiresAt: startedAt,
+    });
+    repository.close();
+
+    const stored = dump(path, 'email_tokens');
+    expect(stored).toContain(createHash('sha256').update('raw-email-token').digest('hex'));
+    expect(stored).not.toContain('raw-email-token');
   });
 });

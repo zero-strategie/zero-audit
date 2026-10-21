@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -12,6 +13,8 @@ import {
   TEST_DATABASE_URL,
   type TestDatabase,
 } from '../support/postgres-test-database.js';
+import { describeEmailTokenRepositoryContract } from '../support/email-token-repository-contract.js';
+import { describeSessionRepositoryContract } from '../support/session-repository-contract.js';
 import { describeSnapshotRepositoryContract } from '../support/snapshot-repository-contract.js';
 import { describeUserRepositoryContract } from '../support/user-repository-contract.js';
 
@@ -68,6 +71,58 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     users: repository.users,
   }));
   describeUserRepositoryContract(() => repository.users);
+  describeSessionRepositoryContract(() => ({
+    sessions: repository.sessions,
+    users: repository.users,
+  }));
+  describeEmailTokenRepositoryContract(() => ({
+    emailTokens: repository.emailTokens,
+    users: repository.users,
+  }));
+
+  describe('secrets at rest', () => {
+    const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
+
+    it('stores the SHA-256 of a session identifier, never the identifier', async () => {
+      const user = await repository.users.create({
+        email: 'u@example.fr',
+        passwordHash: 'h',
+        createdAt: startedAt,
+      });
+      await repository.sessions.create({
+        id: 'raw-session-id',
+        userId: user.id,
+        createdAt: startedAt,
+        expiresAt: startedAt,
+      });
+
+      const { rows } = await database.pool.query('SELECT * FROM sessions');
+
+      expect(JSON.stringify(rows)).toContain(sha256('raw-session-id'));
+      expect(JSON.stringify(rows)).not.toContain('raw-session-id');
+    });
+
+    it('stores the SHA-256 of an e-mail token, never the token', async () => {
+      const user = await repository.users.create({
+        email: 'u@example.fr',
+        passwordHash: 'h',
+        createdAt: startedAt,
+      });
+      await repository.emailTokens.create({
+        token: 'raw-email-token',
+        userId: user.id,
+        email: user.email,
+        kind: 'verify',
+        createdAt: startedAt,
+        expiresAt: startedAt,
+      });
+
+      const { rows } = await database.pool.query('SELECT * FROM email_tokens');
+
+      expect(JSON.stringify(rows)).toContain(sha256('raw-email-token'));
+      expect(JSON.stringify(rows)).not.toContain('raw-email-token');
+    });
+  });
 
   describe('ping', () => {
     it('resolves when the database answers', async () => {
