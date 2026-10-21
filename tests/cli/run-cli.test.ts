@@ -71,6 +71,25 @@ describe('runCli', () => {
     }
   };
 
+  it('records the audit in a project without owner, launched by nobody, under no quota', async () => {
+    const code = await runCli(
+      [server.baseUrl, '--limit', '10', '--delay', '0', '--db', dbPath],
+      { ZERO_AUDIT_LAUNCHES_PER_DAY: '1' },
+      capture().io,
+    );
+
+    expect(code).toBe(0);
+    const db = new Database(dbPath, { readonly: true });
+    try {
+      expect(db.prepare('SELECT launched_by FROM snapshots').all()).toEqual([
+        { launched_by: null },
+      ]);
+      expect(db.prepare('SELECT owner_id FROM projects').all()).toEqual([{ owner_id: null }]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('audits a 5-page site, prints the summary and persists a finished snapshot', async () => {
     const run = capture();
     const jsonPath = join(dir, 'out', 'audit.json');

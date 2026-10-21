@@ -330,6 +330,71 @@ describe('runCli serve', () => {
     expect(statuses).toEqual(['failed', 'running']);
   });
 
+  describe('purge of stale accounts', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    const seed = async () => {
+      const seeded = await createStorage({ store: 'sqlite', dbPath, databaseUrl: null });
+      const now = Date.now();
+      const stale = await seeded.users.create({
+        email: 'stale@exemple.test',
+        passwordHash: 'h',
+        createdAt: new Date(now - 8 * DAY_MS),
+      });
+      const recent = await seeded.users.create({
+        email: 'recent@exemple.test',
+        passwordHash: 'h',
+        createdAt: new Date(now - DAY_MS),
+      });
+      await seeded.sessions.create({
+        id: 'expired-session',
+        userId: recent.id,
+        createdAt: new Date(now - 2 * DAY_MS),
+        expiresAt: new Date(now - DAY_MS),
+      });
+      await seeded.close();
+      return { stale, recent };
+    };
+
+    it('removes unverified accounts older than 7 days and expired sessions at startup', async () => {
+      const { stale, recent } = await seed();
+      let outcome: unknown = null;
+
+      await serve([], fakeServer(events), {
+        storageFactory: async (config) => {
+          const storage = await storageFactory(config);
+          return {
+            ...storage,
+            close: async () => {
+              outcome = [
+                await storage.users.findById(stale.id),
+                (await storage.users.findById(recent.id))?.email,
+                await storage.sessions.deleteExpired(new Date()),
+              ];
+              await storage.close();
+            },
+          };
+        },
+      });
+
+      expect(outcome).toEqual([null, 'recent@exemple.test', 0]);
+    });
+
+    it('schedules the purge every day and stops the schedule when the server stops', async () => {
+      const setTimer = vi.spyOn(globalThis, 'setInterval');
+      const clearTimer = vi.spyOn(globalThis, 'clearInterval');
+
+      await serve([], fakeServer(events));
+
+      const scheduled = setTimer.mock.calls.filter(([, delay]) => delay === DAY_MS);
+      expect(scheduled).toHaveLength(1);
+      const handle = setTimer.mock.results[setTimer.mock.calls.indexOf(scheduled[0] ?? [])]?.value;
+      expect(clearTimer).toHaveBeenCalledWith(handle);
+      setTimer.mockRestore();
+      clearTimer.mockRestore();
+    });
+  });
+
   it('hands over a runner that audits a local target once private targets are allowed', async () => {
     const fixtures = await startFixtureServer({
       '/': { status: 200, headers: { 'content-type': 'text/html' }, body: '<html></html>' },

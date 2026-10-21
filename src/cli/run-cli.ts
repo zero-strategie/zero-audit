@@ -1,4 +1,5 @@
 import { AuditRunner } from '../application/audit-runner.js';
+import { PurgeStaleAccounts } from '../application/purge-stale-accounts.js';
 import { FailOrphanedAudits } from '../application/fail-orphaned-audits.js';
 import { ANONYMOUS_READER } from '../domain/reader.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
@@ -25,6 +26,7 @@ import {
 } from './config.js';
 import { CONSOLE_MAILER_WARNING, createMailer } from './mailer-factory.js';
 import { createRunAudit } from './audit-factory.js';
+import { startDailyPurge } from './daily-purge.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
 import { renderComparison } from './render-compare.js';
@@ -138,6 +140,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
   let storage: Storage | null = null;
   let server: HttpServer | null = null;
   let runner: AuditRunner | null = null;
+  let stopPurge: (() => void) | null = null;
   try {
     if (config.mail.kind === 'console') io.stderr(`Avertissement, ${CONSOLE_MAILER_WARNING}\n`);
     const opened = await (hooks.storageFactory ?? createStorage)(config);
@@ -153,6 +156,15 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
         io.stderr(`${message}\n`);
       },
     };
+    stopPurge = await startDailyPurge(
+      new PurgeStaleAccounts({
+        eraser: opened.eraser,
+        sessions: opened.sessions,
+        emailTokens: opened.emailTokens,
+        clock,
+      }),
+      logger,
+    );
     runner = new AuditRunner({
       createRunAudit: (events) =>
         createRunAudit({
@@ -198,6 +210,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
     io.stderr(`Démarrage du serveur échoué : ${errorMessage(error)}\n`);
     return EXIT_CRAWL_FAILED;
   } finally {
+    stopPurge?.();
     await server?.close();
     await runner?.stop();
     await storage?.close();
