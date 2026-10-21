@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DeleteAccount } from '../../../src/application/auth/delete-account.js';
 import { ResolveSession } from '../../../src/application/auth/resolve-session.js';
-import { AuditInProgress, Unauthenticated } from '../../../src/domain/errors.js';
+import { LOGIN_FAILURES_PER_ACCOUNT } from '../../../src/domain/abuse-limits.js';
+import { AuditInProgress, TooManyAttempts, Unauthenticated } from '../../../src/domain/errors.js';
 import { ORPHAN_AUDIT_MAX_AGE_MS } from '../../../src/domain/snapshot.js';
 import { InMemoryAccountEraser } from '../../../src/infrastructure/in-memory-account-eraser.js';
 import { InMemoryProjectRepository } from '../../../src/infrastructure/in-memory-project-repository.js';
@@ -111,5 +112,21 @@ describe('DeleteAccount', () => {
     await deleteAccount.execute({ sessionId: 'session-2', password: PASSWORD });
 
     expect(await kit.users.findById(user.id)).toBeNull();
+  });
+
+  it('blocks further attempts after too many wrong passwords, even with the right one', async () => {
+    const { kit, user, snapshot, snapshots, deleteAccount } = await setup();
+    await snapshots.finish(snapshot.id, { finishedAt: NOW, pagesCrawled: 0 });
+    for (let attempt = 0; attempt < LOGIN_FAILURES_PER_ACCOUNT; attempt += 1) {
+      await expect(
+        deleteAccount.execute({ sessionId: 'session-1', password: 'wrong password!' }),
+      ).rejects.toThrow(Unauthenticated);
+    }
+
+    await expect(
+      deleteAccount.execute({ sessionId: 'session-1', password: PASSWORD }),
+    ).rejects.toThrow(TooManyAttempts);
+
+    expect(await kit.users.findById(user.id)).not.toBeNull();
   });
 });
