@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { AuditQueue } from '../../src/application/ports/audit-queue.js';
 import type { ProjectRepository } from '../../src/application/ports/project-repository.js';
 import type { SessionRepository } from '../../src/application/ports/session-repository.js';
 import type { SnapshotRepository } from '../../src/application/ports/snapshot-repository.js';
@@ -12,7 +13,7 @@ import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-s
 import { InMemoryUserRepository } from '../../src/infrastructure/in-memory-user-repository.js';
 import { migrate } from '../../src/infrastructure/postgres/migrate.js';
 import { PostgresSnapshotRepository } from '../../src/infrastructure/postgres/postgres-snapshot-repository.js';
-import { FakeAuditRunner, FakeHostResolver } from '../support/audit-doubles.js';
+import { FakeHostResolver } from '../support/audit-doubles.js';
 import { buildAuthKit, NOW } from '../support/auth-doubles.js';
 import { makePage } from '../support/check-fixtures.js';
 import {
@@ -26,6 +27,7 @@ interface Storage {
   readonly sessions: SessionRepository;
   readonly projects: ProjectRepository;
   readonly snapshots: SnapshotRepository;
+  readonly queue: AuditQueue;
 }
 
 const ADMIN_EMAIL = 'admin@exemple.test';
@@ -75,7 +77,6 @@ const describeMatrix = (
   describe(`authorization matrix (${name})`, () => {
     let app: FastifyInstance;
     let close: () => Promise<void>;
-    let runner: FakeAuditRunner;
     let ids: Record<Owner, Ids>;
     let sessionOf: Record<Persona, string | undefined>;
 
@@ -142,7 +143,6 @@ const describeMatrix = (
         u: await seedOwner(storage, 'u', u.id),
         v: await seedOwner(storage, 'v', v.id),
       };
-      runner = new FakeAuditRunner();
       const kit = buildAuthKit();
       app = buildServer({
         ...kit,
@@ -153,22 +153,12 @@ const describeMatrix = (
           projects: new InMemoryProjectRepository(),
           snapshots: new InMemorySnapshotRepository(),
         }),
-        auditRunner: runner,
         hostResolver: new FakeHostResolver(),
         allowPrivateTargets: false,
         launchesPerDay: 30,
+        queueMax: 20,
         adminEmails: [ADMIN_EMAIL],
       });
-    });
-
-    beforeEach(() => {
-      runner.progressOutcome = {
-        status: 'running',
-        pagesCrawled: 1,
-        pagesLimit: 10,
-        startedAt: NOW,
-        rootUrl: 'https://live.exemple.test/',
-      };
     });
 
     afterAll(async () => {
@@ -240,11 +230,11 @@ const describeMatrix = (
       });
     });
 
-    it('does not read the in-memory progress of someone else audit', async () => {
+    it('does not reveal the progress of someone else audit', async () => {
       const response = await request(`/snapshots/${ids.v.snapshot}/progress`, 'u');
 
       expect(response.statusCode).toBe(404);
-      expect(JSON.stringify(response.json())).not.toContain('live.exemple.test');
+      expect(JSON.stringify(response.json())).not.toContain('v.exemple.test');
     });
 
     it('keeps the administrator out of the snapshot of another account', async () => {
@@ -253,17 +243,19 @@ const describeMatrix = (
   });
 };
 
-describeMatrix('in memory', () =>
-  Promise.resolve({
+describeMatrix('in memory', () => {
+  const snapshots = new InMemorySnapshotRepository();
+  return Promise.resolve({
     storage: {
       users: new InMemoryUserRepository(),
       sessions: new InMemorySessionRepository(),
       projects: new InMemoryProjectRepository(),
-      snapshots: new InMemorySnapshotRepository(),
+      snapshots,
+      queue: snapshots,
     },
     close: () => Promise.resolve(),
-  }),
-);
+  });
+});
 
 describe.skipIf(!TEST_DATABASE_URL)('authorization matrix on Postgres', () => {
   let database: TestDatabase | undefined;
@@ -277,6 +269,7 @@ describe.skipIf(!TEST_DATABASE_URL)('authorization matrix on Postgres', () => {
         sessions: repository.sessions,
         projects: repository.projects,
         snapshots: repository,
+        queue: repository,
       },
       close: async () => {
         await database?.dispose();

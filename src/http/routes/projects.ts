@@ -33,7 +33,7 @@ const projectListSchema = {
             required: ['id', 'status', 'startedAt'],
             properties: {
               id: { type: 'string' },
-              status: { type: 'string', enum: ['running', 'finished', 'failed'] },
+              status: { type: 'string', enum: ['queued', 'running', 'finished', 'failed'] },
               startedAt: { type: 'string' },
             },
           },
@@ -57,7 +57,7 @@ const snapshotListSchema = {
         required: ['id', 'status', 'startedAt', 'finishedAt', 'pagesCrawled', 'health'],
         properties: {
           id: { type: 'string' },
-          status: { type: 'string', enum: ['running', 'finished', 'failed'] },
+          status: { type: 'string', enum: ['queued', 'running', 'finished', 'failed'] },
           startedAt: { type: 'string' },
           finishedAt: nullableDate,
           pagesCrawled: { type: 'integer' },

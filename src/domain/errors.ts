@@ -78,10 +78,17 @@ export class PrivateAddressRejected extends DomainError {
   }
 }
 
-export class AuditAlreadyRunning extends DomainError {
-  constructor(readonly startedAt: Date) {
-    super(`An audit is already running since ${startedAt.toISOString()}`);
-    this.name = 'AuditAlreadyRunning';
+export class AuditAlreadyQueuedForAccount extends DomainError {
+  constructor() {
+    super('The account already has an audit queued or running');
+    this.name = 'AuditAlreadyQueuedForAccount';
+  }
+}
+
+export class QueueFull extends DomainError {
+  constructor() {
+    super('The audit queue is full');
+    this.name = 'QueueFull';
   }
 }
 

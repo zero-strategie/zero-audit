@@ -1,5 +1,5 @@
 /**
- * Until audits are recovered through the worker heartbeat, a `running` audit older than this is
- * the orphan of a killed process. To be replaced by `HEARTBEAT_STALE_MS` once heartbeats exist.
+ * A `running` audit that never sent a heartbeat (`--direct`, rows older than the queue) older than
+ * this is the orphan of a killed process; the 2-minute heartbeat threshold would kill a live one.
  */
 export const LEGACY_ORPHAN_AGE_MS = 6 * 60 * 60 * 1000;

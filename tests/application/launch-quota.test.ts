@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { LaunchQuota } from '../../src/application/launch-quota.js';
-import { QuotaExceeded } from '../../src/domain/errors.js';
+import { AuditAlreadyQueuedForAccount, QueueFull, QuotaExceeded } from '../../src/domain/errors.js';
 import { QUOTA_WINDOW_MS } from '../../src/domain/quota.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 import { MutableClock, NOW } from '../support/auth-doubles.js';
 
 const HOUR_MS = 60 * 60 * 1000;
+const QUEUE_MAX = 3;
 const FREE = { userId: 'u1', isAdmin: false };
 const ADMIN = { userId: 'a1', isAdmin: true };
 
 const build = (launchesPerDay = 30) => {
   const clock = new MutableClock();
   const snapshots = new InMemorySnapshotRepository();
-  const quota = new LaunchQuota({ snapshots, clock, launchesPerDay });
+  const quota = new LaunchQuota({ snapshots, clock, launchesPerDay, queueMax: QUEUE_MAX });
   const launch = (launchedBy: string | null, hoursAgo: number) =>
     snapshots.create({
       projectId: 'p1',
@@ -20,7 +21,12 @@ const build = (launchesPerDay = 30) => {
       pagesLimit: 10,
       startedAt: new Date(NOW.getTime() - hoursAgo * HOUR_MS),
     });
-  return { clock, quota, launch };
+  const enqueue = (launchedBy: string | null) =>
+    snapshots.enqueue(
+      { projectId: 'p1', launchedBy, pagesLimit: 10, requestedAt: new Date(clock.now()) },
+      () => Promise.resolve(),
+    );
+  return { clock, quota, launch, snapshots, enqueue };
 };
 
 const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> => {
@@ -148,5 +154,60 @@ describe('LaunchQuota.statusOf', () => {
       auditsRemaining: null,
       nextAuditAt: null,
     });
+  });
+});
+
+describe('LaunchQuota.assertAdmitted', () => {
+  it('applies the quotas first, on the view it is given', async () => {
+    const { quota, snapshots, enqueue } = build();
+    await enqueue('someone-else');
+
+    const error = await rejectionOf(quota.assertAdmitted(snapshots, FREE, 250));
+
+    expect(error).toEqual(new QuotaExceeded({ reason: 'pages', maxPages: 100 }));
+  });
+
+  it.each([
+    ['an administrator', ADMIN],
+    ['a free account', FREE],
+  ])('refuses %s who already has a queued audit', async (_label, account) => {
+    const { quota, snapshots, enqueue } = build();
+    await enqueue(account.userId);
+
+    const error = await rejectionOf(quota.assertAdmitted(snapshots, account, 10));
+
+    expect(error).toEqual(new AuditAlreadyQueuedForAccount());
+  });
+
+  it('refuses an account whose audit is running', async () => {
+    const { quota, snapshots, enqueue } = build();
+    await enqueue(FREE.userId);
+    await snapshots.claimNext('worker', new Date(NOW));
+
+    const error = await rejectionOf(quota.assertAdmitted(snapshots, FREE, 10));
+
+    expect(error).toEqual(new AuditAlreadyQueuedForAccount());
+  });
+
+  it('refuses a full queue, and the account conflict comes first', async () => {
+    const { quota, snapshots, enqueue } = build(30);
+    await enqueue('a');
+    await enqueue('b');
+    await enqueue('c');
+
+    expect(await rejectionOf(quota.assertAdmitted(snapshots, FREE, 10))).toEqual(new QueueFull());
+    expect(
+      await rejectionOf(quota.assertAdmitted(snapshots, { userId: 'a', isAdmin: false }, 10)),
+    ).toEqual(new AuditAlreadyQueuedForAccount());
+  });
+
+  it('counts only the queued audits for the ceiling, not the running one', async () => {
+    const { quota, snapshots, enqueue } = build();
+    await enqueue('a');
+    await snapshots.claimNext('worker', new Date(NOW));
+    await enqueue('b');
+    await enqueue('c');
+
+    await expect(quota.assertAdmitted(snapshots, FREE, 10)).resolves.toBeUndefined();
   });
 });

@@ -1,14 +1,14 @@
 import { formatParisDateTime } from '../../src/http/format-date.js';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AuditAlreadyRunning, HostNotResolved } from '../../src/domain/errors.js';
+import { HostNotResolved } from '../../src/domain/errors.js';
 import { HOUR_MS, idleAccountDependencies, NOW } from '../support/auth-doubles.js';
 import { SESSION_TTL_MS } from '../../src/domain/session.js';
 import { buildServer } from '../../src/http/server.js';
 import { InMemoryAccountEraser } from '../../src/infrastructure/in-memory-account-eraser.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
-import { FakeAuditRunner, FakeHostResolver } from '../support/audit-doubles.js';
+import { FakeHostResolver } from '../support/audit-doubles.js';
 
 const SITE = 'https://site.test/';
 const UNKNOWN_UUID = '00000000-0000-4000-8000-000000000000';
@@ -21,7 +21,6 @@ interface ApiError {
 }
 
 describe('audit launch API', () => {
-  let runner: FakeAuditRunner;
   let resolver: FakeHostResolver;
   let app: FastifyInstance;
   let projects: InMemoryProjectRepository;
@@ -45,10 +44,13 @@ describe('audit launch API', () => {
     return user;
   };
 
-  const serverWith = (allowPrivateTargets: boolean, launchesPerDay = 30): FastifyInstance => {
+  const serverWith = (
+    allowPrivateTargets: boolean,
+    launchesPerDay = 30,
+    queueMax = 20,
+  ): FastifyInstance => {
     projects = new InMemoryProjectRepository();
     snapshots = new InMemorySnapshotRepository(account.users);
-    runner = new FakeAuditRunner({ snapshots, now: () => account.clock.now() });
     return buildServer({
       ...account,
       eraser: new InMemoryAccountEraser({ ...account, projects, snapshots }),
@@ -56,10 +58,11 @@ describe('audit launch API', () => {
       projects,
       snapshots,
       health: snapshots,
-      auditRunner: runner,
+      queue: snapshots,
       hostResolver: resolver,
       allowPrivateTargets,
       launchesPerDay,
+      queueMax,
     });
   };
 
@@ -70,6 +73,40 @@ describe('audit launch API', () => {
       payload,
       headers: session === null ? {} : { 'x-session-id': session },
     });
+
+  const expectNothingQueued = async () => {
+    expect(await snapshots.countQueued()).toBe(0);
+    expect(await snapshots.countApiLaunchedSince(new Date(0))).toBe(0);
+  };
+
+  /** What a worker does: takes the next audit and ends it, so the account may launch again. */
+  const finishNextAudit = async () => {
+    const claimed = await snapshots.claimNext('worker', new Date(account.clock.now()));
+    if (!claimed) throw new Error('expected a queued audit');
+    await snapshots.finishAttempt(claimed.id, claimed.attempts, {
+      finishedAt: new Date(account.clock.now()),
+      pagesCrawled: 1,
+    });
+  };
+
+  let arrivals = 0;
+  const enqueueFor = (launchedBy: string | null, { running = false } = {}) => {
+    arrivals += 1;
+    return snapshots
+      .enqueue(
+        {
+          projectId: 'p',
+          launchedBy,
+          pagesLimit: 10,
+          requestedAt: new Date(NOW.getTime() - 1e6 + arrivals),
+        },
+        () => Promise.resolve(),
+      )
+      .then(async (snapshot) => {
+        if (running) await snapshots.claimNext('other-worker', NOW);
+        return snapshot;
+      });
+  };
 
   beforeEach(async () => {
     account = idleAccountDependencies();
@@ -88,10 +125,14 @@ describe('audit launch API', () => {
       const response = await post({ url: SITE, limit: 100 });
 
       expect(response.statusCode).toBe(202);
-      expect(response.json()).toEqual({ snapshotId: 'snap-1', projectId: 'proj-1' });
-      expect(runner.requests).toEqual([
-        { rootUrl: SITE, limit: 100, ownerId: alice.id, launchedBy: alice.id },
-      ]);
+      const { snapshotId, projectId } = response.json<{ snapshotId: string; projectId: string }>();
+      expect((await snapshots.getById(snapshotId))?.snapshot).toMatchObject({
+        status: 'queued',
+        pagesLimit: 100,
+        projectId,
+      });
+      expect(await projects.getById(projectId)).toMatchObject({ rootUrl: SITE, ownerId: alice.id });
+      expect(await snapshots.listLaunchedAtBy(alice.id, new Date(0))).toHaveLength(1);
     });
 
     it.each([
@@ -102,7 +143,7 @@ describe('audit launch API', () => {
 
       expect(response.statusCode).toBe(401);
       expect(response.json<ApiError>().error.code).toBe('unauthenticated');
-      expect(runner.requests).toEqual([]);
+      await expectNothingQueued();
       expect(await snapshots.countApiLaunchedSince(new Date(0))).toBe(0);
     });
 
@@ -112,15 +153,13 @@ describe('audit launch API', () => {
       const response = await post({ url: SITE });
 
       expect(response.statusCode).toBe(401);
-      expect(runner.requests).toEqual([]);
+      await expectNothingQueued();
     });
 
     it('uses a limit of 100 when none is given', async () => {
-      await post({ url: SITE });
+      const { snapshotId } = (await post({ url: SITE })).json<{ snapshotId: string }>();
 
-      expect(runner.requests).toEqual([
-        { rootUrl: SITE, limit: 100, ownerId: alice.id, launchedBy: alice.id },
-      ]);
+      expect((await snapshots.getById(snapshotId))?.snapshot.pagesLimit).toBe(100);
     });
 
     it.each([75, 0, 1000])('answers 400 invalid_request for the limit %s', async (limit) => {
@@ -128,7 +167,7 @@ describe('audit launch API', () => {
 
       expect(response.statusCode).toBe(400);
       expect(response.json<ApiError>().error.code).toBe('invalid_request');
-      expect(runner.requests).toEqual([]);
+      await expectNothingQueued();
     });
 
     it.each([
@@ -144,7 +183,7 @@ describe('audit launch API', () => {
       expect(response.json<ApiError>().error.code).toBe('invalid_request');
       expect(response.json<ApiError>().error.message).not.toBe('');
       expect(response.json<ApiError>().error.message).not.toContain('body/');
-      expect(runner.requests).toEqual([]);
+      await expectNothingQueued();
     });
 
     it('refuses a host with one internal address among its resolved ones', async () => {
@@ -155,7 +194,7 @@ describe('audit launch API', () => {
       expect(response.statusCode).toBe(400);
       expect(response.json<ApiError>().error.code).toBe('invalid_request');
       expect(response.json<ApiError>().error.message).toContain('interne');
-      expect(runner.requests).toEqual([]);
+      await expectNothingQueued();
     });
 
     it.each(['http://127.0.0.1/', 'http://[::1]/'])(
@@ -191,18 +230,53 @@ describe('audit launch API', () => {
       expect(response.statusCode).toBe(202);
     });
 
-    it('answers 409 conflict with the start date of the blocking audit', async () => {
-      runner.startOutcome = new AuditAlreadyRunning(new Date('2026-01-01T10:00:00.000Z'));
+    it.each([
+      ['a free account', ALICE_SESSION],
+      ['an administrator', ADMIN_SESSION],
+    ])('answers 409 conflict to %s who already has an audit queued', async (_label, session) => {
+      expect((await post({ url: SITE }, session)).statusCode).toBe(202);
+
+      const response = await post({ url: SITE }, session);
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({
+        error: { code: 'conflict', message: 'Vous avez déjà un audit en cours ou en file' },
+      });
+      expect(await snapshots.countQueued()).toBe(1);
+    });
+
+    it('answers 409 to an account whose audit is running', async () => {
+      await enqueueFor(alice.id, { running: true });
+
+      expect((await post({ url: SITE })).statusCode).toBe(409);
+    });
+
+    it('answers 429 quota_exceeded without Retry-After when 20 audits are queued', async () => {
+      for (let index = 0; index < 20; index += 1) await enqueueFor(`other-${String(index)}`);
 
       const response = await post({ url: SITE });
 
-      expect(response.statusCode).toBe(409);
-      expect(response.json<ApiError>().error.code).toBe('conflict');
-      expect(response.json<ApiError>().error.message).toContain('depuis le 01/01/2026 à 11:00');
-      expect(response.json<ApiError>().error.message).not.toContain('2026-01-01T10:00:00.000Z');
-      expect(response.json<ApiError>().error.message).toContain(
-        'Un audit est déjà en cours depuis',
-      );
+      expect(response.statusCode).toBe(429);
+      expect(response.json()).toEqual({
+        error: { code: 'quota_exceeded', message: "La file d'attente est pleine" },
+      });
+      expect(response.headers['retry-after']).toBeUndefined();
+      expect(await snapshots.countQueued()).toBe(20);
+    });
+
+    it('answers 202 with 19 audits queued and one running: only the queued ones count', async () => {
+      await enqueueFor('runner', { running: true });
+      for (let index = 0; index < 19; index += 1) await enqueueFor(`other-${String(index)}`);
+
+      expect((await post({ url: SITE })).statusCode).toBe(202);
+    });
+
+    it('reads the queue ceiling from the dependencies', async () => {
+      await app.close();
+      app = serverWith(false, 30, 1);
+      await enqueueFor('other');
+
+      expect((await post({ url: SITE })).statusCode).toBe(429);
     });
 
     it.each(['PUT', 'DELETE', 'GET'] as const)('answers 404 for %s /audits', async (method) => {
@@ -218,6 +292,7 @@ describe('audit launch API', () => {
     const launchOnce = async (session = ALICE_SESSION) => {
       const response = await post({ url: SITE, limit: 50 }, session);
       expect(response.statusCode).toBe(202);
+      await finishNextAudit();
       account.clock.advance(HOUR_MS);
     };
 
@@ -228,17 +303,18 @@ describe('audit launch API', () => {
       expect(refused.json()).toEqual({
         error: { code: 'quota_exceeded', message: 'Votre compte permet 100 pages par audit' },
       });
-      expect(runner.requests).toEqual([]);
+      await expectNothingQueued();
       expect((await post({ url: SITE, limit: 100 })).statusCode).toBe(202);
     });
 
     it('refuses the fourth audit in 24 hours, a failed one included, then accepts it a day after the oldest', async () => {
       await launchOnce();
       await launchOnce();
-      await launchOnce();
-      const [latest] = await snapshots.listRunning();
-      if (!latest) throw new Error('expected a running snapshot');
-      await snapshots.fail(latest.id, new Date(account.clock.now()));
+      expect((await post({ url: SITE, limit: 50 })).statusCode).toBe(202);
+      const claimed = await snapshots.claimNext('worker', new Date(account.clock.now()));
+      if (!claimed) throw new Error('expected a queued audit');
+      await snapshots.failAttempt(claimed.id, claimed.attempts, new Date(account.clock.now()));
+      account.clock.advance(HOUR_MS);
 
       const refused = await post({ url: SITE });
 
@@ -288,18 +364,19 @@ describe('audit launch API', () => {
       expect(refused.json<ApiError>().error.code).toBe('quota_exceeded');
     });
 
-    it('counts neither an anti-SSRF refusal nor a conflict with a running audit', async () => {
+    it('counts neither an anti-SSRF refusal nor a conflict with an audit already queued', async () => {
       resolver.outcome = ['10.0.0.1'];
       expect((await post({ url: SITE })).statusCode).toBe(400);
       resolver.outcome = ['93.184.216.34'];
-      runner.startOutcome = new AuditAlreadyRunning(NOW);
+      expect((await post({ url: SITE })).statusCode).toBe(202);
       expect((await post({ url: SITE })).statusCode).toBe(409);
 
-      expect((await me(ALICE_SESSION)).json()).toMatchObject({ auditsRemaining: 3 });
+      expect((await me(ALICE_SESSION)).json()).toMatchObject({ auditsRemaining: 2 });
     });
 
     it('lets an administrator launch 500 pages and more than 3 audits a day', async () => {
       expect((await post({ url: SITE, limit: 500 }, ADMIN_SESSION)).statusCode).toBe(202);
+      await finishNextAudit();
       await launchOnce(ADMIN_SESSION);
       await launchOnce(ADMIN_SESSION);
       await launchOnce(ADMIN_SESSION);
@@ -351,37 +428,63 @@ describe('audit launch API', () => {
   });
 
   describe('GET /snapshots/:id/progress', () => {
-    it('answers the progress of a running audit', async () => {
-      runner.progressOutcome = {
-        status: 'running',
-        pagesCrawled: 12,
-        pagesLimit: 100,
-        startedAt: new Date('2026-01-01T10:00:00.000Z'),
-        rootUrl: SITE,
-      };
-
-      const project = await projects.findOrCreateByRootUrl({
-        rootUrl: SITE,
-        ownerId: null,
-        createdAt: new Date('2026-01-01T09:00:00.000Z'),
+    const progressOf = (id: string, session: string | null = ALICE_SESSION) =>
+      app.inject({
+        url: `/snapshots/${id}/progress`,
+        headers: session === null ? {} : { 'x-session-id': session },
       });
-      const { id } = await snapshots.create({
-        launchedBy: null,
-        projectId: project.id,
-        pagesLimit: 100,
-        startedAt: new Date('2026-01-01T10:00:00.000Z'),
-      });
+    const project = () =>
+      projects.findOrCreateByRootUrl({ rootUrl: SITE, ownerId: alice.id, createdAt: NOW });
 
-      const response = await app.inject(`/snapshots/${id}/progress`);
+    it('reports the position of the third queued audit, read from storage', async () => {
+      await enqueueFor('other-1');
+      await enqueueFor('other-2');
+      const { projectId, snapshotId } = (await post({ url: SITE, limit: 50 })).json<{
+        projectId: string;
+        snapshotId: string;
+      }>();
+      expect(projectId).not.toBe('');
+
+      const response = await progressOf(snapshotId);
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({
+        status: 'queued',
+        pagesCrawled: 0,
+        pagesLimit: 50,
+        startedAt: new Date(account.clock.now()).toISOString(),
+        rootUrl: SITE,
+        queuePosition: 3,
+        attempts: 0,
+      });
+    });
+
+    it('reports a running audit with its heartbeat pages and no position', async () => {
+      const { snapshotId } = (await post({ url: SITE })).json<{ snapshotId: string }>();
+      const claimed = await snapshots.claimNext('worker', new Date(account.clock.now()));
+      await snapshots.heartbeat(snapshotId, claimed?.attempts ?? 0, 12, NOW);
+
+      expect((await progressOf(snapshotId)).json()).toMatchObject({
         status: 'running',
         pagesCrawled: 12,
-        pagesLimit: 100,
-        startedAt: '2026-01-01T10:00:00.000Z',
-        rootUrl: SITE,
+        queuePosition: null,
+        attempts: 1,
       });
+    });
+
+    it('refuses the audit of another account like a missing one', async () => {
+      const { id } = await snapshots.create({
+        launchedBy: null,
+        projectId: (await project()).id,
+        pagesLimit: 100,
+        startedAt: NOW,
+      });
+
+      const response = await progressOf(id, ADMIN_SESSION);
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json<ApiError>().error.code).toBe('not_found');
+      expect((await progressOf(id, null)).statusCode).toBe(404);
     });
 
     it('answers 404 for an unknown snapshot', async () => {
@@ -389,6 +492,26 @@ describe('audit launch API', () => {
 
       expect(response.statusCode).toBe(404);
       expect(response.json<ApiError>().error.code).toBe('not_found');
+    });
+  });
+
+  describe('routes of projects and snapshots with a queued audit', () => {
+    it('validates their schema with the status queued', async () => {
+      const { snapshotId, projectId } = (await post({ url: SITE })).json<{
+        snapshotId: string;
+        projectId: string;
+      }>();
+      const headers = { 'x-session-id': ALICE_SESSION };
+
+      const list = await app.inject({ url: '/projects', headers });
+      const history = await app.inject({ url: `/projects/${projectId}/snapshots`, headers });
+      const report = await app.inject({ url: `/snapshots/${snapshotId}`, headers });
+
+      expect(list.statusCode).toBe(200);
+      expect(JSON.stringify(list.json())).toContain('"queued"');
+      expect(history.statusCode).toBe(200);
+      expect(JSON.stringify(history.json())).toContain('"queued"');
+      expect(report.statusCode).toBe(200);
     });
   });
 });

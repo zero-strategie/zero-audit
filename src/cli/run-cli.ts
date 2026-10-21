@@ -1,4 +1,3 @@
-import { AuditRunner } from '../application/audit-runner.js';
 import { PurgeStaleAccounts } from '../application/purge-stale-accounts.js';
 import { RecoverStaleAudits } from '../application/recover-stale-audits.js';
 import { ANONYMOUS_READER } from '../domain/reader.js';
@@ -25,7 +24,7 @@ import {
   type ServeConfig,
 } from './config.js';
 import { CONSOLE_MAILER_WARNING, createMailer } from './mailer-factory.js';
-import { createRunAudit } from './audit-factory.js';
+import { createAuditWorker, createRunAudit } from './audit-factory.js';
 import { startDailyPurge } from './daily-purge.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
@@ -57,8 +56,8 @@ export interface CliHooks {
   onStorageOpened?(storage: Storage): void;
   /** Lets the process entry point mark the snapshot failed on SIGINT. */
   onAuditStarted?(snapshotId: string, rootUrl: string): void;
-  /** Lets the process entry point stop the background audit on SIGINT / SIGTERM. */
-  onAuditRunnerStarted?(runner: AuditRunner): void;
+  /** Lets the process entry point stop the embedded worker on SIGINT / SIGTERM. */
+  onWorkerStarted?(worker: { stop(): Promise<void> }): void;
   /** Lets the process entry point stop the server on SIGINT. */
   onServerStarted?(server: HttpServer): void;
   /** Builds the HTTP server; defaults to the Fastify API. */
@@ -136,10 +135,28 @@ const migrate = async (config: MigrateConfig, io: CliIo): Promise<number> => {
   }
 };
 
+interface EmbeddedWorker {
+  stop(): Promise<void>;
+}
+
+/** The worker loop runs beside the API until `stop()`, which hands the running audit back to the queue. */
+const startEmbeddedWorker = (worker: {
+  run(signal: AbortSignal): Promise<void>;
+}): EmbeddedWorker => {
+  const shutdown = new AbortController();
+  const loop = worker.run(shutdown.signal);
+  return {
+    stop: async () => {
+      shutdown.abort();
+      await loop;
+    },
+  };
+};
+
 const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<number> => {
   let storage: Storage | null = null;
   let server: HttpServer | null = null;
-  let runner: AuditRunner | null = null;
+  let worker: EmbeddedWorker | null = null;
   let stopPurge: (() => void) | null = null;
   try {
     if (config.mail.kind === 'console') io.stderr(`Avertissement, ${CONSOLE_MAILER_WARNING}\n`);
@@ -165,25 +182,22 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
       }),
       logger,
     );
-    runner = new AuditRunner({
-      createRunAudit: (events) =>
-        createRunAudit({
+    if (config.workerMode === 'embedded') {
+      worker = startEmbeddedWorker(
+        createAuditWorker({
           storage: opened,
-          events,
-          blockPrivateAddresses: !config.allowPrivateTargets,
+          logger,
+          allowPrivateTargets: config.allowPrivateTargets,
+          delayMs: config.delayMs,
         }),
-      snapshots: opened.snapshots,
-      projects: opened.projects,
-      clock,
-      logger,
-      delayMs: config.delayMs,
-    });
-    hooks.onAuditRunnerStarted?.(runner);
+      );
+      hooks.onWorkerStarted?.(worker);
+    }
     server = (hooks.createServer ?? buildServer)({
       projects: storage.projects,
       snapshots: storage.snapshots,
       health: storage.health,
-      auditRunner: runner,
+      queue: opened.queue,
       hostResolver: new DnsHostResolver(),
       allowPrivateTargets: config.allowPrivateTargets,
       users: opened.users,
@@ -200,6 +214,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
       publicUrl: config.mail.publicUrl ?? DEFAULT_PUBLIC_URL,
       adminEmails: config.adminEmails,
       launchesPerDay: config.launchesPerDay,
+      queueMax: config.queueMax,
     });
     hooks.onServerStarted?.(server);
     await server.listen({ host: config.host, port: config.port });
@@ -212,7 +227,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
   } finally {
     stopPurge?.();
     await server?.close();
-    await runner?.stop();
+    await worker?.stop();
     await storage?.close();
   }
 };

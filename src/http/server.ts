@@ -12,7 +12,6 @@ import { ResolveReader } from '../application/auth/resolve-reader.js';
 import { ResolveSession } from '../application/auth/resolve-session.js';
 import { SendVerificationLink } from '../application/auth/send-verification-link.js';
 import { VerifyEmail } from '../application/auth/verify-email.js';
-import type { AuditRunner } from '../application/audit-runner.js';
 import { CheckHealth } from '../application/check-health.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetAuditProgress } from '../application/get-audit-progress.js';
@@ -24,6 +23,7 @@ import { ListOccurrences } from '../application/list-occurrences.js';
 import { ListPages } from '../application/list-pages.js';
 import { ListProjectSnapshots } from '../application/list-project-snapshots.js';
 import { ListProjects } from '../application/list-projects.js';
+import type { AuditQueue } from '../application/ports/audit-queue.js';
 import type { AccountEraser } from '../application/ports/account-eraser.js';
 import type { Clock } from '../application/ports/clock.js';
 import type { EmailTokenRepository } from '../application/ports/email-token-repository.js';
@@ -54,12 +54,15 @@ export interface ServerDependencies {
   readonly projects: ProjectRepository;
   readonly snapshots: SnapshotRepository;
   readonly health: StorageHealth;
-  readonly auditRunner: Pick<AuditRunner, 'start' | 'progress'>;
+  /** Where launched audits wait for a worker; the API itself never crawls. */
+  readonly queue: AuditQueue;
   readonly hostResolver: HostResolver;
   /** Turns the SSRF pre-check of `POST /audits` off (`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`). */
   readonly allowPrivateTargets: boolean;
   /** Ceiling of audits launched through the API per 24 hours, all accounts together. */
   readonly launchesPerDay: number;
+  /** Ceiling of audits waiting in the queue, all accounts together. */
+  readonly queueMax: number;
   readonly users: UserRepository;
   readonly sessions: SessionRepository;
   readonly emailTokens: EmailTokenRepository;
@@ -108,13 +111,13 @@ const buildAuthUseCases = (dependencies: ServerDependencies, quota: LaunchQuota)
 
 /** Builds the API without listening, so that tests can use `inject()`. */
 export const buildServer = (dependencies: ServerDependencies): FastifyInstance => {
-  const { projects, snapshots, health, auditRunner, hostResolver, allowPrivateTargets } =
-    dependencies;
+  const { projects, snapshots, health, queue, hostResolver, allowPrivateTargets } = dependencies;
   const app = Fastify();
   const quota = new LaunchQuota({
     snapshots,
     clock: dependencies.clock,
     launchesPerDay: dependencies.launchesPerDay,
+    queueMax: dependencies.queueMax,
   });
   const readerOf = buildReaderOf(
     new ResolveReader({
@@ -136,13 +139,22 @@ export const buildServer = (dependencies: ServerDependencies): FastifyInstance =
     app,
     {
       getSnapshotReport: new GetSnapshotReport(snapshots, projects),
-      getAuditProgress: new GetAuditProgress(auditRunner, snapshots, projects),
+      getAuditProgress: new GetAuditProgress(queue, snapshots, projects),
     },
     readerOf,
   );
   registerAuditRoutes(
     app,
-    { launchAudit: new LaunchAudit(auditRunner, hostResolver, allowPrivateTargets, quota) },
+    {
+      launchAudit: new LaunchAudit(
+        queue,
+        projects,
+        hostResolver,
+        allowPrivateTargets,
+        quota,
+        dependencies.clock,
+      ),
+    },
     readerOf,
   );
   registerIssueRoutes(

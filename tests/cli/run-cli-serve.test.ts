@@ -8,7 +8,6 @@ import { createStorage, type Storage, type StorageFactory } from '../../src/cli/
 import type { HttpServer, ServerDependencies } from '../../src/http/server.js';
 import { LEGACY_ORPHAN_AGE_MS } from '../../src/application/legacy-orphan-age.js';
 import { HEARTBEAT_STALE_MS } from '../../src/domain/snapshot.js';
-import type { AuditRunner } from '../../src/application/audit-runner.js';
 import { startFixtureServer } from '../support/fixture-server.js';
 
 interface ListenCall {
@@ -321,22 +320,28 @@ describe('runCli serve', () => {
     await seeded.close();
     let statuses: string[] = [];
 
-    await serve([], fakeServer(events), {
-      storageFactory: async (config) => {
-        const storage = await storageFactory(config);
-        return {
-          ...storage,
-          close: async () => {
-            statuses = [
-              (await storage.snapshots.getById(old.id))?.snapshot.status ?? '',
-              (await storage.snapshots.getById(recent.id))?.snapshot.status ?? '',
-              (await storage.snapshots.getById(orphan.id))?.snapshot.status ?? '',
-            ];
-            await storage.close();
-          },
-        };
+    await serve(
+      [],
+      fakeServer(events),
+      {
+        storageFactory: async (config) => {
+          const storage = await storageFactory(config);
+          return {
+            ...storage,
+            close: async () => {
+              statuses = [
+                (await storage.snapshots.getById(old.id))?.snapshot.status ?? '',
+                (await storage.snapshots.getById(recent.id))?.snapshot.status ?? '',
+                (await storage.snapshots.getById(orphan.id))?.snapshot.status ?? '',
+              ];
+              await storage.close();
+            },
+          };
+        },
       },
-    });
+      capture().io,
+      { ZERO_AUDIT_WORKER: 'external' },
+    );
 
     expect(statuses).toEqual(['queued', 'running', 'failed']);
   });
@@ -405,43 +410,163 @@ describe('runCli serve', () => {
     });
   });
 
-  it('hands over a runner that audits a local target once private targets are allowed', async () => {
-    const fixtures = await startFixtureServer({
-      '/': { status: 200, headers: { 'content-type': 'text/html' }, body: '<html></html>' },
-    });
-    const held: { runner: AuditRunner | null } = { runner: null };
-    let stop: () => void = () => undefined;
-    const untilStopped = new Promise<void>((resolve) => {
-      stop = resolve;
+  describe('worker mode', () => {
+    const PAGE = { status: 200, headers: { 'content-type': 'text/html' }, body: '<html></html>' };
+    const LOCAL_ENV = { ZERO_AUDIT_ALLOW_PRIVATE_TARGETS: 'true', ZERO_AUDIT_DELAY_MS: '0' };
+
+    /** Serves until `stop()`, handing back the storage that serve opened. */
+    const serveUntilStopped = (env: Record<string, string>, hooks: Partial<CliHooks> = {}) => {
+      const held: { storage: Storage | null; stop: () => void } = {
+        storage: null,
+        stop: () => undefined,
+      };
+      const untilStopped = new Promise<void>((resolve) => {
+        held.stop = resolve;
+      });
+      const running = serve(
+        [],
+        fakeServer(events),
+        {
+          untilStopped,
+          onStorageOpened: (opened) => {
+            held.storage = opened;
+          },
+          ...hooks,
+        },
+        capture().io,
+        env,
+      );
+      return { held, running };
+    };
+
+    const seedAudit = async (rootUrl: string) => {
+      const seeded = await createStorage({ store: 'sqlite', dbPath, databaseUrl: null });
+      const project = await seeded.projects.findOrCreateByRootUrl({
+        ownerId: null,
+        rootUrl,
+        createdAt: new Date(),
+      });
+      const queued = await seeded.queue.enqueue(
+        { projectId: project.id, launchedBy: null, pagesLimit: 5, requestedAt: new Date() },
+        () => Promise.resolve(),
+      );
+      await seeded.close();
+      return queued.id;
+    };
+
+    const statusOf = async (storage: Storage | null, id: string) =>
+      (await storage?.snapshots.getById(id))?.snapshot.status;
+
+    it.each([
+      ['by default', {}],
+      ['with ZERO_AUDIT_WORKER=embedded', { ZERO_AUDIT_WORKER: 'embedded' }],
+    ])('processes a queued audit inside the process %s', async (_label, mode) => {
+      const fixtures = await startFixtureServer({ '/': PAGE });
+      const id = await seedAudit(`${fixtures.baseUrl}/`);
+      const { held, running } = serveUntilStopped({ ...LOCAL_ENV, ...mode });
+
+      try {
+        await vi.waitFor(
+          async () => {
+            expect(await statusOf(held.storage, id)).toBe('finished');
+          },
+          { timeout: 8000 },
+        );
+      } finally {
+        held.stop();
+        await running;
+        await fixtures.close();
+      }
     });
 
-    const running = serve(
-      [],
-      fakeServer(events),
-      {
-        untilStopped,
-        onAuditRunnerStarted: (started) => {
-          held.runner = started;
+    it('leaves the audit queued with ZERO_AUDIT_WORKER=external', async () => {
+      const fixtures = await startFixtureServer({ '/': PAGE });
+      const id = await seedAudit(`${fixtures.baseUrl}/`);
+      const { held, running } = serveUntilStopped({ ...LOCAL_ENV, ZERO_AUDIT_WORKER: 'external' });
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const status = await statusOf(held.storage, id);
+      held.stop();
+      await running;
+      await fixtures.close();
+
+      expect(status).toBe('queued');
+      expect(fixtures.requests).toEqual([]);
+    });
+
+    it('refuses to start with another ZERO_AUDIT_WORKER value, saying which ones exist', async () => {
+      const run = capture();
+
+      const code = await serve([], fakeServer(events), {}, run.io, { ZERO_AUDIT_WORKER: 'both' });
+
+      expect(code).toBe(2);
+      expect(run.err()).toContain('ZERO_AUDIT_WORKER');
+      expect(run.err()).toContain('embedded, external');
+      expect(events).toEqual([]);
+    });
+
+    it('gives the server the queue of the storage and the ceiling of ZERO_AUDIT_QUEUE_MAX', async () => {
+      const received: ServerDependencies[] = [];
+      let opened: Storage | null = null;
+
+      await serve(
+        [],
+        fakeServer(events),
+        {
+          onStorageOpened: (storage) => {
+            opened = storage;
+          },
+          createServer: (dependencies) => {
+            received.push(dependencies);
+            return fakeServer(events);
+          },
         },
-      },
-      capture().io,
-      { ZERO_AUDIT_ALLOW_PRIVATE_TARGETS: 'true', ZERO_AUDIT_DELAY_MS: '0' },
-    );
-    await vi.waitFor(() => {
-      expect(held.runner).not.toBeNull();
+        capture().io,
+        { ZERO_AUDIT_QUEUE_MAX: '7' },
+      );
+
+      expect(received[0]?.queue).toBe((opened as Storage | null)?.queue);
+      expect(received[0]?.queueMax).toBe(7);
     });
-    const started = await held.runner?.start({
-      rootUrl: `${fixtures.baseUrl}/`,
-      limit: 5,
-    });
-    await vi.waitFor(async () => {
-      expect(await held.runner?.progress(started?.snapshotId ?? '')).toMatchObject({
-        status: 'finished',
-        pagesCrawled: 1,
+
+    it('puts the running audit back in the queue on SIGTERM, before the storage is released', async () => {
+      const fixtures = await startFixtureServer({
+        '/': { ...PAGE, body: '<html><body><a href="/a">a</a><a href="/b">b</a></body></html>' },
       });
+      const id = await seedAudit(`${fixtures.baseUrl}/`);
+      const exits: number[] = [];
+      const controller = createInterruptController((code) => {
+        exits.push(code);
+      });
+      const { held, running } = serveUntilStopped(
+        { ...LOCAL_ENV, ZERO_AUDIT_DELAY_MS: '300' },
+        {
+          onStorageOpened: (storage) => {
+            held.storage = storage;
+            controller.onStorageOpened(storage);
+          },
+          onServerStarted: (server) => {
+            controller.onServerStarted(server);
+          },
+          onWorkerStarted: (worker) => {
+            controller.onWorkerStarted(worker);
+          },
+        },
+      );
+      await vi.waitFor(async () => {
+        expect(await statusOf(held.storage, id)).toBe('running');
+      });
+
+      await controller.terminate();
+      held.stop();
+      await running;
+      await fixtures.close();
+
+      expect(exits).toEqual([0]);
+      const reopened = await createStorage({ store: 'sqlite', dbPath, databaseUrl: null });
+      const details = await reopened.snapshots.getById(id);
+      await reopened.close();
+      expect(details?.snapshot).toMatchObject({ status: 'queued', attempts: 1 });
     });
-    stop();
-    await running;
-    await fixtures.close();
   });
 });

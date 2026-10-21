@@ -226,15 +226,15 @@ The server (`serve`) crawls any public site on request, so its HTTP client must 
 - **`blocked`**: a refused request is a `NetworkFailure` of kind `blocked`. The crawler records it like any other network error; if the root itself is blocked the audit fails with `RootUnreachable`.
 - **`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`**: read by `serve` only. The exact value `true` turns the guard off (`allowPrivateTargets`); `TRUE`, `1` or `yes` do not.
 
-### Background audits (`AuditRunner`)
+### Queued audits
 
-`src/application/audit-runner.ts` runs one audit at a time inside the `serve` process, without making the caller wait for the crawl.
+`POST /audits` (`LaunchAudit`) never crawls: it checks the quotas and the SSRF guard, then `AuditQueue.enqueue` inserts a `queued` snapshot and answers 202. A worker (`ProcessAuditQueue`) claims the audits one by one.
 
-- **Lock**: global, all projects together. It is held in memory and, for audits started by another process, by any `running` snapshot younger than `ORPHAN_AUDIT_MAX_AGE_MS` (6 hours, `src/domain/snapshot.ts`). `start` then rejects with `AuditAlreadyRunning`, which carries the start date of the blocking audit. The CLI `audit` command is not blocked by this lock, so a scheduled audit and one launched from the server may overlap.
-- **Orphans**: `serve` runs `RecoverStaleAudits` at startup: every `running` audit whose heartbeat is older than 2 minutes goes back to the queue, or is marked `failed` once its 2 attempts are spent. Audits without a heartbeat (in-process runner, `--direct`, rows older than the migration) are not requeued: `RecoverStaleAudits` marks them `failed` once they are 6 hours old (`LEGACY_ORPHAN_AGE_MS`), never earlier, so a live `--direct` audit is left alone.
-- **Progress**: `GET /snapshots/:id/progress` calls `progress(snapshotId)`, which reads the page counter from memory for the audit it runs, and from the database otherwise (0 pages for a `running` snapshot owned by another process).
-- **Shutdown**: on SIGINT / SIGTERM the server is closed, then `stop()` aborts the crawl at its next page (the progress callback throws), marks the snapshot `failed`, and only then is the storage closed.
-- **Config**: `serve` reads `ZERO_AUDIT_DELAY_MS` like `audit`.
+- **Admission**: `LaunchQuota.assertAdmitted` runs inside the transaction of `enqueue`: quotas, then one `queued` or `running` audit per account (409 `AuditAlreadyQueuedForAccount`, administrators included), then the ceiling of waiting audits `ZERO_AUDIT_QUEUE_MAX` (429 `quota_exceeded`, `QueueFull`; running audits do not count). The CLI is outside these limits.
+- **Worker mode**: `ZERO_AUDIT_WORKER` is `embedded` (default: `serve` runs the worker loop and stops it on shutdown, which puts the running audit back in the queue) or `external` (another process runs the worker, the audits stay `queued` meanwhile). Any other value stops `serve` at startup. The SSRF guard of the worker follows `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`.
+- **Orphans**: `RecoverStaleAudits` (worker loop, and `serve` at startup): every `running` audit whose heartbeat is older than 2 minutes goes back to the queue, or is marked `failed` once its 2 attempts are spent. Audits without a heartbeat (`--direct`, rows older than the migration) are marked `failed` once they are 6 hours old (`LEGACY_ORPHAN_AGE_MS`), never earlier.
+- **Progress**: `GET /snapshots/:id/progress` reads everything from the database: status, `pagesCrawled` (last heartbeat), `pagesLimit`, `queuePosition` (null unless queued) and `attempts`.
+- **Account deletion**: refused with 409 while an audit of the account is `queued` or `running` with a heartbeat of less than 2 minutes.
 
 ## Dashboard
 

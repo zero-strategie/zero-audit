@@ -1,7 +1,7 @@
 import { formatParisDateTime } from './format-date.js';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
-  AuditAlreadyRunning,
+  AuditAlreadyQueuedForAccount,
   AuditInProgress,
   EmailNotVerified,
   HostNotResolved,
@@ -12,6 +12,7 @@ import {
   MailerUnavailable,
   PrivateAddressRejected,
   ProjectNotFound,
+  QueueFull,
   QuotaExceeded,
   SnapshotNotFinished,
   SnapshotNotFound,
@@ -43,8 +44,8 @@ const HTTP_SERVICE_UNAVAILABLE = 503;
 const INTERNAL_MESSAGE = 'Internal server error';
 const PRIVATE_ADDRESS_MESSAGE =
   'Adresse interne refusée : le site cible une adresse réseau non publique';
-const auditAlreadyRunningMessage = (error: AuditAlreadyRunning): string =>
-  `Un audit est déjà en cours depuis le ${formatParisDateTime(error.startedAt)} : attendez qu'il se termine avant d'en lancer un autre`;
+const AUDIT_ALREADY_QUEUED_MESSAGE = 'Vous avez déjà un audit en cours ou en file';
+const QUEUE_FULL_MESSAGE = "La file d'attente est pleine";
 const HOST_NOT_RESOLVED_MESSAGE = 'Site introuvable : le nom de domaine ne résout pas';
 
 const INVALID_URL_MESSAGE =
@@ -168,8 +169,11 @@ export const registerErrorHandlers = (app: FastifyInstance): void => {
     if (error instanceof AuditInProgress) {
       return send(reply, HTTP_CONFLICT, 'conflict', AUDIT_IN_PROGRESS_MESSAGE);
     }
-    if (error instanceof AuditAlreadyRunning) {
-      return send(reply, HTTP_CONFLICT, 'conflict', auditAlreadyRunningMessage(error));
+    if (error instanceof AuditAlreadyQueuedForAccount) {
+      return send(reply, HTTP_CONFLICT, 'conflict', AUDIT_ALREADY_QUEUED_MESSAGE);
+    }
+    if (error instanceof QueueFull) {
+      return send(reply, HTTP_TOO_MANY_REQUESTS, 'quota_exceeded', QUEUE_FULL_MESSAGE);
     }
     request.log.error({ err: error }, 'Unhandled error');
     return send(reply, HTTP_INTERNAL_ERROR, 'internal_error', INTERNAL_MESSAGE);

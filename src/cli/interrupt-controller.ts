@@ -9,14 +9,14 @@ export interface ClosableServer {
   close(): Promise<void>;
 }
 
-export interface StoppableRunner {
+export interface StoppableWorker {
   stop(): Promise<void>;
 }
 
 export interface InterruptController {
   onStorageOpened(storage: Storage): void;
   onServerStarted(server: ClosableServer): void;
-  onAuditRunnerStarted(runner: StoppableRunner): void;
+  onWorkerStarted(worker: StoppableWorker): void;
   onAuditStarted(snapshotId: string, rootUrl: string): void;
   /** Meant for SIGINT: stops the server, fails the running snapshot if any, releases the storage, then exits. */
   interrupt(): Promise<void>;
@@ -31,12 +31,12 @@ export const createInterruptController = (
   let storage: Storage | null = null;
   let audit: { snapshotId: string; rootUrl: string } | null = null;
   let server: ClosableServer | null = null;
-  let runner: StoppableRunner | null = null;
+  let worker: StoppableWorker | null = null;
   const shutDown = async (exitCode: number): Promise<void> => {
     try {
       try {
         await server?.close();
-        await runner?.stop();
+        await worker?.stop();
         if (storage !== null && audit !== null) {
           await storage.snapshots.fail(audit.snapshotId, new Date());
           events?.failed(audit);
@@ -55,8 +55,8 @@ export const createInterruptController = (
     onServerStarted: (started) => {
       server = started;
     },
-    onAuditRunnerStarted: (started) => {
-      runner = started;
+    onWorkerStarted: (started) => {
+      worker = started;
     },
     onAuditStarted: (snapshotId, rootUrl) => {
       audit = { snapshotId, rootUrl };
