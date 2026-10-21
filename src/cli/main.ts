@@ -32,6 +32,9 @@ const exitCode = await runCli(
     onWorkerStarted: (worker) => {
       interrupts.onWorkerStarted(worker);
     },
+    onWorkerProcessStarted: (worker) => {
+      interrupts.onWorkerProcessStarted(worker);
+    },
     onServerStarted: (server) => {
       interrupts.onServerStarted(server);
     },

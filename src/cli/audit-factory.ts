@@ -59,6 +59,8 @@ export interface AuditWorkerOptions {
   /** Same switch as `serve`: the SSRF guard of the worker is on unless it is explicitly lifted. */
   allowPrivateTargets: boolean;
   delayMs: number;
+  /** Audits crawled in parallel. */
+  concurrency: number;
 }
 
 const ignoredEvents: AuditEvents = {
@@ -73,6 +75,7 @@ export const createAuditWorker = ({
   logger,
   allowPrivateTargets,
   delayMs,
+  concurrency,
 }: AuditWorkerOptions): ProcessAuditQueue => {
   const clock = new SystemClock();
   return new ProcessAuditQueue({
@@ -87,7 +90,7 @@ export const createAuditWorker = ({
     sleeper: new RealSleeper(),
     logger,
     hostname: os.hostname(),
-    concurrency: 1,
+    concurrency,
     delayMs,
   });
 };

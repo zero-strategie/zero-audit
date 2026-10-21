@@ -17,6 +17,8 @@ export interface InterruptController {
   onStorageOpened(storage: Storage): void;
   onServerStarted(server: ClosableServer): void;
   onWorkerStarted(worker: StoppableWorker): void;
+  /** The dedicated `worker` command: a signal hands the running audit back to the queue and exits 0. */
+  onWorkerProcessStarted(worker: StoppableWorker): void;
   onAuditStarted(snapshotId: string, rootUrl: string): void;
   /** Meant for SIGINT: stops the server, fails the running snapshot if any, releases the storage, then exits. */
   interrupt(): Promise<void>;
@@ -32,6 +34,7 @@ export const createInterruptController = (
   let audit: { snapshotId: string; rootUrl: string } | null = null;
   let server: ClosableServer | null = null;
   let worker: StoppableWorker | null = null;
+  let isWorkerProcess = false;
   const shutDown = async (exitCode: number): Promise<void> => {
     try {
       try {
@@ -58,10 +61,14 @@ export const createInterruptController = (
     onWorkerStarted: (started) => {
       worker = started;
     },
+    onWorkerProcessStarted: (started) => {
+      worker = started;
+      isWorkerProcess = true;
+    },
     onAuditStarted: (snapshotId, rootUrl) => {
       audit = { snapshotId, rootUrl };
     },
-    interrupt: () => shutDown(EXIT_INTERRUPTED),
-    terminate: () => shutDown(server === null ? EXIT_TERMINATED : EXIT_SUCCESS),
+    interrupt: () => shutDown(isWorkerProcess ? EXIT_SUCCESS : EXIT_INTERRUPTED),
+    terminate: () => shutDown(server === null && !isWorkerProcess ? EXIT_TERMINATED : EXIT_SUCCESS),
   };
 };

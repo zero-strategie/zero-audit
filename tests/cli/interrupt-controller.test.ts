@@ -179,3 +179,32 @@ describe('createInterruptController terminate (SIGTERM)', () => {
     expect(calls).toEqual(['close', 'exit:130']);
   });
 });
+
+describe('createInterruptController with the worker command', () => {
+  const workerProcess = (calls: string[], exitCodes: number[]) => {
+    const controller = createInterruptController((code) => {
+      exitCodes.push(code);
+    });
+    controller.onStorageOpened(fakeStorage(calls));
+    controller.onWorkerProcessStarted({
+      stop: () => {
+        calls.push('worker-stop');
+        return Promise.resolve();
+      },
+    });
+    return controller;
+  };
+
+  it.each(['interrupt', 'terminate'] as const)(
+    'stops the worker, releases the storage and exits 0 on %s, without failing any audit',
+    async (signal) => {
+      const calls: string[] = [];
+      const exitCodes: number[] = [];
+
+      await workerProcess(calls, exitCodes)[signal]();
+
+      expect(calls).toEqual(['worker-stop', 'close']);
+      expect(exitCodes).toEqual([0]);
+    },
+  );
+});

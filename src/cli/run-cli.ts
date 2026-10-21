@@ -1,3 +1,4 @@
+import type { Logger } from '../application/ports/logger.js';
 import { PurgeStaleAccounts } from '../application/purge-stale-accounts.js';
 import { RecoverStaleAudits } from '../application/recover-stale-audits.js';
 import { ANONYMOUS_READER } from '../domain/reader.js';
@@ -22,6 +23,7 @@ import {
   type CompareConfig,
   type MigrateConfig,
   type ServeConfig,
+  type WorkerConfig,
 } from './config.js';
 import { CONSOLE_MAILER_WARNING, createMailer } from './mailer-factory.js';
 import { createAuditWorker, createRunAudit } from './audit-factory.js';
@@ -58,6 +60,8 @@ export interface CliHooks {
   onAuditStarted?(snapshotId: string, rootUrl: string): void;
   /** Lets the process entry point stop the embedded worker on SIGINT / SIGTERM. */
   onWorkerStarted?(worker: { stop(): Promise<void> }): void;
+  /** Lets the process entry point stop the `worker` command on SIGINT / SIGTERM. */
+  onWorkerProcessStarted?(worker: { stop(): Promise<void> }): void;
   /** Lets the process entry point stop the server on SIGINT. */
   onServerStarted?(server: HttpServer): void;
   /** Builds the HTTP server; defaults to the Fastify API. */
@@ -136,7 +140,10 @@ const migrate = async (config: MigrateConfig, io: CliIo): Promise<number> => {
 };
 
 interface EmbeddedWorker {
+  /** Aborts the loop and resolves once it is over; the running audit is back in the queue. */
   stop(): Promise<void>;
+  /** Settles when the loop is over, whoever stopped it. */
+  done: Promise<void>;
 }
 
 /** The worker loop runs beside the API until `stop()`, which hands the running audit back to the queue. */
@@ -150,6 +157,7 @@ const startEmbeddedWorker = (worker: {
       shutdown.abort();
       await loop;
     },
+    done: loop,
   };
 };
 
@@ -189,6 +197,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
           logger,
           allowPrivateTargets: config.allowPrivateTargets,
           delayMs: config.delayMs,
+          concurrency: 1,
         }),
       );
       hooks.onWorkerStarted?.(worker);
@@ -227,6 +236,44 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
   } finally {
     stopPurge?.();
     await server?.close();
+    await worker?.stop();
+    await storage?.close();
+  }
+};
+
+const consoleLogger = (io: CliIo): Logger => ({
+  info: (message) => {
+    io.stderr(`${message}\n`);
+  },
+  error: (message) => {
+    io.stderr(`${message}\n`);
+  },
+});
+
+/** Dedicated process: crawls the queued audits until a signal stops it. */
+const work = async (config: WorkerConfig, io: CliIo, hooks: CliHooks): Promise<number> => {
+  let storage: Storage | null = null;
+  let worker: EmbeddedWorker | null = null;
+  try {
+    const opened = await (hooks.storageFactory ?? createStorage)(config);
+    storage = opened;
+    hooks.onStorageOpened?.(opened);
+    worker = startEmbeddedWorker(
+      createAuditWorker({
+        storage: opened,
+        logger: consoleLogger(io),
+        allowPrivateTargets: config.allowPrivateTargets,
+        delayMs: config.delayMs,
+        concurrency: config.concurrency,
+      }),
+    );
+    hooks.onWorkerProcessStarted?.(worker);
+    await worker.done;
+    return EXIT_SUCCESS;
+  } catch (error) {
+    io.stderr(`Démarrage du worker échoué : ${errorMessage(error)}\n`);
+    return EXIT_CRAWL_FAILED;
+  } finally {
     await worker?.stop();
     await storage?.close();
   }
@@ -277,7 +324,9 @@ export const runCli = async (
     return EXIT_USAGE;
   }
   if (command.kind === 'migrate') return migrate(command, io);
+  if (command.kind === 'worker') return work(command, io, hooks);
   if (command.kind === 'serve') return serve(command, io, hooks);
   if (command.kind === 'compare') return compare(command, io, hooks);
-  return audit(command.config, io, hooks);
+  if (command.kind === 'audit') return audit(command.config, io, hooks);
+  return Promise.resolve(EXIT_USAGE);
 };

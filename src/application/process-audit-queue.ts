@@ -27,6 +27,12 @@ export interface ProcessAuditQueueDependencies {
   delayMs: number;
 }
 
+/** The presence identifiers of a worker process: the host name, suffixed per lane above one lane. */
+export const workerIdsFor = (hostname: string, concurrency: number): string[] => {
+  if (concurrency <= 1) return [hostname];
+  return Array.from({ length: concurrency }, (_, index) => `${hostname}-${String(index + 1)}`);
+};
+
 type Outcome = SnapshotStatus | 'abandoned';
 
 /** The worker: claims queued audits and runs them until the signal fires. */
@@ -51,8 +57,7 @@ export class ProcessAuditQueue {
 
   private workerIds(): string[] {
     const { hostname, concurrency } = this.dependencies;
-    if (concurrency <= 1) return [hostname];
-    return Array.from({ length: concurrency }, (_, index) => `${hostname}-${String(index + 1)}`);
+    return workerIdsFor(hostname, concurrency);
   }
 
   /** Runs the task now, then after every interval; a failing task is logged by name and retried. */

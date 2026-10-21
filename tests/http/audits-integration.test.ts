@@ -40,6 +40,7 @@ describe('audit launched through the API against a local fixture site', () => {
       logger: { info: () => undefined, error: () => undefined },
       allowPrivateTargets: true,
       delayMs: 0,
+      concurrency: 1,
     });
     const stopWorker = new AbortController();
     const running = worker.run(stopWorker.signal);
