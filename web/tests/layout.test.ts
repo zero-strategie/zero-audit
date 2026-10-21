@@ -144,6 +144,20 @@ describe.each(SCREENS)('$name screen', (screen) => {
     );
   });
 
+  it('marks the link of the current screen with aria-current, and only that one', async () => {
+    const html = await render(screen);
+    const path = new URL(`http://localhost${screen.url}`).pathname;
+    const current = [...html.matchAll(/<a[^>]*aria-current="page"[^>]*>/g)].map(([tag]) => tag);
+
+    const navLinks =
+      [...html.matchAll(/<nav[^>]*data-testid="main-nav"[\s\S]*?<\/nav>/g)][0]?.[0] ?? '';
+    const linksToPath = [...navLinks.matchAll(/<a([^>]*)href="([^"]*)"([^>]*)>/g)].filter(
+      ([, , href, rest]) => href === path && !/class="brand"/.test(rest ?? ''),
+    );
+    expect(current.length).toBe(linksToPath.length > 0 ? 1 : 0);
+    if (linksToPath.length > 0) expect(current[0]).toContain(`href="${path}"`);
+  });
+
   it('ships no client-side script', async () => {
     expect(await render(screen)).not.toContain('<script');
   });

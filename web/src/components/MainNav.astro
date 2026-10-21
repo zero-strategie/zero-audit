@@ -10,34 +10,52 @@ const { user, projectId, snapshotId } = Astro.props;
 const compareHref = projectId
   ? `/projects/${projectId}/compare`
   : snapshotId && `/snapshots/${snapshotId}/compare`;
+const path = Astro.url.pathname;
+const current = (href: string) => (href === path ? 'page' : undefined);
 ---
 
 <nav class="main-nav" aria-label="Navigation principale" data-testid="main-nav">
-  <a class="brand" href="/">zero-audit</a>
-  <a href="/">Projets</a>
-  {
-    snapshotId && (
-      <>
-        <a href={`/snapshots/${snapshotId}`}>Vue d'ensemble</a>
-        <a href={`/snapshots/${snapshotId}/issues`}>Problèmes</a>
-        <a href={`/snapshots/${snapshotId}/pages`}>Pages explorées</a>
-      </>
-    )
-  }
-  {compareHref && <a href={compareHref}>Comparaison</a>}
+  <a class="brand" href="/">zero<span aria-hidden="true">/</span><span class="visually-hidden">-</span>audit</a>
+  <div class="nav-links">
+    <a href="/" aria-current={current('/')}>Projets</a>
+    {
+      snapshotId && (
+        <>
+          <a href={`/snapshots/${snapshotId}`} aria-current={current(`/snapshots/${snapshotId}`)}>
+            Vue d'ensemble
+          </a>
+          <a
+            href={`/snapshots/${snapshotId}/issues`}
+            aria-current={current(`/snapshots/${snapshotId}/issues`)}
+          >
+            Problèmes
+          </a>
+          <a
+            href={`/snapshots/${snapshotId}/pages`}
+            aria-current={current(`/snapshots/${snapshotId}/pages`)}
+          >
+            Pages explorées
+          </a>
+        </>
+      )
+    }
+    {compareHref && <a href={compareHref} aria-current={current(compareHref)}>Comparaison</a>}
+  </div>
   <div class="nav-account">
     {
       user ? (
         <>
-          <a href="/compte">Mon compte</a>
+          <a href="/compte" aria-current={current('/compte')}>Mon compte</a>
           <form method="post" action="/deconnexion">
-            <button type="submit">Se déconnecter</button>
+            <button type="submit" class="button-quiet">Se déconnecter</button>
           </form>
         </>
       ) : (
         <>
-          <a href="/connexion">Se connecter</a>
-          <a href="/inscription">S'inscrire</a>
+          <a href="/connexion" aria-current={current('/connexion')}>Se connecter</a>
+          <a href="/inscription" aria-current={current('/inscription')} class="button-primary">
+            S'inscrire
+          </a>
         </>
       )
     }
