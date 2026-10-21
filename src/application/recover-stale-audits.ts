@@ -11,10 +11,7 @@ export class RecoverStaleAudits {
 
   /** Returns how many audits were interrupted. */
   async execute(): Promise<number> {
-    const recovered = await this.queue.recoverStale(
-      new Date(this.clock.now()),
-      HEARTBEAT_STALE_MS,
-    );
+    const recovered = await this.queue.recoverStale(new Date(this.clock.now()), HEARTBEAT_STALE_MS);
     return recovered.length;
   }
 }
