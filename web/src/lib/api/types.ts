@@ -128,3 +128,12 @@ export interface Comparison {
   themes: Record<Theme, Score>;
   checks: CheckComparison[];
 }
+
+export interface CurrentAccount {
+  email: string;
+  isAdmin: boolean;
+  pagesLimitMax: number;
+  /** `null` when the account has no quota (administrators). */
+  auditsRemaining: number | null;
+  nextAuditAt: string | null;
+}

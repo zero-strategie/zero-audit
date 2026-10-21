@@ -1,6 +1,7 @@
 import type {
   AuditProgress,
   Comparison,
+  CurrentAccount,
   IssueRow,
   OccurrencePage,
   PageListing,
@@ -26,4 +27,21 @@ export interface ApiClient {
   getAuditProgress(snapshotId: string): Promise<AuditProgress>;
   /** True only when the API answers `/health` with 200 in time; never throws. */
   checkHealth(): Promise<boolean>;
+
+  /**
+   * Account calls reject with `InvalidRequest` (400), `Unauthenticated` (401), `Forbidden` (403),
+   * `Conflict` (409), `TooManyRequests` (429) or `ServiceUnavailable` (503), carrying the API message.
+   * The ones answering 202 return the API's generic message.
+   */
+  register(input: { email: string; password: string; website: string }): Promise<string>;
+  resendVerification(email: string): Promise<string>;
+  /** Returns the id of the session opened by the confirmation. */
+  verifyEmail(token: string): Promise<string>;
+  /** Returns the id of the new session. */
+  login(input: { email: string; password: string }): Promise<string>;
+  logout(): Promise<void>;
+  getCurrentAccount(): Promise<CurrentAccount>;
+  requestPasswordReset(email: string): Promise<string>;
+  confirmPasswordReset(input: { token: string; password: string }): Promise<void>;
+  deleteAccount(password: string): Promise<void>;
 }

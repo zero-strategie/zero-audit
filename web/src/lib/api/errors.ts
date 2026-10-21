@@ -25,3 +25,31 @@ export class Conflict extends Error {
     this.name = 'Conflict';
   }
 }
+
+export class Unauthenticated extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'Unauthenticated';
+  }
+}
+
+export class Forbidden extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'Forbidden';
+  }
+}
+
+export class TooManyRequests extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TooManyRequests';
+  }
+}
+
+export class ServiceUnavailable extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ServiceUnavailable';
+  }
+}

@@ -1,7 +1,16 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ApiUnreachable, Conflict, InvalidRequest, NotFound } from '../src/lib/api/errors';
+import {
+  ApiUnreachable,
+  Conflict,
+  Forbidden,
+  InvalidRequest,
+  NotFound,
+  ServiceUnavailable,
+  TooManyRequests,
+  Unauthenticated,
+} from '../src/lib/api/errors';
 import { resolveApiBaseUrl } from '../src/lib/api/config';
 import { fetchApiClient } from '../src/lib/api/fetch-api-client';
 
@@ -288,5 +297,137 @@ describe('fetchApiClient.checkHealth', () => {
 
       expect(await client.checkHealth()).toBe(false);
     });
+  });
+});
+
+describe('fetchApiClient accounts', () => {
+  const apiError = (message: string, status: number) =>
+    json({ error: { code: 'x', message } }, status);
+  const recording = (answer: () => Response) => {
+    const requests: { url: string; init: RequestInit | undefined }[] = [];
+    const fetchImpl: typeof fetch = (input, init) => {
+      requests.push({ url: typeof input === 'string' ? input : '', init });
+      return Promise.resolve(answer());
+    };
+    return { requests, fetchImpl };
+  };
+
+  it('sends the session and the visitor address on every request when it has them', async () => {
+    const { requests, fetchImpl } = recording(() => json([]));
+
+    await fetchApiClient(BASE_URL, fetchImpl, {
+      sessionId: 'sess-1',
+      clientIp: '203.0.113.9',
+    }).listProjects();
+
+    expect(requests[0]?.init?.headers).toMatchObject({
+      'x-session-id': 'sess-1',
+      'x-real-ip': '203.0.113.9',
+    });
+  });
+
+  it('sends neither header for an anonymous request', async () => {
+    const { requests, fetchImpl } = recording(() => json([]));
+
+    await fetchApiClient(BASE_URL, fetchImpl).listProjects();
+
+    expect(requests[0]?.init?.headers).toEqual({});
+  });
+
+  it('register posts the form fields and returns the generic message', async () => {
+    const { requests, fetchImpl } = recording(() => json({ message: 'ok' }, 202));
+
+    const message = await fetchApiClient(BASE_URL, fetchImpl).register({
+      email: 'a@example.test',
+      password: 'a long enough password',
+      website: '',
+    });
+
+    expect(message).toBe('ok');
+    expect(requests[0]?.url).toBe(`${BASE_URL}/auth/register`);
+    expect(requests[0]?.init?.method).toBe('POST');
+    expect(JSON.parse(requests[0]?.init?.body as string)).toEqual({
+      email: 'a@example.test',
+      password: 'a long enough password',
+      website: '',
+    });
+  });
+
+  it('login returns the session id', async () => {
+    const { fetchImpl } = recording(() => json({ sessionId: 'sess-2' }));
+
+    expect(
+      await fetchApiClient(BASE_URL, fetchImpl).login({ email: 'a@example.test', password: 'x' }),
+    ).toBe('sess-2');
+  });
+
+  it('verifyEmail posts the token and returns the session id', async () => {
+    const { requests, fetchImpl } = recording(() => json({ sessionId: 'sess-3' }));
+
+    expect(await fetchApiClient(BASE_URL, fetchImpl).verifyEmail('tok')).toBe('sess-3');
+    expect(requests[0]?.url).toBe(`${BASE_URL}/auth/verify-email`);
+  });
+
+  it('getCurrentAccount reads /auth/me', async () => {
+    const account = {
+      email: 'a@example.test',
+      isAdmin: false,
+      pagesLimitMax: 100,
+      auditsRemaining: 2,
+      nextAuditAt: null,
+    };
+    const { requests, fetchImpl } = recording(() => json(account));
+
+    expect(await fetchApiClient(BASE_URL, fetchImpl).getCurrentAccount()).toEqual(account);
+    expect(requests[0]?.url).toBe(`${BASE_URL}/auth/me`);
+  });
+
+  it.each([
+    ['logout', 'POST', '/auth/logout', (c: ReturnType<typeof fetchApiClient>) => c.logout()],
+    [
+      'confirmPasswordReset',
+      'POST',
+      '/auth/password-reset/confirm',
+      (c: ReturnType<typeof fetchApiClient>) =>
+        c.confirmPasswordReset({ token: 't', password: 'p' }),
+    ],
+    [
+      'deleteAccount',
+      'DELETE',
+      '/auth/me',
+      (c: ReturnType<typeof fetchApiClient>) => c.deleteAccount('p'),
+    ],
+  ])('%s accepts an empty 204 answer', async (_, method, path, call) => {
+    const { requests, fetchImpl } = recording(() => new Response(null, { status: 204 }));
+
+    await call(fetchApiClient(BASE_URL, fetchImpl));
+
+    expect(requests[0]?.init?.method).toBe(method);
+    expect(requests[0]?.url).toBe(`${BASE_URL}${path}`);
+  });
+
+  it.each([
+    ['requestPasswordReset', '/auth/password-reset/request'],
+    ['resendVerification', '/auth/resend-verification'],
+  ] as const)('%s posts the e-mail and returns the generic message', async (method, path) => {
+    const { requests, fetchImpl } = recording(() => json({ message: 'sent' }, 202));
+
+    expect(await fetchApiClient(BASE_URL, fetchImpl)[method]('a@example.test')).toBe('sent');
+    expect(requests[0]?.url).toBe(`${BASE_URL}${path}`);
+  });
+
+  it.each([
+    [401, Unauthenticated],
+    [403, Forbidden],
+    [429, TooManyRequests],
+    [503, ServiceUnavailable],
+    [400, InvalidRequest],
+  ])('maps HTTP %i to its error carrying the API message', async (status, errorClass) => {
+    const { fetchImpl } = recording(() => apiError('message en français', status));
+
+    const failure = fetchApiClient(BASE_URL, fetchImpl).login({ email: 'e', password: 'p' });
+
+    await expect(failure).rejects.toBeInstanceOf(errorClass);
+    await expect(failure).rejects.toThrow('message en français');
   });
 });
