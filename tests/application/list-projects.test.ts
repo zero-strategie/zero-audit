@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ANONYMOUS_READER } from '../../src/domain/reader.js';
 import { ListProjects } from '../../src/application/list-projects.js';
 import { ListProjectSnapshots } from '../../src/application/list-project-snapshots.js';
 import type { CheckResult } from '../../src/domain/check.js';
@@ -53,7 +54,7 @@ describe('ListProjects', () => {
       new InMemorySnapshotRepository(),
     );
 
-    expect(await empty.execute()).toEqual([]);
+    expect(await empty.execute(ANONYMOUS_READER)).toEqual([]);
   });
 
   it('gives the latest finished snapshot with its rounded health', async () => {
@@ -63,7 +64,7 @@ describe('ListProjects', () => {
     await record(20, 'failed');
     await record(30, 'running');
 
-    const [listed] = await new ListProjects(projects, snapshots).execute();
+    const [listed] = await new ListProjects(projects, snapshots).execute(ANONYMOUS_READER);
 
     expect(listed?.latestSnapshot).toEqual({ id: latest, finishedAt: minutes(11), health: 80 });
   });
@@ -73,7 +74,7 @@ describe('ListProjects', () => {
     await record(0, 'finished', 1);
     const running = await record(30, 'running');
 
-    const [listed] = await new ListProjects(projects, snapshots).execute();
+    const [listed] = await new ListProjects(projects, snapshots).execute(ANONYMOUS_READER);
 
     expect(listed?.latestRun).toEqual({ id: running, status: 'running', startedAt: minutes(30) });
   });
@@ -81,7 +82,7 @@ describe('ListProjects', () => {
   it('has no latest run for a project without snapshot', async () => {
     const { projects, snapshots, project } = await build();
 
-    const [listed] = await new ListProjects(projects, snapshots).execute();
+    const [listed] = await new ListProjects(projects, snapshots).execute(ANONYMOUS_READER);
 
     expect(listed).toEqual({ project, latestSnapshot: null, latestRun: null });
   });
@@ -90,7 +91,7 @@ describe('ListProjects', () => {
     const { projects, snapshots, record } = await build();
     await record(0, 'failed');
 
-    const [listed] = await new ListProjects(projects, snapshots).execute();
+    const [listed] = await new ListProjects(projects, snapshots).execute(ANONYMOUS_READER);
 
     expect(listed?.latestSnapshot).toBeNull();
   });
@@ -103,7 +104,10 @@ describe('ListProjectSnapshots', () => {
     const second = await record(10, 'failed');
     const third = await record(20, 'finished', 5);
 
-    const listed = await new ListProjectSnapshots(projects, snapshots).execute(project.id);
+    const listed = await new ListProjectSnapshots(projects, snapshots).execute(
+      ANONYMOUS_READER,
+      project.id,
+    );
 
     expect(listed.map(({ snapshot, health }) => [snapshot.id, snapshot.status, health])).toEqual([
       [third, 'finished', 0],
@@ -116,7 +120,7 @@ describe('ListProjectSnapshots', () => {
     const { projects, snapshots } = await build();
 
     await expect(
-      new ListProjectSnapshots(projects, snapshots).execute('missing'),
+      new ListProjectSnapshots(projects, snapshots).execute(ANONYMOUS_READER, 'missing'),
     ).rejects.toBeInstanceOf(ProjectNotFound);
   });
 });

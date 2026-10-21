@@ -3,6 +3,7 @@ import type { ListIssues } from '../../application/list-issues.js';
 import type { ListOccurrences } from '../../application/list-occurrences.js';
 import type { Severity } from '../../domain/check.js';
 import { errorResponseSchema } from '../errors.js';
+import type { ReaderOf } from '../reader.js';
 import {
   pageEnvelope,
   paginationProperties,
@@ -75,17 +76,20 @@ const occurrenceListSchema = {
 export const registerIssueRoutes = (
   app: FastifyInstance,
   useCases: { listIssues: ListIssues; listOccurrences: ListOccurrences },
+  readerOf: ReaderOf,
 ): void => {
   app.get<{ Params: { id: string }; Querystring: { severity?: Severity } }>(
     '/snapshots/:id/issues',
     { schema: issueListSchema },
-    (request) => useCases.listIssues.execute(request.params.id, request.query),
+    async (request) =>
+      useCases.listIssues.execute(await readerOf(request), request.params.id, request.query),
   );
   app.get<{ Params: { id: string; checkId: number }; Querystring: PaginationQuery }>(
     '/snapshots/:id/issues/:checkId',
     { schema: occurrenceListSchema },
     async (request) => {
       const { items, ...paging } = await useCases.listOccurrences.execute(
+        await readerOf(request),
         request.params.id,
         request.params.checkId,
         request.query,

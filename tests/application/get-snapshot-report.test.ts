@@ -4,6 +4,7 @@ import type { CheckResult } from '../../src/domain/check.js';
 import type { Page } from '../../src/domain/crawl.js';
 import { SnapshotNotFound } from '../../src/domain/errors.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
+import { ANONYMOUS_READER } from '../../src/domain/reader.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 import { makePage } from '../support/check-fixtures.js';
 
@@ -66,7 +67,7 @@ describe('GetSnapshotReport', () => {
     const blocked = makePage('https://e.com/p', { blockedByRobots: true, status: null });
     const current = await record(10, 'finished', [], [healthy('a'), blocked]);
 
-    const { pageGroups } = await useCase.execute(current);
+    const { pageGroups } = await useCase.execute(ANONYMOUS_READER, current);
 
     expect(pageGroups.counts).toMatchObject({ healthy: 1, blocked: 1 });
     expect(pageGroups.variation).toMatchObject({ healthy: -1, blocked: 1 });
@@ -76,7 +77,7 @@ describe('GetSnapshotReport', () => {
     const { record, useCase } = await build();
     const current = await record(0, 'finished', []);
 
-    const report = await useCase.execute(current);
+    const report = await useCase.execute(ANONYMOUS_READER, current);
 
     expect(report.rootUrl).toBe(ROOT_URL);
   });
@@ -85,7 +86,7 @@ describe('GetSnapshotReport', () => {
     const { record, useCase } = await build();
     const current = await record(0, 'finished', [], [makePage('https://e.com/a')]);
 
-    const { pageGroups } = await useCase.execute(current);
+    const { pageGroups } = await useCase.execute(ANONYMOUS_READER, current);
 
     expect(pageGroups.variation.healthy).toBeNull();
   });
@@ -95,7 +96,7 @@ describe('GetSnapshotReport', () => {
     await record(0, 'finished', [check15('o1', 'o2')]);
     const current = await record(10, 'finished', [check15('o2', 'o3')]);
 
-    const report = await useCase.execute(current);
+    const report = await useCase.execute(ANONYMOUS_READER, current);
 
     expect(report.checkDiffs).toMatchObject([
       { checkId: 15, delta: 0, newCount: 1, fixedCount: 1 },
@@ -107,7 +108,7 @@ describe('GetSnapshotReport', () => {
     const { record, useCase } = await build();
     const first = await record(0, 'finished', [check15('o1', 'o2')]);
 
-    const report = await useCase.execute(first);
+    const report = await useCase.execute(ANONYMOUS_READER, first);
 
     expect(report.checkDiffs).toMatchObject([{ delta: 0, newCount: 2, fixedCount: 0, count: 2 }]);
   });
@@ -118,7 +119,7 @@ describe('GetSnapshotReport', () => {
     await record(10, 'failed', [check15('o9')]);
     const current = await record(20, 'finished', [check15('o1')]);
 
-    const report = await useCase.execute(current);
+    const report = await useCase.execute(ANONYMOUS_READER, current);
 
     expect(report.checkDiffs).toMatchObject([{ delta: -2, newCount: 0, fixedCount: 2 }]);
   });
@@ -128,7 +129,7 @@ describe('GetSnapshotReport', () => {
     await record(0, 'finished', [check15('o1', 'o2')]);
     const current = await record(10, 'finished', [check15('o2', 'o1')]);
 
-    const report = await useCase.execute(current);
+    const report = await useCase.execute(ANONYMOUS_READER, current);
 
     expect(report.checkDiffs).toMatchObject([{ delta: 0, newCount: 0, fixedCount: 0 }]);
   });
@@ -136,7 +137,9 @@ describe('GetSnapshotReport', () => {
   it('throws SnapshotNotFound for an unknown snapshot id', async () => {
     const { useCase } = await build();
 
-    await expect(useCase.execute('missing')).rejects.toBeInstanceOf(SnapshotNotFound);
+    await expect(useCase.execute(ANONYMOUS_READER, 'missing')).rejects.toBeInstanceOf(
+      SnapshotNotFound,
+    );
   });
 
   it('scores the snapshot and its variation since the previous finished one', async () => {
@@ -144,7 +147,7 @@ describe('GetSnapshotReport', () => {
     await record(0, 'finished', [check15('o1', 'o2')]);
     const current = await record(10, 'finished', [check15('o1')]);
 
-    const report = await useCase.execute(current);
+    const report = await useCase.execute(ANONYMOUS_READER, current);
 
     expect(report.scores.health).toEqual({ score: 80, variation: 20 });
     expect(report.scores.themes['on-page']).toEqual({ score: 80, variation: 20 });
@@ -155,7 +158,7 @@ describe('GetSnapshotReport', () => {
     const { record, useCase } = await build();
     const first = await record(0, 'finished', [check15('o1')]);
 
-    const report = await useCase.execute(first);
+    const report = await useCase.execute(ANONYMOUS_READER, first);
 
     expect(report.scores.health).toEqual({ score: 80, variation: null });
   });
@@ -165,7 +168,7 @@ describe('GetSnapshotReport', () => {
     const error: CheckResult = { ...check15('o1'), checkId: 2, severity: 'error', count: 4 };
     const id = await record(0, 'finished', [check15('o1', 'o2'), error]);
 
-    const report = await useCase.execute(id);
+    const report = await useCase.execute(ANONYMOUS_READER, id);
 
     expect(report.severityCounts).toEqual({ error: 4, warning: 2, notice: 0 });
   });
@@ -179,7 +182,7 @@ describe('GetSnapshotReport', () => {
     }));
     const id = await record(0, 'finished', results);
 
-    const report = await useCase.execute(id);
+    const report = await useCase.execute(ANONYMOUS_READER, id);
 
     expect(report.topIssues.map(({ checkId }) => checkId)).toEqual([6, 5, 4, 3, 2]);
   });

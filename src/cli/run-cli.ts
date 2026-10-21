@@ -1,5 +1,6 @@
 import { AuditRunner } from '../application/audit-runner.js';
 import { FailOrphanedAudits } from '../application/fail-orphaned-audits.js';
+import { ANONYMOUS_READER } from '../domain/reader.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetSnapshotReport } from '../application/get-snapshot-report.js';
 import {
@@ -107,6 +108,7 @@ const audit = async (config: AuditConfig, io: CliIo, hooks: CliHooks): Promise<n
     });
     progress.finish();
     const report = await new GetSnapshotReport(opened.snapshots, opened.projects).execute(
+      ANONYMOUS_READER,
       details.snapshot.id,
     );
     io.stdout(renderSummary(report, labelsById()));
@@ -215,7 +217,8 @@ const compare = async (config: CompareConfig, io: CliIo, hooks: CliHooks): Promi
   try {
     storage = await (hooks.storageFactory ?? createStorage)(config);
     hooks.onStorageOpened?.(storage);
-    const comparison = await new CompareSnapshots(storage.snapshots).execute(
+    const comparison = await new CompareSnapshots(storage.snapshots, storage.projects).execute(
+      ANONYMOUS_READER,
       config.baseId,
       config.targetId,
     );

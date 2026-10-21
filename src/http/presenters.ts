@@ -20,6 +20,8 @@ export const presentProjectOverview = ({
 }: ProjectOverview) => ({
   id: project.id,
   rootUrl: project.rootUrl,
+  // Never the owner id: a listing only holds the showcase and the reader's own projects.
+  owned: project.ownerId !== null,
   createdAt: project.createdAt.toISOString(),
   latestSnapshot: latestSnapshot && {
     id: latestSnapshot.id,

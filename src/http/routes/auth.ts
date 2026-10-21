@@ -12,11 +12,11 @@ import { MAX_EMAIL_LENGTH } from '../../domain/user.js';
 import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '../../domain/password-policy.js';
 import { clientIpOf } from '../client-ip.js';
 import { errorResponseSchema } from '../errors.js';
+import { SESSION_HEADER, sessionIdOf } from '../reader.js';
 
 const HTTP_OK = 200;
 const HTTP_ACCEPTED = 202;
 const HTTP_NO_CONTENT = 204;
-const SESSION_HEADER = 'x-session-id';
 const MAX_TOKEN_LENGTH = 256;
 const GENERIC_ACCEPTED_MESSAGE =
   'Si cette adresse peut être utilisée, un e-mail vient de vous être envoyé';
@@ -217,9 +217,4 @@ export const registerAuthRoutes = (app: FastifyInstance, useCases: AuthUseCases)
     const account = await useCases.getCurrentAccount.execute(sessionIdOf(request.headers));
     return reply.status(HTTP_OK).send(account);
   });
-};
-
-const sessionIdOf = (headers: Record<string, unknown>): string | undefined => {
-  const value = headers[SESSION_HEADER];
-  return typeof value === 'string' ? value : undefined;
 };

@@ -95,6 +95,7 @@ describe('read-only HTTP API', () => {
         {
           id: first.id,
           rootUrl: 'https://e.com/',
+          owned: false,
           createdAt: minutes(0).toISOString(),
           latestSnapshot: { id: latest, finishedAt: minutes(11).toISOString(), health: 90 },
           latestRun: { id: latest, status: 'finished', startedAt: minutes(10).toISOString() },
@@ -102,6 +103,7 @@ describe('read-only HTTP API', () => {
         {
           id: expect.any(String) as string,
           rootUrl: 'https://other.com/',
+          owned: false,
           createdAt: minutes(5).toISOString(),
           latestSnapshot: null,
           latestRun: null,

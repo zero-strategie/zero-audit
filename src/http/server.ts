@@ -8,6 +8,7 @@ import { OpenSession } from '../application/auth/open-session.js';
 import { RegisterAccount } from '../application/auth/register-account.js';
 import { RequestPasswordReset } from '../application/auth/request-password-reset.js';
 import { ResendVerification } from '../application/auth/resend-verification.js';
+import { ResolveReader } from '../application/auth/resolve-reader.js';
 import { ResolveSession } from '../application/auth/resolve-session.js';
 import { SendVerificationLink } from '../application/auth/send-verification-link.js';
 import { VerifyEmail } from '../application/auth/verify-email.js';
@@ -37,6 +38,7 @@ import type { ProjectRepository } from '../application/ports/project-repository.
 import type { SnapshotRepository } from '../application/ports/snapshot-repository.js';
 import { allChecks } from '../domain/checks/index.js';
 import { registerErrorHandlers } from './errors.js';
+import { buildReaderOf } from './reader.js';
 import { registerAuditRoutes } from './routes/audits.js';
 import { registerAuthRoutes, type AuthUseCases } from './routes/auth.js';
 import { registerCheckRoutes } from './routes/checks.js';
@@ -106,25 +108,47 @@ export const buildServer = (dependencies: ServerDependencies): FastifyInstance =
   const { projects, snapshots, health, auditRunner, hostResolver, allowPrivateTargets } =
     dependencies;
   const app = Fastify();
+  const readerOf = buildReaderOf(
+    new ResolveReader({
+      resolveSession: new ResolveSession(dependencies),
+      adminEmails: dependencies.adminEmails,
+    }),
+  );
   registerErrorHandlers(app);
   registerAuthRoutes(app, buildAuthUseCases(dependencies));
-  registerProjectRoutes(app, {
-    listProjects: new ListProjects(projects, snapshots),
-    listProjectSnapshots: new ListProjectSnapshots(projects, snapshots),
-  });
-  registerSnapshotRoutes(app, {
-    getSnapshotReport: new GetSnapshotReport(snapshots, projects),
-    getAuditProgress: new GetAuditProgress(auditRunner),
-  });
+  registerProjectRoutes(
+    app,
+    {
+      listProjects: new ListProjects(projects, snapshots),
+      listProjectSnapshots: new ListProjectSnapshots(projects, snapshots),
+    },
+    readerOf,
+  );
+  registerSnapshotRoutes(
+    app,
+    {
+      getSnapshotReport: new GetSnapshotReport(snapshots, projects),
+      getAuditProgress: new GetAuditProgress(auditRunner, snapshots, projects),
+    },
+    readerOf,
+  );
   registerAuditRoutes(app, {
     launchAudit: new LaunchAudit(auditRunner, hostResolver, allowPrivateTargets),
   });
-  registerIssueRoutes(app, {
-    listIssues: new ListIssues(snapshots, allChecks),
-    listOccurrences: new ListOccurrences(snapshots, allChecks),
-  });
-  registerPageRoutes(app, { listPages: new ListPages(snapshots) });
-  registerCompareRoutes(app, { compareSnapshots: new CompareSnapshots(snapshots) });
+  registerIssueRoutes(
+    app,
+    {
+      listIssues: new ListIssues(snapshots, projects, allChecks),
+      listOccurrences: new ListOccurrences(snapshots, projects, allChecks),
+    },
+    readerOf,
+  );
+  registerPageRoutes(app, { listPages: new ListPages(snapshots, projects) }, readerOf);
+  registerCompareRoutes(
+    app,
+    { compareSnapshots: new CompareSnapshots(snapshots, projects) },
+    readerOf,
+  );
   registerCheckRoutes(app, allChecks);
   registerHealthRoutes(app, { checkHealth: new CheckHealth(health) });
   return app;

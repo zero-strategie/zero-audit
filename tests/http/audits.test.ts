@@ -18,12 +18,15 @@ describe('audit launch API', () => {
   let runner: FakeAuditRunner;
   let resolver: FakeHostResolver;
   let app: FastifyInstance;
+  let projects: InMemoryProjectRepository;
+  let snapshots: InMemorySnapshotRepository;
 
   const serverWith = (allowPrivateTargets: boolean): FastifyInstance => {
-    const snapshots = new InMemorySnapshotRepository();
+    projects = new InMemoryProjectRepository();
+    snapshots = new InMemorySnapshotRepository();
     return buildServer({
       ...idleAccountDependencies(),
-      projects: new InMemoryProjectRepository(),
+      projects,
       snapshots,
       health: snapshots,
       auditRunner: runner,
@@ -157,7 +160,19 @@ describe('audit launch API', () => {
         rootUrl: SITE,
       };
 
-      const response = await app.inject(`/snapshots/${UNKNOWN_UUID}/progress`);
+      const project = await projects.findOrCreateByRootUrl({
+        rootUrl: SITE,
+        ownerId: null,
+        createdAt: new Date('2026-01-01T09:00:00.000Z'),
+      });
+      const { id } = await snapshots.create({
+        launchedBy: null,
+        projectId: project.id,
+        pagesLimit: 100,
+        startedAt: new Date('2026-01-01T10:00:00.000Z'),
+      });
+
+      const response = await app.inject(`/snapshots/${id}/progress`);
 
       expect(response.statusCode).toBe(200);
       expect(response.json()).toEqual({

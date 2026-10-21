@@ -1,8 +1,11 @@
 import type { Check, IssueOccurrence } from '../domain/check.js';
-import { SnapshotNotFound, UnknownCheck } from '../domain/errors.js';
+import { UnknownCheck } from '../domain/errors.js';
 import { paginate, type Paginated, type PageRequest } from '../domain/pagination.js';
+import type { Reader } from '../domain/reader.js';
 import { canonicalJson } from '../domain/snapshot-diff.js';
+import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotRepository } from './ports/snapshot-repository.js';
+import { loadReadableSnapshot } from './readable-snapshot.js';
 
 const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -19,16 +22,22 @@ const stableOrder = (occurrences: readonly IssueOccurrence[]): IssueOccurrence[]
 export class ListOccurrences {
   constructor(
     private readonly repository: SnapshotRepository,
+    private readonly projects: ProjectRepository,
     private readonly checks: readonly Check[],
   ) {}
 
   async execute(
+    reader: Reader,
     snapshotId: string,
     checkId: number,
     request: PageRequest,
   ): Promise<Paginated<IssueOccurrence>> {
-    const details = await this.repository.getById(snapshotId);
-    if (!details) throw new SnapshotNotFound(snapshotId);
+    const { details } = await loadReadableSnapshot(
+      this.repository,
+      this.projects,
+      reader,
+      snapshotId,
+    );
     if (!this.checks.some(({ id }) => id === checkId)) throw new UnknownCheck(checkId);
     const result = details.checkResults.find((candidate) => candidate.checkId === checkId);
     return paginate(stableOrder(result?.occurrences ?? []), request);

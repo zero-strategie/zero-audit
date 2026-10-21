@@ -1,7 +1,9 @@
-import { SnapshotNotFound } from '../domain/errors.js';
 import { classifyPages, type PageGroup } from '../domain/page-groups.js';
+import type { Reader } from '../domain/reader.js';
 import { paginate, type Paginated, type PageRequest } from '../domain/pagination.js';
+import type { ProjectRepository } from './ports/project-repository.js';
 import type { SnapshotRepository } from './ports/snapshot-repository.js';
+import { loadReadableSnapshot } from './readable-snapshot.js';
 
 export const PAGE_SORT_FIELDS = ['url', 'status', 'depth', 'issues', 'responseTime'] as const;
 export type PageSortField = (typeof PAGE_SORT_FIELDS)[number];
@@ -40,14 +42,22 @@ export const sortPages = (rows: readonly PageRow[], sort: PageSort): PageRow[] =
 };
 
 export class ListPages {
-  constructor(private readonly repository: SnapshotRepository) {}
+  constructor(
+    private readonly repository: SnapshotRepository,
+    private readonly projects: ProjectRepository,
+  ) {}
 
   async execute(
+    reader: Reader,
     snapshotId: string,
     { sort, page, limit }: PageRequest & { sort: PageSort },
   ): Promise<Paginated<PageRow>> {
-    const details = await this.repository.getById(snapshotId);
-    if (!details) throw new SnapshotNotFound(snapshotId);
+    const { details } = await loadReadableSnapshot(
+      this.repository,
+      this.projects,
+      reader,
+      snapshotId,
+    );
     const { groups } = classifyPages(details.pages, details.checkResults);
     const issuesByUrl = new Map<string, number>();
     for (const { pageUrl } of details.checkResults.flatMap(({ occurrences }) => occurrences)) {

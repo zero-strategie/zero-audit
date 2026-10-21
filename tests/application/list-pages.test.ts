@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { ListPages } from '../../src/application/list-pages.js';
 import { SnapshotNotFound } from '../../src/domain/errors.js';
+import { ANONYMOUS_READER } from '../../src/domain/reader.js';
+import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 import { makePage } from '../support/check-fixtures.js';
 
 const setup = async () => {
   const repository = new InMemorySnapshotRepository();
+  const projects = new InMemoryProjectRepository();
+  const project = await projects.findOrCreateByRootUrl({
+    rootUrl: 'https://e.com/',
+    ownerId: null,
+    createdAt: new Date(Date.UTC(2026, 0, 1)),
+  });
   const { id } = await repository.create({
     launchedBy: null,
-    projectId: 'p',
+    projectId: project.id,
     pagesLimit: 10,
     startedAt: new Date(Date.UTC(2026, 0, 1)),
   });
@@ -30,7 +38,7 @@ const setup = async () => {
       ],
     },
   ]);
-  return { id, useCase: new ListPages(repository) };
+  return { id, useCase: new ListPages(repository, projects) };
 };
 
 const urls = (items: readonly { url: string }[]): string[] =>
@@ -40,7 +48,11 @@ describe('ListPages', () => {
   it('exposes url, status, depth, group, canonical, issues and response time', async () => {
     const { id, useCase } = await setup();
 
-    const { items } = await useCase.execute(id, { sort: 'url', page: 1, limit: 50 });
+    const { items } = await useCase.execute(ANONYMOUS_READER, id, {
+      sort: 'url',
+      page: 1,
+      limit: 50,
+    });
 
     expect(items[0]).toEqual({
       url: 'https://e.com/a',
@@ -65,7 +77,7 @@ describe('ListPages', () => {
   ] as const)('sorts by %s', async (sort, expected) => {
     const { id, useCase } = await setup();
 
-    const { items } = await useCase.execute(id, { sort, page: 1, limit: 50 });
+    const { items } = await useCase.execute(ANONYMOUS_READER, id, { sort, page: 1, limit: 50 });
 
     expect(urls(items)).toEqual(expected);
   });
@@ -73,7 +85,7 @@ describe('ListPages', () => {
   it('paginates after sorting', async () => {
     const { id, useCase } = await setup();
 
-    const result = await useCase.execute(id, { sort: 'url', page: 2, limit: 2 });
+    const result = await useCase.execute(ANONYMOUS_READER, id, { sort: 'url', page: 2, limit: 2 });
 
     expect(urls(result.items)).toEqual(['c']);
     expect(result).toMatchObject({ total: 3, page: 2, limit: 2 });
@@ -82,8 +94,8 @@ describe('ListPages', () => {
   it('fails for an unknown snapshot', async () => {
     const { useCase } = await setup();
 
-    await expect(useCase.execute('nope', { sort: 'url', page: 1, limit: 50 })).rejects.toThrow(
-      SnapshotNotFound,
-    );
+    await expect(
+      useCase.execute(ANONYMOUS_READER, 'nope', { sort: 'url', page: 1, limit: 50 }),
+    ).rejects.toThrow(SnapshotNotFound);
   });
 });
