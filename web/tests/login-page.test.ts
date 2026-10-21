@@ -40,7 +40,7 @@ it('redirects to the return path when it is a path of the site', async () => {
   expect(response.headers.get('location')).toBe('/compte');
 });
 
-it.each(['//evil.example', 'https://evil.example'])(
+it.each(['//evil.example', 'https://evil.example', '/\t/evil.example'])(
   'ignores the foreign return path %s',
   async (retour) => {
     const response = await renderPage(

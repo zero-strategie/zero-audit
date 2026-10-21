@@ -12,7 +12,11 @@ interface Sent {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
-const run = async (options: { cookie?: string; realIp?: string; answer: () => Response }) => {
+const run = async (options: {
+  cookie?: string;
+  realIp?: string;
+  answer: () => Response | Error;
+}) => {
   const sent: Sent[] = [];
   const deleted: string[] = [];
   const fetchImpl: typeof fetch = (input, init) => {
@@ -20,7 +24,8 @@ const run = async (options: { cookie?: string; realIp?: string; answer: () => Re
       url: typeof input === 'string' ? input : '',
       headers: (init?.headers ?? {}) as Record<string, string>,
     });
-    return Promise.resolve(options.answer());
+    const answer = options.answer();
+    return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
   };
   const headers = new Headers(options.realIp ? { 'x-real-ip': options.realIp } : {});
   const context = {
@@ -78,4 +83,14 @@ it('forgets a session the API rejects and clears the cookie', async () => {
 
   expect(context.locals.user).toBeNull();
   expect(deleted).toEqual(['za_session']);
+});
+
+it('stays anonymous but keeps the cookie when the API is unreachable', async () => {
+  const { context, deleted } = await run({
+    cookie: 'sess-1',
+    answer: () => new TypeError('fetch failed'),
+  });
+
+  expect(context.locals.user).toBeNull();
+  expect(deleted).toEqual([]);
 });
