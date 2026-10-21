@@ -78,8 +78,8 @@ const rows = comparison ? changedChecks(comparison.checks) : [];
             </p>
             <HealthGauge score={comparison.health.score} variation={comparison.health.variation} />
             <ul class="theme-cards">
-              {Object.entries(comparison.themes).map(([theme, { score, variation }]) => (
-                <ThemeCard theme={theme as Theme} score={score} variation={variation} />
+              {Object.entries(comparison.themes).map(([theme, { score, variation }], index) => (
+                <ThemeCard theme={theme as Theme} score={score} variation={variation} index={index} />
               ))}
             </ul>
           </section>

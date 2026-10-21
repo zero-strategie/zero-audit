@@ -465,11 +465,11 @@ a.button-primary {
   color: var(--color-error-text);
 }
 
-/* Theme cards */
+/* Theme cards: instrument labels with a notched corner and a meter. They enter in reading order. */
 .theme-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+  gap: var(--space-2);
   margin: var(--space-3) 0;
   padding: 0;
   list-style: none;
@@ -478,30 +478,76 @@ a.button-primary {
 .theme-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-2);
   padding: var(--space-3);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  background: var(--color-bg);
+  background: var(--color-surface);
+  clip-path: polygon(0 0, calc(100% - var(--notch)) 0, 100% var(--notch), 100% 100%, 0 100%);
+  animation: rise var(--dur-medium) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), var(--stagger-max)) * var(--stagger) + 200ms);
 }
 
 .theme-name {
   color: var(--color-text-muted);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .theme-score {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
-/* Severity badges */
+.theme-meter {
+  display: block;
+  height: 6px;
+  margin-top: auto;
+  overflow: hidden;
+  background: var(--color-grid-major);
+}
+
+/* The meter grows with a transform from the left: no width animation. */
+.theme-meter i {
+  display: block;
+  height: 100%;
+  background: var(--color-text);
+  transform: scaleX(var(--v));
+  transform-origin: left;
+  animation: grow-x var(--dur-long) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), var(--stagger-max)) * var(--stagger) + 320ms);
+}
+
+.theme-meter-na {
+  background: repeating-linear-gradient(135deg, var(--color-grid-major) 0 4px, transparent 4px 8px);
+}
+
+/* Severity badges: color and shape. ■ error, ▲ warning, ● notice. */
 .severity-badge {
-  display: inline-block;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius);
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding: 0.28rem var(--space-2);
   background: var(--color-surface);
   color: var(--color-text-muted);
-  font-size: 0.875rem;
+  font-family: var(--font-data);
+  font-size: 0.68rem;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.severity-badge::before {
+  width: 0.55rem;
+  height: 0.55rem;
+  flex: none;
+  background: currentColor;
+  content: '';
 }
 
 .severity-error {
@@ -514,9 +560,17 @@ a.button-primary {
   color: var(--color-warning-text);
 }
 
+.severity-warning::before {
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
 .severity-notice {
   background: var(--color-notice-bg);
   color: var(--color-notice-text);
+}
+
+.severity-notice::before {
+  border-radius: 50%;
 }
 
 /* Passed checks */

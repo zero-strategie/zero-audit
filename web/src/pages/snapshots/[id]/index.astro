@@ -52,8 +52,8 @@ const siteFileStatus = (status: number | null, error: string | null) =>
       <section>
         <h2>Thèmes</h2>
         <ul class="theme-cards">
-          {Object.entries(report.themes).map(([theme, { score, variation }]) => (
-            <ThemeCard theme={theme as Theme} score={score} variation={variation} />
+          {Object.entries(report.themes).map(([theme, { score, variation }], index) => (
+            <ThemeCard theme={theme as Theme} score={score} variation={variation} index={index} />
           ))}
         </ul>
       </section>

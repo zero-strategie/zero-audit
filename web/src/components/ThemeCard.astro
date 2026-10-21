@@ -7,12 +7,27 @@ interface Props {
   theme: Theme;
   score: number | null;
   variation: number | null;
+  /** Position in the list, for the staggered entrance. */
+  index?: number;
 }
 
-const { theme, score, variation } = Astro.props;
+const { theme, score, variation, index = 0 } = Astro.props;
 ---
 
-<li class="theme-card" data-testid={`theme-${theme}`}>
+<li
+  class="theme-card"
+  data-testid={`theme-${theme}`}
+  style={`--i: ${String(index)}; view-transition-name: theme-${theme}`}
+>
   <span class="theme-name">{THEME_LABELS[theme]}</span>
   <strong class="theme-score">{formatScoreWithVariation(score, variation)}</strong>
+  {
+    score === null ? (
+      <span class="theme-meter theme-meter-na" aria-hidden="true" />
+    ) : (
+      <span class="theme-meter" aria-hidden="true">
+        <i style={`--v: ${String(score / 100)}`} />
+      </span>
+    )
+  }
 </li>

@@ -68,6 +68,22 @@ it('HealthGauge without a score parks the needle and shows a dash instead of a c
   expect(html).toMatch(/class="gauge-value gauge-value-na"[^>]*>\s*—\s*</);
 });
 
+it('ThemeCard draws a meter scaled to the score and staggers by its index', async () => {
+  const html = await render(ThemeCard, { theme: 'linking', score: 90, variation: 3, index: 2 });
+
+  expect(html).toMatch(
+    /class="theme-card"[^>]*style="--i: 2; view-transition-name: theme-linking"/,
+  );
+  expect(html).toMatch(/class="theme-meter"[^>]*aria-hidden="true"[^>]*>\s*<i style="--v: 0.9"/);
+});
+
+it('ThemeCard without a score shows a hatched, empty meter', async () => {
+  const html = await render(ThemeCard, { theme: 'https', score: null, variation: null });
+
+  expect(html).toContain('Non calculable');
+  expect(html).toMatch(/class="theme-meter theme-meter-na"/);
+});
+
 it('ThemeCard shows the theme name and its score with variation', async () => {
   const html = await render(ThemeCard, { theme: 'linking', score: 90, variation: 3 });
 
