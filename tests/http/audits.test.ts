@@ -29,7 +29,11 @@ describe('audit launch API', () => {
   let alice: { id: string };
 
   const openSession = async (email: string, id: string): Promise<{ id: string }> => {
-    const user = await account.users.create({ email, passwordHash: 'hashed:secret password', createdAt: NOW });
+    const user = await account.users.create({
+      email,
+      passwordHash: 'hashed:secret password',
+      createdAt: NOW,
+    });
     await account.users.markVerified(user.id, NOW);
     await account.sessions.create({
       id,

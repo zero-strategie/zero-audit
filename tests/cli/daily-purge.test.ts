@@ -14,7 +14,9 @@ describe('startDailyPurge', () => {
 
   const build = () => {
     const purge = {
-      execute: vi.fn(() => Promise.resolve({ accounts: 0, sessions: 0, emailTokens: 0 })),
+      execute: vi.fn(() =>
+        Promise.resolve({ accounts: 0, sessions: 0, emailTokens: 0, launches: 0 }),
+      ),
     };
     const errors: string[] = [];
     const logger = {

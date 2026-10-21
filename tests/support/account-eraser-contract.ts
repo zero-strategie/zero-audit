@@ -181,7 +181,11 @@ export const describeAccountEraserContract = (
       const HOUR_MS = 60 * 60 * 1000;
       const since = new Date(NOW.getTime() - DAY_MS);
 
-      const registerAndLaunch = async (storage: AccountStorage, email: string, launches: number) => {
+      const registerAndLaunch = async (
+        storage: AccountStorage,
+        email: string,
+        launches: number,
+      ) => {
         const user = await storage.users.create({ email, passwordHash: 'h', createdAt: NOW });
         const { id: projectId } = await storage.projects.findOrCreateByRootUrl({
           ownerId: user.id,

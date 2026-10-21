@@ -25,6 +25,12 @@ it('states the retention periods', async () => {
   expect(page).toMatch(/supprimées[^<]*suppression du compte/);
 });
 
+it('discloses the 24 hour fingerprint of the address kept against abuse', async () => {
+  const page = await html();
+
+  expect(page).toMatch(/empreinte de votre adresse[^<]*24 heures[^<]*abus/);
+});
+
 it('names Brevo as the e-mail processor and gives the contact address', async () => {
   const page = await html();
 

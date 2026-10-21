@@ -50,7 +50,9 @@ const summary = `Audit de ${host} en cours` + (hasCount ? ` — ${count}` : '');
       ) : (
         <>
           <p class="alert alert-error" role="alert">L'audit de {host} a échoué.</p>
-          <RelaunchForm url={progress.rootUrl} limit={relaunchLimit(progress.pagesLimit)} />
+          {Astro.locals.user && (
+            <RelaunchForm url={progress.rootUrl} limit={relaunchLimit(progress.pagesLimit)} />
+          )}
         </>
       )}
     </Layout>

@@ -95,7 +95,12 @@ describe('PurgeStaleAccounts report', () => {
       createdAt: new Date(NOW.getTime() - 8 * DAY_MS),
     });
 
-    expect(await purge.execute()).toEqual({ accounts: 1, sessions: 0, emailTokens: 0, launches: 0 });
+    expect(await purge.execute()).toEqual({
+      accounts: 1,
+      sessions: 0,
+      emailTokens: 0,
+      launches: 0,
+    });
   });
 });
 

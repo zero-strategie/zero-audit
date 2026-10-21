@@ -182,7 +182,7 @@ Visitors can read the showcase; launching audits needs an account.
 
 Your audits are private to your account. The **Vitrine** lists the projects that have no owner (audits run from the command line). An account relaunching a showcase site gets its own private project.
 
-**Quotas** for a regular account: 100 pages per audit (the form offers 50 and 100) and 3 audits per rolling 24 hours, counting every audit started, even a failed one. When the quota is reached, the message gives the time of the next possible audit. A global ceiling (`ZERO_AUDIT_LAUNCHES_PER_DAY`, 30 by default) also caps the audits launched through the dashboard, all accounts together. Administrators have no personal quota and can pick up to 500 pages, but the global ceiling still applies to them. The command line has no quota.
+**Quotas** for a regular account: 100 pages per audit (the form offers 50 and 100) and 3 audits per rolling 24 hours, counting every audit started, even a failed one. When the quota is reached, the message gives the time of the next possible audit. A global ceiling (`ZERO_AUDIT_LAUNCHES_PER_DAY`, 30 by default) also caps the audits launched through the dashboard, all accounts together. Administrators have no personal quota and can pick up to 500 pages, but the global ceiling still applies to them. Deleting an account does not reset these counts: for 24 hours the platform keeps a fingerprint of the address with the date of each audit, so registering again with the same address finds the same quota. The command line has no quota.
 
 ### Launch an audit from the dashboard
 

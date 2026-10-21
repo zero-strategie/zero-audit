@@ -220,8 +220,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
 
   private emailHashOf(userId: string): string | null {
     const row = this.db.prepare('SELECT email FROM users WHERE id = ?').get(userId) as
-      | { email: string }
-      | undefined;
+      { email: string } | undefined;
     return row ? hashToken(row.email) : null;
   }
 
@@ -249,9 +248,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
   countApiLaunchedSince(since: Date): Promise<number> {
     return this.run(() => {
       const row = this.db
-        .prepare(
-          'SELECT COUNT(*) AS n FROM api_launches WHERE launched_at >= ?',
-        )
+        .prepare('SELECT COUNT(*) AS n FROM api_launches WHERE launched_at >= ?')
         .get(since.toISOString()) as { n: number };
       return row.n;
     });
