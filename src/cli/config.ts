@@ -23,6 +23,14 @@ export interface CompareConfig extends StoreSelection {
   dbPath: string;
 }
 
+export const MAILER_KINDS = ['console', 'brevo'] as const;
+export const DEFAULT_MAIL_FROM = 'no-reply@agents.zero-strategie.dev';
+
+/** `disabled` is the default: sign-up and resets answer 503 until a mailer is chosen. */
+export type MailConfig =
+  | { kind: 'disabled' | 'console'; from: string; publicUrl: string | null }
+  | { kind: 'brevo'; from: string; publicUrl: string; apiKey: string };
+
 export interface ServeConfig extends StoreSelection {
   host: string;
   port: number;
@@ -30,6 +38,7 @@ export interface ServeConfig extends StoreSelection {
   /** Disables the SSRF guard; only the exact value `true` of the environment variable does. */
   allowPrivateTargets: boolean;
   delayMs: number;
+  mail: MailConfig;
 }
 
 export interface MigrateConfig extends StoreSelection {
@@ -56,6 +65,10 @@ const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
 const DB_ENV = 'ZERO_AUDIT_DB_PATH';
 const ALLOW_PRIVATE_TARGETS_ENV = 'ZERO_AUDIT_ALLOW_PRIVATE_TARGETS';
 const STORE_ENV = 'ZERO_AUDIT_STORE';
+const MAILER_ENV = 'ZERO_AUDIT_MAILER';
+const BREVO_API_KEY_ENV = 'ZERO_AUDIT_BREVO_API_KEY';
+const MAIL_FROM_ENV = 'ZERO_AUDIT_MAIL_FROM';
+const PUBLIC_URL_ENV = 'ZERO_AUDIT_PUBLIC_URL';
 const HOST_ENV = 'HOST';
 const PORT_ENV = 'PORT';
 const DATABASE_URL_ENV = 'DATABASE_URL';
@@ -101,6 +114,41 @@ const parseRootUrl = (raw: string | undefined): string => {
     throw new UsageError(`<url> must be an absolute http(s) URL (received "${raw}")`);
   }
   return raw;
+};
+
+const parsePublicUrl = (raw: string | undefined): string | null => {
+  if (raw === undefined) return null;
+  const parsed = URL.parse(raw);
+  const isHttp = parsed?.protocol === 'http:' || parsed?.protocol === 'https:';
+  if (!isHttp || raw.endsWith('/')) {
+    throw new UsageError(
+      `${PUBLIC_URL_ENV} must be an absolute http(s) URL without trailing slash (received "${raw}")`,
+    );
+  }
+  return raw;
+};
+
+const requireEnv = (env: Environment, name: string, reason: string): string => {
+  const value = env[name];
+  if (!value) throw new UsageError(`${name} is required ${reason}`);
+  return value;
+};
+
+const parseMail = (env: Environment): MailConfig => {
+  const kind = env[MAILER_ENV];
+  const from = env[MAIL_FROM_ENV] ?? DEFAULT_MAIL_FROM;
+  const publicUrl = parsePublicUrl(env[PUBLIC_URL_ENV]);
+  if (kind === undefined) return { kind: 'disabled', from, publicUrl };
+  if (kind === 'console') return { kind, from, publicUrl };
+  if (kind !== 'brevo') {
+    throw new UsageError(
+      `${MAILER_ENV} must be one of: ${MAILER_KINDS.join(', ')} (received "${kind}")`,
+    );
+  }
+  const reason = `when ${MAILER_ENV}=brevo`;
+  const apiKey = requireEnv(env, BREVO_API_KEY_ENV, reason);
+  if (publicUrl === null) throw new UsageError(`${PUBLIC_URL_ENV} is required ${reason}`);
+  return { kind, from, publicUrl, apiKey };
 };
 
 const buildConfig = (argv: readonly string[], env: Environment): AuditConfig => {
@@ -161,6 +209,7 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
     dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
     allowPrivateTargets: env[ALLOW_PRIVATE_TARGETS_ENV] === 'true',
     delayMs: parseInteger(env[DELAY_ENV] ?? String(DEFAULT_DELAY_MS), DELAY_ENV, 0),
+    mail: parseMail(env),
     ...parseStore(values.store, env),
   };
 };
