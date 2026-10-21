@@ -6,3 +6,7 @@ const isAllowed = (limit: number): boolean => ALLOWED_LIMITS.some((allowed) => a
 /** A relaunch reuses the previous page limit when the form still offers it. */
 export const relaunchLimit = (previousLimit: number): number =>
   isAllowed(previousLimit) ? previousLimit : DEFAULT_LIMIT;
+
+/** The limits an account may pick, given its `pagesLimitMax`. */
+export const limitsUpTo = (pagesLimitMax: number): number[] =>
+  ALLOWED_LIMITS.filter((allowed) => allowed <= pagesLimitMax);
