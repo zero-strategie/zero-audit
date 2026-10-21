@@ -1,0 +1,32 @@
+import { describe, expect, it } from 'vitest';
+import { MailerUnavailable } from '../../../src/domain/errors.js';
+import { ConsoleMailer } from '../../../src/infrastructure/mail/console-mailer.js';
+import { DisabledMailer } from '../../../src/infrastructure/mail/disabled-mailer.js';
+
+const LINK = 'https://audit.exemple.test/verifier-email?token=abc';
+
+describe('DisabledMailer', () => {
+  it('raises MailerUnavailable for every e-mail', async () => {
+    const mailer = new DisabledMailer();
+
+    await expect(mailer.sendVerification('a@exemple.test', LINK)).rejects.toThrow(
+      MailerUnavailable,
+    );
+    await expect(mailer.sendPasswordReset('a@exemple.test', LINK)).rejects.toThrow(
+      MailerUnavailable,
+    );
+  });
+});
+
+describe('ConsoleMailer', () => {
+  it('writes the link on the output', async () => {
+    const lines: string[] = [];
+    const mailer = new ConsoleMailer((text) => lines.push(text));
+
+    await mailer.sendVerification('a@exemple.test', LINK);
+    await mailer.sendPasswordReset('a@exemple.test', `${LINK}2`);
+
+    expect(lines.join('')).toContain(LINK);
+    expect(lines.join('')).toContain(`${LINK}2`);
+  });
+});
