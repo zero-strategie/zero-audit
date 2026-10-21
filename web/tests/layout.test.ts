@@ -16,6 +16,7 @@ import {
   aPageRow,
   aProject,
   aReport,
+  anAccount,
   aSnapshotListing,
   anAuditProgress,
   fakeApiClient,
@@ -97,7 +98,7 @@ const render = async (screen: (typeof SCREENS)[number]) => {
   const response = await container.renderToResponse(screen.component, {
     params: screen.params,
     request: new Request(`http://localhost${screen.url}`),
-    locals: { apiClient },
+    locals: { apiClient, user: anAccount() },
   });
   return response.text();
 };

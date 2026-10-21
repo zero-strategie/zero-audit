@@ -1,13 +1,18 @@
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { expect, it } from 'vitest';
 import NewAuditPage from '../src/pages/audits/new.astro';
-import { Conflict, InvalidRequest } from '../src/lib/api/errors';
+import { Conflict, InvalidRequest, TooManyRequests, Unauthenticated } from '../src/lib/api/errors';
 import type { ApiClient } from '../src/lib/api/api-client';
-import { aStartedAudit, fakeApiClient } from './fake-api-client';
+import type { CurrentAccount } from '../src/lib/api/types';
+import { anAccount, aStartedAudit, fakeApiClient } from './fake-api-client';
 
-const render = async (apiClient: ApiClient, request: Request) => {
+const render = async (
+  apiClient: ApiClient,
+  request: Request,
+  user: CurrentAccount | null = anAccount({ isAdmin: true, pagesLimitMax: 500 }),
+) => {
   const container = await AstroContainer.create();
-  return container.renderToResponse(NewAuditPage, { request, locals: { apiClient } });
+  return container.renderToResponse(NewAuditPage, { request, locals: { apiClient, user } });
 };
 
 const submit = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
@@ -80,4 +85,58 @@ it.each([
 
   expect(response.status).toBe(403);
   expect(calls).toEqual([]);
+});
+
+it('sends an anonymous visitor to the sign-in page, then back to the launch form', async () => {
+  const response = await render(fakeApiClient({}), new Request('http://localhost/audits/new'), null);
+
+  expect(response.status).toBe(303);
+  expect(response.headers.get('location')).toBe('/connexion?retour=/audits/new');
+});
+
+it('redirects an anonymous relaunch to the sign-in page without calling the API', async () => {
+  const response = await render(
+    fakeApiClient({}),
+    submit({ url: 'https://alpha.test/', limit: '100' }),
+    null,
+  );
+
+  expect(response.status).toBe(303);
+  expect(response.headers.get('location')).toBe('/connexion?retour=/audits/new');
+});
+
+it('offers only 50 and 100 pages to a free account', async () => {
+  const html = await (
+    await render(fakeApiClient({}), new Request('http://localhost/audits/new'), anAccount())
+  ).text();
+
+  expect(html).toMatch(/<option value="50"/);
+  expect(html).toMatch(/<option value="100" selected/);
+  expect(html).not.toMatch(/<option value="250"/);
+  expect(html).not.toMatch(/<option value="500"/);
+});
+
+it('shows the quota message of the API and keeps the typed fields on a 429', async () => {
+  const message = 'Limite de 3 audits par 24 h atteinte : prochain audit possible le 06/03/2026 à 10:00';
+  const html = await (
+    await render(
+      fakeApiClient({ startAudit: () => Promise.reject(new TooManyRequests(message)) }),
+      submit({ url: 'https://alpha.test/', limit: '50' }),
+      anAccount(),
+    )
+  ).text();
+
+  expect(html).toContain(message);
+  expect(html).toContain('value="https://alpha.test/"');
+  expect(html).toMatch(/<option value="50" selected/);
+});
+
+it('redirects to the sign-in page when the session expired during the launch', async () => {
+  const response = await render(
+    fakeApiClient({ startAudit: () => Promise.reject(new Unauthenticated('Session expirée')) }),
+    submit({ url: 'https://alpha.test/', limit: '100' }),
+  );
+
+  expect(response.status).toBe(303);
+  expect(response.headers.get('location')).toBe('/connexion?retour=/audits/new');
 });
