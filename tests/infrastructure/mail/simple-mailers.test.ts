@@ -19,6 +19,13 @@ describe('DisabledMailer', () => {
   });
 });
 
+describe('Mailer.enabled', () => {
+  it('is false for the disabled mailer and true for the console mailer', () => {
+    expect(new DisabledMailer().enabled).toBe(false);
+    expect(new ConsoleMailer(() => undefined).enabled).toBe(true);
+  });
+});
+
 describe('ConsoleMailer', () => {
   it('writes the link on the output', async () => {
     const lines: string[] = [];

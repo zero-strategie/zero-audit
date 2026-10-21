@@ -2,6 +2,8 @@ import type { Mailer } from '../../application/ports/mailer.js';
 
 /** Development only: it is the one adapter that writes single-use links to the output. */
 export class ConsoleMailer implements Mailer {
+  readonly enabled = true;
+
   constructor(private readonly write: (text: string) => void) {}
 
   sendVerification(_to: string, link: string): Promise<void> {

@@ -23,6 +23,8 @@ export interface BrevoMailerOptions {
  * the single-use link and the API key, none of which may reach the logs.
  */
 export class BrevoMailer implements Mailer {
+  readonly enabled = true;
+
   private readonly endpoint: string;
   private readonly timeoutMs: number;
 

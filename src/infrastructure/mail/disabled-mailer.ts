@@ -3,6 +3,8 @@ import { MailerUnavailable } from '../../domain/errors.js';
 
 /** Default when no mailer is configured: sign-up and resets answer 503 instead of dropping e-mails. */
 export class DisabledMailer implements Mailer {
+  readonly enabled = false;
+
   sendVerification(): Promise<void> {
     return Promise.reject(new MailerUnavailable());
   }
