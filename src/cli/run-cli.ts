@@ -1,6 +1,6 @@
 import { AuditRunner } from '../application/audit-runner.js';
 import { PurgeStaleAccounts } from '../application/purge-stale-accounts.js';
-import { FailOrphanedAudits } from '../application/fail-orphaned-audits.js';
+import { RecoverStaleAudits } from '../application/recover-stale-audits.js';
 import { ANONYMOUS_READER } from '../domain/reader.js';
 import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetSnapshotReport } from '../application/get-snapshot-report.js';
@@ -147,7 +147,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
     storage = opened;
     hooks.onStorageOpened?.(opened);
     const clock = new SystemClock();
-    await new FailOrphanedAudits(opened.snapshots, clock).execute();
+    await new RecoverStaleAudits(opened.queue, clock).execute();
     const logger = {
       info: (message: string) => {
         io.stderr(`${message}\n`);

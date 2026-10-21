@@ -51,6 +51,7 @@ const spyOnFactory = (): SpiedFactory => {
     return {
       projects: real.projects,
       snapshots: real.snapshots,
+      queue: real.queue,
       health: real.health,
       users: real.users,
       sessions: real.sessions,

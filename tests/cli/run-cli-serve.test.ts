@@ -6,7 +6,7 @@ import { createInterruptController } from '../../src/cli/interrupt-controller.js
 import { runCli, type CliHooks, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type Storage, type StorageFactory } from '../../src/cli/storage-factory.js';
 import type { HttpServer, ServerDependencies } from '../../src/http/server.js';
-import { LEGACY_ORPHAN_AGE_MS } from '../../src/application/legacy-orphan-age.js';
+import { HEARTBEAT_STALE_MS } from '../../src/domain/snapshot.js';
 import type { AuditRunner } from '../../src/application/audit-runner.js';
 import { startFixtureServer } from '../support/fixture-server.js';
 
@@ -64,6 +64,7 @@ describe('runCli serve', () => {
     return {
       projects: real.projects,
       snapshots: real.snapshots,
+      queue: real.queue,
       health: real.health,
       users: real.users,
       sessions: real.sessions,
@@ -288,7 +289,7 @@ describe('runCli serve', () => {
     await expect(Promise.all(closeResults)).resolves.toBeDefined();
   });
 
-  it('fails the running snapshots older than the orphan age at startup, and only those', async () => {
+  it('requeues the running audits without heartbeat at startup, and only those', async () => {
     const seeded = await createStorage({
       store: 'sqlite',
       dbPath,
@@ -299,15 +300,17 @@ describe('runCli serve', () => {
       rootUrl: 'https://exemple.com/',
       createdAt: new Date(),
     });
-    const start = (ageMs: number) =>
-      seeded.snapshots.create({
-        launchedBy: null,
-        projectId: project.id,
-        pagesLimit: 100,
-        startedAt: new Date(Date.now() - ageMs),
-      });
-    const old = await start(LEGACY_ORPHAN_AGE_MS + 60_000);
-    const recent = await start(LEGACY_ORPHAN_AGE_MS - 60_000);
+    const start = async (ageMs: number) => {
+      await seeded.queue.enqueue(
+        { projectId: project.id, launchedBy: null, pagesLimit: 100, requestedAt: new Date() },
+        () => Promise.resolve(),
+      );
+      const claimed = await seeded.queue.claimNext('seed', new Date(Date.now() - ageMs));
+      if (!claimed) throw new Error('nothing claimed');
+      return claimed;
+    };
+    const old = await start(HEARTBEAT_STALE_MS + 60_000);
+    const recent = await start(HEARTBEAT_STALE_MS - 60_000);
     await seeded.close();
     let statuses: string[] = [];
 
@@ -327,7 +330,7 @@ describe('runCli serve', () => {
       },
     });
 
-    expect(statuses).toEqual(['failed', 'running']);
+    expect(statuses).toEqual(['queued', 'running']);
   });
 
   describe('purge of stale accounts', () => {

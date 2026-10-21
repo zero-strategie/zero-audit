@@ -12,6 +12,7 @@ const fakeStorage = (calls: string[]): Storage => ({
   sessions: {} as Storage['sessions'],
   emailTokens: {} as Storage['emailTokens'],
   eraser: {} as Storage['eraser'],
+  queue: {} as Storage['queue'],
   snapshots: {
     fail: (id: string) => {
       calls.push(`fail:${id}`);
