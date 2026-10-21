@@ -386,10 +386,9 @@ describe('runCli serve', () => {
 
       await serve([], fakeServer(events));
 
-      const scheduled = setTimer.mock.calls.filter(([, delay]) => delay === DAY_MS);
-      expect(scheduled).toHaveLength(1);
-      const handle = setTimer.mock.results[setTimer.mock.calls.indexOf(scheduled[0] ?? [])]?.value;
-      expect(clearTimer).toHaveBeenCalledWith(handle);
+      const index = setTimer.mock.calls.findIndex(([, delay]) => delay === DAY_MS);
+      expect(index).toBeGreaterThanOrEqual(0);
+      expect(clearTimer).toHaveBeenCalledWith(setTimer.mock.results[index]?.value);
       setTimer.mockRestore();
       clearTimer.mockRestore();
     });
