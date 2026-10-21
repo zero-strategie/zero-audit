@@ -56,7 +56,7 @@ describe('check 112 end to end', () => {
     it.skipIf(skip)('flags only the markup-heavy page', async () => {
       const configs: StorageConfig[] = [];
       let snapshotId = '';
-      const args = [server.baseUrl, '--delay', '0', '--db', join(dir, 'audit.db')];
+      const args = [server.baseUrl, '--direct', '--delay', '0', '--db', join(dir, 'audit.db')];
 
       const code = await runCli(
         store === 'postgres' ? [...args, '--store', 'postgres'] : args,

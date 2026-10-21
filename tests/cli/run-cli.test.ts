@@ -73,7 +73,7 @@ describe('runCli', () => {
 
   it('records the audit in a project without owner, launched by nobody, under no quota', async () => {
     const code = await runCli(
-      [server.baseUrl, '--limit', '10', '--delay', '0', '--db', dbPath],
+      [server.baseUrl, '--limit', '10', '--direct', '--delay', '0', '--db', dbPath],
       { ZERO_AUDIT_LAUNCHES_PER_DAY: '1' },
       capture().io,
     );
@@ -95,7 +95,18 @@ describe('runCli', () => {
     const jsonPath = join(dir, 'out', 'audit.json');
 
     const code = await runCli(
-      [server.baseUrl, '--limit', '10', '--delay', '0', '--db', dbPath, '--json', jsonPath],
+      [
+        server.baseUrl,
+        '--limit',
+        '10',
+        '--direct',
+        '--delay',
+        '0',
+        '--db',
+        dbPath,
+        '--json',
+        jsonPath,
+      ],
       {},
       run.io,
     );
@@ -145,7 +156,7 @@ describe('runCli', () => {
   });
 
   it('reports zero deltas in the console and the JSON export for two audits of an unchanged site', async () => {
-    const args = [server.baseUrl, '--limit', '10', '--delay', '0', '--db', dbPath];
+    const args = [server.baseUrl, '--limit', '10', '--direct', '--delay', '0', '--db', dbPath];
     await runCli(args, {}, capture().io);
     const jsonPath = join(dir, 'second.json');
     const second = capture();
@@ -171,7 +182,11 @@ describe('runCli', () => {
   it('rewrites a single progress line on a terminal', async () => {
     const run = capture(true);
 
-    await runCli([server.baseUrl, '--limit', '10', '--delay', '0', '--db', dbPath], {}, run.io);
+    await runCli(
+      [server.baseUrl, '--limit', '10', '--direct', '--delay', '0', '--db', dbPath],
+      {},
+      run.io,
+    );
 
     expect(run.err).toContain('\r\u001B[2K5/10');
     expect(run.err.endsWith('\n')).toBe(true);
@@ -184,7 +199,7 @@ describe('runCli', () => {
     await closedPort.close();
     const run = capture();
 
-    const code = await runCli([closedUrl, '--delay', '0', '--db', dbPath], {}, run.io);
+    const code = await runCli([closedUrl, '--direct', '--delay', '0', '--db', dbPath], {}, run.io);
 
     expect(code).toBe(1);
     expect(run.err).toContain('unreachable');
@@ -231,7 +246,7 @@ describe('runCli', () => {
     const auditId = async (url: string): Promise<string> => {
       const jsonPath = join(dir, `${String(Math.random())}.json`);
       await runCli(
-        [url, '--limit', '10', '--delay', '0', '--db', dbPath, '--json', jsonPath],
+        [url, '--limit', '10', '--direct', '--delay', '0', '--db', dbPath, '--json', jsonPath],
         {},
         capture().io,
       );

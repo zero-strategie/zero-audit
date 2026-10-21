@@ -19,6 +19,7 @@ describe('parseCommand defaults', () => {
       dbPath: './.zero-audit/audit.db',
       jsonPath: null,
       mode: 'queue',
+      workerConcurrency: 1,
       store: 'sqlite',
       databaseUrl: null,
     });
@@ -32,6 +33,18 @@ describe('parseCommand audit mode', () => {
 
   it('crawls in the process with --direct', () => {
     expect(auditConfig([URL_ARG, '--direct']).mode).toBe('direct');
+  });
+
+  it('reads the concurrency of the worker to look for when waiting', () => {
+    expect(
+      auditConfig([URL_ARG, '--wait'], { ZERO_AUDIT_WORKER_CONCURRENCY: '3' }).workerConcurrency,
+    ).toBe(3);
+  });
+
+  it('does not read the concurrency of the worker without --wait', () => {
+    expect(
+      auditConfig([URL_ARG, '--direct'], { ZERO_AUDIT_WORKER_CONCURRENCY: 'x' }).workerConcurrency,
+    ).toBe(1);
   });
 
   it('rejects --wait together with --direct', () => {
@@ -90,9 +103,9 @@ describe('parseCommand worker-health', () => {
   });
 
   it('rejects an invalid concurrency', () => {
-    expect(
-      parseCommand(['worker-health'], { ZERO_AUDIT_WORKER_CONCURRENCY: '0' }).kind,
-    ).toBe('usage-error');
+    expect(parseCommand(['worker-health'], { ZERO_AUDIT_WORKER_CONCURRENCY: '0' }).kind).toBe(
+      'usage-error',
+    );
   });
 });
 
@@ -319,6 +332,24 @@ describe('parseCommand migrate', () => {
 
   it('is listed in the usage', () => {
     expect(USAGE).toContain('migrate');
+  });
+});
+
+describe('usage of the worker commands', () => {
+  it.each([
+    'worker',
+    'worker-health',
+    '--wait',
+    '--direct',
+    'ZERO_AUDIT_WORKER',
+    'ZERO_AUDIT_WORKER_CONCURRENCY',
+    'ZERO_AUDIT_QUEUE_MAX',
+  ])('mentions %s', (token) => {
+    expect(USAGE).toContain(token);
+  });
+
+  it('is what --help prints', () => {
+    expect(parseCommand(['--help'], {})).toEqual({ kind: 'help' });
   });
 });
 

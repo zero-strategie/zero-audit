@@ -86,9 +86,14 @@ describe('runCli storage wiring', () => {
   it('uses SQLite by default and closes the storage exactly once after an audit', async () => {
     const spy = spyOnFactory();
 
-    const code = await runCli([server.baseUrl, '--delay', '0', '--db', dbPath], {}, silentIo().io, {
-      storageFactory: spy.factory,
-    });
+    const code = await runCli(
+      [server.baseUrl, '--direct', '--delay', '0', '--db', dbPath],
+      {},
+      silentIo().io,
+      {
+        storageFactory: spy.factory,
+      },
+    );
 
     expect(code).toBe(0);
     expect(spy.configs).toMatchObject([{ store: 'sqlite', databaseUrl: null, dbPath }]);
@@ -99,7 +104,7 @@ describe('runCli storage wiring', () => {
     const spy = spyOnFactory();
 
     const code = await runCli(
-      ['http://127.0.0.1:1/', '--delay', '0', '--db', dbPath],
+      ['http://127.0.0.1:1/', '--direct', '--delay', '0', '--db', dbPath],
       {},
       silentIo().io,
       { storageFactory: spy.factory },
@@ -131,7 +136,7 @@ describe('runCli storage wiring', () => {
     });
     let pending: Promise<void> = Promise.resolve();
 
-    await runCli([server.baseUrl, '--delay', '0', '--db', dbPath], {}, silentIo().io, {
+    await runCli([server.baseUrl, '--direct', '--delay', '0', '--db', dbPath], {}, silentIo().io, {
       storageFactory: spy.factory,
       onStorageOpened: (storage) => {
         controller.onStorageOpened(storage);
@@ -198,7 +203,7 @@ describe('runCli storage wiring', () => {
     const run = silentIo();
 
     const code = await runCli(
-      [server.baseUrl, '--delay', '0', '--store', 'postgres'],
+      [server.baseUrl, '--direct', '--delay', '0', '--store', 'postgres'],
       { DATABASE_URL: 'postgresql://zero:s3cret-pw@127.0.0.1:1/audit' },
       run.io,
     );
@@ -216,7 +221,7 @@ describe('runCli storage wiring', () => {
       let snapshotId = '';
 
       const code = await runCli(
-        [server.baseUrl, '--delay', '0', '--store', 'postgres'],
+        [server.baseUrl, '--direct', '--delay', '0', '--store', 'postgres'],
         env,
         silentIo().io,
         {

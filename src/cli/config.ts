@@ -16,6 +16,8 @@ export type AuditMode = 'queue' | 'wait' | 'direct';
 
 export interface AuditConfig extends StoreSelection {
   mode: AuditMode;
+  /** Tells `--wait` which worker identifiers to look for; 1 unless waiting. */
+  workerConcurrency: number;
   rootUrl: string;
   limit: number;
   delayMs: number;
@@ -221,6 +223,19 @@ const parseAdminEmails = (raw: string | undefined): string[] =>
       }
     });
 
+const parseConcurrency = (env: Environment): number =>
+  parseInteger(
+    env[WORKER_CONCURRENCY_ENV] ?? String(DEFAULT_WORKER_CONCURRENCY),
+    WORKER_CONCURRENCY_ENV,
+    1,
+  );
+
+const parseAuditMode = (flags: { wait?: boolean; direct?: boolean }): AuditMode => {
+  if (flags.wait && flags.direct) throw new UsageError('--wait and --direct are exclusive');
+  if (flags.direct) return 'direct';
+  return flags.wait ? 'wait' : 'queue';
+};
+
 const buildConfig = (argv: readonly string[], env: Environment): AuditConfig => {
   const { values, positionals } = parseArgs({
     args: [...argv],
@@ -236,11 +251,12 @@ const buildConfig = (argv: readonly string[], env: Environment): AuditConfig => 
     },
   });
   if (positionals.length > 1) throw new UsageError('only one <url> is accepted');
-  if (values.wait && values.direct) throw new UsageError('--wait and --direct are exclusive');
 
   const delay = values.delay ?? env[DELAY_ENV];
+  const mode = parseAuditMode(values);
   return {
-    mode: values.direct ? 'direct' : values.wait ? 'wait' : 'queue',
+    mode,
+    workerConcurrency: mode === 'wait' ? parseConcurrency(env) : DEFAULT_WORKER_CONCURRENCY,
     rootUrl: parseRootUrl(positionals[0]),
     limit: values.limit === undefined ? DEFAULT_LIMIT : parseInteger(values.limit, '--limit', 1),
     delayMs: delay === undefined ? DEFAULT_DELAY_MS : parseInteger(delay, '--delay', 0),
@@ -304,13 +320,6 @@ const buildMigrateConfig = (argv: readonly string[], env: Environment): MigrateC
   return { dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH, ...parseStore(values.store, env) };
 };
 
-const parseConcurrency = (env: Environment): number =>
-  parseInteger(
-    env[WORKER_CONCURRENCY_ENV] ?? String(DEFAULT_WORKER_CONCURRENCY),
-    WORKER_CONCURRENCY_ENV,
-    1,
-  );
-
 const buildWorkerConfig = (argv: readonly string[], env: Environment): WorkerConfig => {
   const { values } = parseArgs({
     args: [...argv],
@@ -325,10 +334,7 @@ const buildWorkerConfig = (argv: readonly string[], env: Environment): WorkerCon
   };
 };
 
-const buildWorkerHealthConfig = (
-  argv: readonly string[],
-  env: Environment,
-): WorkerHealthConfig => {
+const buildWorkerHealthConfig = (argv: readonly string[], env: Environment): WorkerHealthConfig => {
   const { values } = parseArgs({
     args: [...argv],
     options: { db: { type: 'string' }, store: { type: 'string' } },

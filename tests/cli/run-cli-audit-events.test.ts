@@ -53,6 +53,7 @@ describe('runCli audit events', () => {
   it('writes audit.started then audit.finished on stdout and no event on stderr', async () => {
     const { code, out, err } = await run([
       server.baseUrl,
+      '--direct',
       '--delay',
       '0',
       '--db',
@@ -76,6 +77,7 @@ describe('runCli audit events', () => {
   it('writes audit.failed without stack trace when the crawl fails', async () => {
     const { code, out } = await run([
       'http://127.0.0.1:1/',
+      '--direct',
       '--delay',
       '0',
       '--db',

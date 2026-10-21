@@ -65,9 +65,12 @@ describe('AwaitAudit', () => {
     });
     const progress: string[] = [];
 
-    const status = await new AwaitAudit(snapshots, sleeper).execute(snapshotId, (crawled, limit) => {
-      progress.push(`${String(crawled)}/${String(limit)}`);
-    });
+    const status = await new AwaitAudit(snapshots, sleeper).execute(
+      snapshotId,
+      (crawled, limit) => {
+        progress.push(`${String(crawled)}/${String(limit)}`);
+      },
+    );
 
     expect(status).toBe('failed');
     expect(sleeper.delays).toEqual([2000, 2000]);
