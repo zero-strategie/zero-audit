@@ -147,7 +147,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
     storage = opened;
     hooks.onStorageOpened?.(opened);
     const clock = new SystemClock();
-    await new RecoverStaleAudits(opened.queue, clock).execute();
+    await new RecoverStaleAudits(opened.queue, opened.snapshots, clock).execute();
     const logger = {
       info: (message: string) => {
         io.stderr(`${message}\n`);

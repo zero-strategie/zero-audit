@@ -243,8 +243,10 @@ describe('ProcessAuditQueue', () => {
 
     await kit.runUntil(() => crawler.requests.length > 0);
 
+    expect(crawler.requests).toHaveLength(1);
     expect(await kit.statusOf(audit.id)).toBe('queued');
     expect(await kit.queue.queuePosition(audit.id)).toBe(1);
+    expect((await kit.queue.getById(audit.id))?.snapshot.attempts).toBe(1);
   });
 
   it('fails the audit when the signal fires during attempt 2 of 2', async () => {

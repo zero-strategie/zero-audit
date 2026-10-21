@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RecoverStaleAudits } from '../../src/application/recover-stale-audits.js';
+import { LEGACY_ORPHAN_AGE_MS } from '../../src/application/legacy-orphan-age.js';
 import { HEARTBEAT_STALE_MS } from '../../src/domain/snapshot.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
@@ -23,7 +24,7 @@ const seed = async () => {
     if (!claimed) throw new Error('nothing claimed');
     return claimed;
   };
-  return { queue, claimedAt };
+  return { queue, project, claimedAt };
 };
 
 describe('RecoverStaleAudits', () => {
@@ -32,7 +33,7 @@ describe('RecoverStaleAudits', () => {
     const stale = await claimedAt(HEARTBEAT_STALE_MS + 1);
     const live = await claimedAt(HEARTBEAT_STALE_MS - 1);
 
-    const recovered = await new RecoverStaleAudits(queue, { now: () => NOW }).execute();
+    const recovered = await new RecoverStaleAudits(queue, queue, { now: () => NOW }).execute();
 
     expect(recovered).toBe(1);
     expect(await queue.queuePosition(stale.id)).toBe(1);
@@ -45,8 +46,27 @@ describe('RecoverStaleAudits', () => {
     await queue.requeue(first.id, 1, new Date(NOW));
     await queue.claimNext('w', new Date(NOW - HEARTBEAT_STALE_MS - 1));
 
-    await new RecoverStaleAudits(queue, { now: () => NOW }).execute();
+    await new RecoverStaleAudits(queue, queue, { now: () => NOW }).execute();
 
     expect((await queue.getById(first.id))?.snapshot.status).toBe('failed');
+  });
+
+  it('fails a heartbeat-less running audit older than six hours and keeps a younger one', async () => {
+    const { queue, project } = await seed();
+    const start = async (ageMs: number) =>
+      queue.create({
+        projectId: project.id,
+        launchedBy: null,
+        pagesLimit: 10,
+        startedAt: new Date(NOW - ageMs),
+      });
+    const orphan = await start(LEGACY_ORPHAN_AGE_MS + 1);
+    const direct = await start(LEGACY_ORPHAN_AGE_MS - 1);
+
+    const recovered = await new RecoverStaleAudits(queue, queue, { now: () => NOW }).execute();
+
+    expect(recovered).toBe(1);
+    expect((await queue.getById(orphan.id))?.snapshot.status).toBe('failed');
+    expect((await queue.getById(direct.id))?.snapshot.status).toBe('running');
   });
 });

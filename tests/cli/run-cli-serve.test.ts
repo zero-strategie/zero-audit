@@ -6,6 +6,7 @@ import { createInterruptController } from '../../src/cli/interrupt-controller.js
 import { runCli, type CliHooks, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type Storage, type StorageFactory } from '../../src/cli/storage-factory.js';
 import type { HttpServer, ServerDependencies } from '../../src/http/server.js';
+import { LEGACY_ORPHAN_AGE_MS } from '../../src/application/legacy-orphan-age.js';
 import { HEARTBEAT_STALE_MS } from '../../src/domain/snapshot.js';
 import type { AuditRunner } from '../../src/application/audit-runner.js';
 import { startFixtureServer } from '../support/fixture-server.js';
@@ -289,7 +290,7 @@ describe('runCli serve', () => {
     await expect(Promise.all(closeResults)).resolves.toBeDefined();
   });
 
-  it('requeues the running audits without heartbeat at startup, and only those', async () => {
+  it('recovers stale running audits at startup, and only those', async () => {
     const seeded = await createStorage({
       store: 'sqlite',
       dbPath,
@@ -311,6 +312,12 @@ describe('runCli serve', () => {
     };
     const old = await start(HEARTBEAT_STALE_MS + 60_000);
     const recent = await start(HEARTBEAT_STALE_MS - 60_000);
+    const orphan = await seeded.snapshots.create({
+      projectId: project.id,
+      launchedBy: null,
+      pagesLimit: 100,
+      startedAt: new Date(Date.now() - LEGACY_ORPHAN_AGE_MS - 60_000),
+    });
     await seeded.close();
     let statuses: string[] = [];
 
@@ -323,6 +330,7 @@ describe('runCli serve', () => {
             statuses = [
               (await storage.snapshots.getById(old.id))?.snapshot.status ?? '',
               (await storage.snapshots.getById(recent.id))?.snapshot.status ?? '',
+              (await storage.snapshots.getById(orphan.id))?.snapshot.status ?? '',
             ];
             await storage.close();
           },
@@ -330,7 +338,7 @@ describe('runCli serve', () => {
       },
     });
 
-    expect(statuses).toEqual(['queued', 'running']);
+    expect(statuses).toEqual(['queued', 'running', 'failed']);
   });
 
   describe('purge of stale accounts', () => {
