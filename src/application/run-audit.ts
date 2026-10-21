@@ -39,6 +39,7 @@ export class RunAudit {
     });
     const snapshot = await repository.create({
       projectId: project.id,
+      launchedBy: null,
       pagesLimit: request.limit,
       startedAt,
     });

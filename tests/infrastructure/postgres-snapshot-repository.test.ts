@@ -61,6 +61,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
   describeSnapshotRepositoryContract(() => ({
     snapshots: repository,
     projects: repository.projects,
+    users: repository.users,
   }));
   describeProjectRepositoryContract(() => ({
     projects: repository.projects,
@@ -87,7 +88,9 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       rootUrl: 'https://x.test/',
       createdAt: startedAt,
     });
-    return (await repository.create({ projectId: project.id, pagesLimit: 5, startedAt })).id;
+    return (
+      await repository.create({ launchedBy: null, projectId: project.id, pagesLimit: 5, startedAt })
+    ).id;
   };
 
   const count = async (table: string): Promise<number> => {

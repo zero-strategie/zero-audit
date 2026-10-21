@@ -31,6 +31,7 @@ const build = async () => {
     failing = 0,
   ): Promise<string> => {
     const { id } = await snapshots.create({
+      launchedBy: null,
       projectId: project.id,
       pagesLimit: 10,
       startedAt: minutes(startMinute),

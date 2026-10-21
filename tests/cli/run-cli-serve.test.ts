@@ -217,6 +217,7 @@ describe('runCli serve', () => {
     });
     const start = (ageMs: number) =>
       seeded.snapshots.create({
+        launchedBy: null,
         projectId: project.id,
         pagesLimit: 100,
         startedAt: new Date(Date.now() - ageMs),

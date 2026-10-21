@@ -17,7 +17,13 @@ export interface SnapshotDetails {
 
 /** Deliberately has no delete method: audit history is append-only. */
 export interface SnapshotRepository {
-  create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot>;
+  /** `launchedBy` is the account behind an API launch; null for the CLI. */
+  create(input: {
+    projectId: string;
+    launchedBy: string | null;
+    pagesLimit: number;
+    startedAt: Date;
+  }): Promise<Snapshot>;
   addPages(id: string, pages: readonly Page[]): Promise<void>;
   addLinks(id: string, links: readonly Link[]): Promise<void>;
   addSiteFiles(id: string, files: readonly SiteFile[]): Promise<void>;
@@ -31,6 +37,10 @@ export interface SnapshotRepository {
   listByProject(projectId: string): Promise<readonly Snapshot[]>;
   /** Snapshots still `running`, every project included, most recent first. */
   listRunning(): Promise<readonly Snapshot[]>;
+  /** Snapshots launched by the account since the date, whatever their status. */
+  countLaunchedBy(userId: string, since: Date): Promise<number>;
+  /** Snapshots launched through the API (by any account) since the date; CLI launches are ignored. */
+  countApiLaunchedSince(since: Date): Promise<number>;
   /** Latest `finished` snapshot of the project whose `startedAt` is strictly before the given date. */
   findPreviousFinished(projectId: string, beforeStartedAt: Date): Promise<Snapshot | null>;
 }

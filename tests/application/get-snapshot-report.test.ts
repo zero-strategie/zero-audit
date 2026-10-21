@@ -38,6 +38,7 @@ const build = async () => {
     pages: Page[] = [],
   ): Promise<string> => {
     const snapshot = await repository.create({
+      launchedBy: null,
       projectId: project.id,
       pagesLimit: 10,
       startedAt: minutes(startMinute),

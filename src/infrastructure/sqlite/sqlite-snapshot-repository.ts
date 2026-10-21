@@ -179,22 +179,49 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     });
   }
 
-  create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
+  create(input: {
+    projectId: string;
+    launchedBy: string | null;
+    pagesLimit: number;
+    startedAt: Date;
+  }): Promise<Snapshot> {
     return this.run(() => {
-      const snapshot = Snapshot.start({ id: randomUUID(), ...input });
+      const { launchedBy, ...props } = input;
+      const snapshot = Snapshot.start({ id: randomUUID(), ...props });
       this.db
         .prepare(
-          'INSERT INTO snapshots (id, project_id, status, started_at, pages_crawled, pages_limit) VALUES (?, ?, ?, ?, ?, ?)',
+          'INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit) VALUES (?, ?, ?, ?, ?, ?, ?)',
         )
         .run(
           snapshot.id,
           snapshot.projectId,
+          launchedBy,
           snapshot.status,
           snapshot.startedAt.toISOString(),
           0,
           snapshot.pagesLimit,
         );
       return snapshot;
+    });
+  }
+
+  countLaunchedBy(userId: string, since: Date): Promise<number> {
+    return this.run(() => {
+      const row = this.db
+        .prepare('SELECT COUNT(*) AS n FROM snapshots WHERE launched_by = ? AND started_at >= ?')
+        .get(userId, since.toISOString()) as { n: number };
+      return row.n;
+    });
+  }
+
+  countApiLaunchedSince(since: Date): Promise<number> {
+    return this.run(() => {
+      const row = this.db
+        .prepare(
+          'SELECT COUNT(*) AS n FROM snapshots WHERE launched_by IS NOT NULL AND started_at >= ?',
+        )
+        .get(since.toISOString()) as { n: number };
+      return row.n;
     });
   }
 

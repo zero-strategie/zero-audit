@@ -168,16 +168,41 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
 
   async create(input: {
     projectId: string;
+    launchedBy: string | null;
     pagesLimit: number;
     startedAt: Date;
   }): Promise<Snapshot> {
-    const snapshot = Snapshot.start({ id: randomUUID(), ...input });
+    const { launchedBy, ...props } = input;
+    const snapshot = Snapshot.start({ id: randomUUID(), ...props });
     await this.pool.query(
-      `INSERT INTO snapshots (id, project_id, status, started_at, pages_crawled, pages_limit)
-       VALUES ($1, $2, $3, $4, 0, $5)`,
-      [snapshot.id, snapshot.projectId, snapshot.status, snapshot.startedAt, snapshot.pagesLimit],
+      `INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit)
+       VALUES ($1, $2, $3, $4, $5, 0, $6)`,
+      [
+        snapshot.id,
+        snapshot.projectId,
+        launchedBy,
+        snapshot.status,
+        snapshot.startedAt,
+        snapshot.pagesLimit,
+      ],
     );
     return snapshot;
+  }
+
+  async countLaunchedBy(userId: string, since: Date): Promise<number> {
+    const { rows } = await this.pool.query<{ n: string }>(
+      'SELECT COUNT(*) AS n FROM snapshots WHERE launched_by = $1 AND started_at >= $2',
+      [userId, since],
+    );
+    return Number(rows[0]?.n);
+  }
+
+  async countApiLaunchedSince(since: Date): Promise<number> {
+    const { rows } = await this.pool.query<{ n: string }>(
+      'SELECT COUNT(*) AS n FROM snapshots WHERE launched_by IS NOT NULL AND started_at >= $1',
+      [since],
+    );
+    return Number(rows[0]?.n);
   }
 
   addPages(id: string, pages: readonly Page[]): Promise<void> {

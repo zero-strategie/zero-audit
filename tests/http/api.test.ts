@@ -39,6 +39,7 @@ describe('read-only HTTP API', () => {
     siteFiles: SiteFile[] = [],
   ): Promise<string> => {
     const { id } = await snapshots.create({
+      launchedBy: null,
       projectId,
       pagesLimit: 10,
       startedAt: minutes(startMinute),
@@ -104,6 +105,7 @@ describe('read-only HTTP API', () => {
     it('gives a running snapshot as latest run of the project', async () => {
       const project = await newProject('https://e.com/');
       const { id } = await snapshots.create({
+        launchedBy: null,
         projectId: project.id,
         pagesLimit: 10,
         startedAt: minutes(20),

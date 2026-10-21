@@ -31,13 +31,21 @@ const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
 
 export class InMemorySnapshotRepository implements SnapshotRepository, StorageHealth {
   private readonly stored = new Map<string, Stored>();
+  private readonly launchedBy = new Map<string, string>();
 
   ping(): Promise<void> {
     return Promise.resolve();
   }
 
-  create(input: { projectId: string; pagesLimit: number; startedAt: Date }): Promise<Snapshot> {
-    const snapshot = Snapshot.start({ id: randomUUID(), ...input });
+  create(input: {
+    projectId: string;
+    launchedBy: string | null;
+    pagesLimit: number;
+    startedAt: Date;
+  }): Promise<Snapshot> {
+    const { launchedBy, ...props } = input;
+    const snapshot = Snapshot.start({ id: randomUUID(), ...props });
+    if (launchedBy !== null) this.launchedBy.set(snapshot.id, launchedBy);
     this.stored.set(snapshot.id, {
       snapshot,
       pages: [],
@@ -102,6 +110,14 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
     });
   }
 
+  countLaunchedBy(userId: string, since: Date): Promise<number> {
+    return Promise.resolve(this.launchedSince(since).filter(([, id]) => id === userId).length);
+  }
+
+  countApiLaunchedSince(since: Date): Promise<number> {
+    return Promise.resolve(this.launchedSince(since).length);
+  }
+
   listByProject(projectId: string): Promise<readonly Snapshot[]> {
     const snapshots = [...this.stored.values()]
       .map(({ snapshot }) => snapshot)
@@ -127,6 +143,15 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
           snapshot.startedAt.getTime() < beforeStartedAt.getTime(),
       ) ?? null
     );
+  }
+
+  private launchedSince(since: Date): [Snapshot, string][] {
+    return [...this.launchedBy].flatMap(([snapshotId, userId]) => {
+      const snapshot = this.stored.get(snapshotId)?.snapshot;
+      return snapshot && snapshot.startedAt.getTime() >= since.getTime()
+        ? [[snapshot, userId]]
+        : [];
+    });
   }
 
   private write(id: string, mutate: (entry: Stored) => void): Promise<void> {

@@ -240,6 +240,7 @@ describe('runCli', () => {
       const base = await repository.getById(a);
       const projectId = base?.snapshot.projectId ?? '';
       const target = await repository.create({
+        launchedBy: null,
         projectId,
         pagesLimit: 10,
         startedAt: new Date(),
@@ -282,7 +283,12 @@ describe('runCli', () => {
       const a = await auditId(server.baseUrl);
       const repository = SqliteSnapshotRepository.open(dbPath);
       const projectId = (await repository.getById(a))?.snapshot.projectId ?? '';
-      const running = await repository.create({ projectId, pagesLimit: 1, startedAt: new Date() });
+      const running = await repository.create({
+        launchedBy: null,
+        projectId,
+        pagesLimit: 1,
+        startedAt: new Date(),
+      });
       repository.close();
       const run = capture();
 

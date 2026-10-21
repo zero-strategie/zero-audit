@@ -17,6 +17,7 @@ describe('FailOrphanedAudits', () => {
     });
     const start = (ageMs: number) =>
       snapshots.create({
+        launchedBy: null,
         projectId: project.id,
         pagesLimit: 100,
         startedAt: new Date(NOW - ageMs),

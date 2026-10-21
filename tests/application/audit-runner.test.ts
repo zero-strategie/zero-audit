@@ -65,6 +65,7 @@ class Harness {
         createdAt: startedAt,
       });
       const snapshot = await this.snapshots.create({
+        launchedBy: null,
         projectId: project.id,
         pagesLimit: request.limit,
         startedAt,
@@ -137,7 +138,12 @@ describe('AuditRunner.start locking', () => {
       createdAt: new Date(NOW),
     });
     const startedAt = new Date(NOW - SIX_HOURS_MS + 1);
-    await harness.snapshots.create({ projectId: project.id, pagesLimit: 100, startedAt });
+    await harness.snapshots.create({
+      launchedBy: null,
+      projectId: project.id,
+      pagesLimit: 100,
+      startedAt,
+    });
 
     const rejection = await rejectionOf(harness.runner.start({ rootUrl: ROOT, limit: 100 }));
 
@@ -154,6 +160,7 @@ describe('AuditRunner.start locking', () => {
       createdAt: new Date(NOW),
     });
     await harness.snapshots.create({
+      launchedBy: null,
       projectId: project.id,
       pagesLimit: 100,
       startedAt: new Date(NOW - SIX_HOURS_MS - 1),
@@ -242,6 +249,7 @@ describe('AuditRunner.progress', () => {
       createdAt: new Date(NOW),
     });
     const snapshot = await harness.snapshots.create({
+      launchedBy: null,
       projectId: project.id,
       pagesLimit: 250,
       startedAt: new Date(NOW),

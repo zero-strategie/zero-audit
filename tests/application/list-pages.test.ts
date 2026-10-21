@@ -7,6 +7,7 @@ import { makePage } from '../support/check-fixtures.js';
 const setup = async () => {
   const repository = new InMemorySnapshotRepository();
   const { id } = await repository.create({
+    launchedBy: null,
     projectId: 'p',
     pagesLimit: 10,
     startedAt: new Date(Date.UTC(2026, 0, 1)),

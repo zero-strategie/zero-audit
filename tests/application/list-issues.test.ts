@@ -26,6 +26,7 @@ const setup = () => {
   const repository = new InMemorySnapshotRepository();
   const record = async (minute: number, results: CheckResult[]): Promise<string> => {
     const { id } = await repository.create({
+      launchedBy: null,
       projectId: 'p',
       pagesLimit: 10,
       startedAt: minutes(minute),

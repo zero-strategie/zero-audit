@@ -28,6 +28,7 @@ const build = () => {
     results: CheckResult[] = [],
   ): Promise<string> => {
     const snapshot = await repository.create({
+      launchedBy: null,
       projectId,
       pagesLimit: 10,
       startedAt: minutes(startMinute),

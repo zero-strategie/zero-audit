@@ -34,6 +34,7 @@ describe('read-only HTTP API: issues, pages, compare and checks', () => {
     outcome: 'finished' | 'failed' = 'finished',
   ): Promise<string> => {
     const { id } = await snapshots.create({
+      launchedBy: null,
       projectId,
       pagesLimit: 10,
       startedAt: minutes(startMinute),

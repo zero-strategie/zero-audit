@@ -14,7 +14,7 @@ const openInMemory = (): SqliteSnapshotRepository => SqliteSnapshotRepository.op
 
 describeSnapshotRepositoryContract(() => {
   const repository = openInMemory();
-  return { snapshots: repository, projects: repository.projects };
+  return { snapshots: repository, projects: repository.projects, users: repository.users };
 });
 describeProjectRepositoryContract(() => {
   const repository = openInMemory();
@@ -62,7 +62,12 @@ describe('SqliteSnapshotRepository file handling', () => {
       rootUrl: 'https://x.test/',
       createdAt: startedAt,
     });
-    const { id } = await first.create({ projectId: project.id, pagesLimit: 5, startedAt });
+    const { id } = await first.create({
+      launchedBy: null,
+      projectId: project.id,
+      pagesLimit: 5,
+      startedAt,
+    });
     first.close();
 
     const second = SqliteSnapshotRepository.open(path);
@@ -81,7 +86,12 @@ describe('SqliteSnapshotRepository file handling', () => {
       rootUrl: 'https://x.test/',
       createdAt: startedAt,
     });
-    const { id } = await repo.create({ projectId: project.id, pagesLimit: 5, startedAt });
+    const { id } = await repo.create({
+      launchedBy: null,
+      projectId: project.id,
+      pagesLimit: 5,
+      startedAt,
+    });
     await repo.finish(id, { finishedAt: startedAt, pagesCrawled: 0 });
     await expect(
       repo.addLinks(id, [
