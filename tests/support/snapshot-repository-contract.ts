@@ -777,6 +777,11 @@ export const describeSnapshotRepositoryContract = (
       expect((await queue.getById(direct.id))?.snapshot.status).toBe('running');
     });
 
+    it('records the presence of the worker that claims an audit', async () => {
+      const { queue } = await claimedAt(3);
+      expect(await queue.getWorkerPresence('worker-a')).toEqual(at(3));
+    });
+
     it('records the presence of a worker and updates it in place', async () => {
       const { queue } = await setup();
       expect(await queue.getWorkerPresence('worker-a')).toBeNull();

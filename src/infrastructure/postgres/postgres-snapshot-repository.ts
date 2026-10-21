@@ -259,7 +259,9 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
     };
   }
 
-  async claimNext(_workerId: string, now: Date): Promise<Snapshot | null> {
+  /** Asking for work proves the worker is alive, so its presence is recorded even on an empty queue. */
+  async claimNext(workerId: string, now: Date): Promise<Snapshot | null> {
+    await this.recordWorkerPresence(workerId, now);
     const { rows } = await this.pool.query<SnapshotRow>(
       `UPDATE snapshots
        SET status = 'running', attempts = attempts + 1, heartbeat_at = $1

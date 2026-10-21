@@ -282,8 +282,10 @@ export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue 
     if (launchedBy !== null) this.journalLaunch(launchedBy, snapshot);
   }
 
-  claimNext(_workerId: string, now: Date): Promise<Snapshot | null> {
+  /** Asking for work proves the worker is alive, so its presence is recorded even on an empty queue. */
+  claimNext(workerId: string, now: Date): Promise<Snapshot | null> {
     return this.run(() => {
+      this.recordPresence(workerId, now);
       const row = this.db
         .transaction(
           () =>
@@ -374,13 +376,17 @@ export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue 
 
   recordWorkerPresence(workerId: string, now: Date): Promise<void> {
     return this.run(() => {
-      this.db
-        .prepare(
-          `INSERT INTO workers (id, heartbeat_at) VALUES (?, ?)
-           ON CONFLICT (id) DO UPDATE SET heartbeat_at = excluded.heartbeat_at`,
-        )
-        .run(workerId, now.toISOString());
+      this.recordPresence(workerId, now);
     });
+  }
+
+  private recordPresence(workerId: string, now: Date): void {
+    this.db
+      .prepare(
+        `INSERT INTO workers (id, heartbeat_at) VALUES (?, ?)
+         ON CONFLICT (id) DO UPDATE SET heartbeat_at = excluded.heartbeat_at`,
+      )
+      .run(workerId, now.toISOString());
   }
 
   getWorkerPresence(workerId: string): Promise<Date | null> {

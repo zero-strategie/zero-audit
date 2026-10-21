@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SnapshotImmutable } from '../../src/domain/errors.js';
 import { UNKNOWN_PROJECT_ROOT_URL } from '../../src/domain/project.js';
+import { openDatabase } from '../../src/infrastructure/sqlite/open-database.js';
 import { SqliteSnapshotRepository } from '../../src/infrastructure/sqlite/sqlite-snapshot-repository.js';
 import { describeProjectRepositoryContract } from '../support/project-repository-contract.js';
 import {
@@ -24,6 +25,15 @@ const openInMemory = (): SqliteSnapshotRepository => SqliteSnapshotRepository.op
 describeSnapshotRepositoryContract(() => {
   const repository = openInMemory();
   return { snapshots: repository, projects: repository.projects, users: repository.users };
+});
+describe('SqliteSnapshotRepository busy timeout', () => {
+  it('waits for a competing writer instead of failing at once', () => {
+    const opened = openDatabase(':memory:');
+    const timeout = opened.pragma('busy_timeout', { simple: true });
+    opened.close();
+
+    expect(timeout).toBeGreaterThan(0);
+  });
 });
 describeProjectRepositoryContract(() => {
   const repository = openInMemory();

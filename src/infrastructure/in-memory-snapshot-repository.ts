@@ -77,7 +77,8 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
     return admitted;
   }
 
-  claimNext(_workerId: string, now: Date): Promise<Snapshot | null> {
+  claimNext(workerId: string, now: Date): Promise<Snapshot | null> {
+    this.presences.set(workerId, now);
     const [next] = this.queuedInOrder();
     if (!next) return Promise.resolve(null);
     next.snapshot = next.snapshot.claim(now);
@@ -107,7 +108,9 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
   }
 
   async requeue(id: string, attempt: number, now: Date): Promise<Snapshot> {
-    await this.writeAttempt(id, attempt, (entry) => this.interrupt(entry, now));
+    await this.writeAttempt(id, attempt, (entry) => {
+      this.interrupt(entry, now);
+    });
     return this.snapshotOf(id);
   }
 
