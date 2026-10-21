@@ -1,3 +1,4 @@
+import type { Mailer } from '../../../src/application/ports/mailer.js';
 import { describe, expect, it } from 'vitest';
 import { MailerUnavailable } from '../../../src/domain/errors.js';
 import { ConsoleMailer } from '../../../src/infrastructure/mail/console-mailer.js';
@@ -7,7 +8,7 @@ const LINK = 'https://audit.exemple.test/verifier-email?token=abc';
 
 describe('DisabledMailer', () => {
   it('raises MailerUnavailable for every e-mail', async () => {
-    const mailer = new DisabledMailer();
+    const mailer: Mailer = new DisabledMailer();
 
     await expect(mailer.sendVerification('a@exemple.test', LINK)).rejects.toThrow(
       MailerUnavailable,
