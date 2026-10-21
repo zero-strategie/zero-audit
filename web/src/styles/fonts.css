@@ -1,0 +1,38 @@
+/*
+ * Self-hosted variable fonts (SIL OFL 1.1, see public/fonts). `swap` shows text at once in a
+ * fallback whose metrics are adjusted to the final font, so the swap does not move the layout.
+ */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/fonts/bricolage-grotesque.woff2') format('woff2');
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Martian Mono';
+  src: url('/fonts/martian-mono.woff2') format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Fallback metrics measured with fonttools against Arial and Courier New. */
+@font-face {
+  font-family: 'Bricolage Fallback';
+  src: local('Arial'), local('Helvetica Neue'), local('Helvetica');
+  size-adjust: 95.43%;
+  ascent-override: 97.46%;
+  descent-override: 28.29%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Martian Fallback';
+  src: local('Courier New'), local('Menlo');
+  size-adjust: 116.65%;
+  ascent-override: 85.73%;
+  descent-override: 17.15%;
+  line-gap-override: 0%;
+}

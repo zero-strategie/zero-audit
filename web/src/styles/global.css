@@ -1,4 +1,6 @@
 @import './tokens.css';
+@import './fonts.css';
+@import './motion.css';
 
 *,
 *::before,
@@ -6,17 +8,30 @@
   box-sizing: border-box;
 }
 
+/* Chart-recorder paper: minor lines every 8px, major lines every 40px. */
 body {
   margin: 0;
-  background: var(--color-bg);
+  background-color: var(--color-bg);
+  background-image:
+    linear-gradient(var(--color-grid-major) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid-major) 1px, transparent 1px),
+    linear-gradient(var(--color-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid-line) 1px, transparent 1px);
+  background-size:
+    40px 40px,
+    40px 40px,
+    8px 8px,
+    8px 8px;
   color: var(--color-text);
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
-  line-height: 1.5;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-link);
+  outline-offset: 3px;
 }
 
 main {
@@ -164,6 +179,7 @@ button {
 
 input {
   min-width: min(100%, 24rem);
+  border-color: var(--color-input-border);
   background: var(--color-input-bg);
   color: var(--color-input-text);
 }

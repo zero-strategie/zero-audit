@@ -1,0 +1,117 @@
+/*
+ * Motion grammar. Everything here is CSS: the dashboard ships no client script.
+ * Only transform and opacity are animated, with two reviewed exceptions that repaint one small
+ * element and never move the layout: the gauge arc (stroke-dashoffset) and the score counter (--n).
+ * Pages are complete at rest: an element that animates in starts from a visible end state.
+ */
+
+/* Score counter: an integer custom property that CSS can interpolate. */
+@property --n {
+  syntax: '<integer>';
+  initial-value: 0;
+  inherits: false;
+}
+
+/* Cross-document view transitions: page changes morph instead of flashing, without a router.
+   Browsers without support simply navigate. */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: var(--dur-page);
+  animation-timing-function: var(--ease-inout);
+}
+
+::view-transition-group(*) {
+  animation-duration: 560ms;
+  animation-timing-function: var(--ease-inout);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes swing {
+  from {
+    transform: rotate(-135deg);
+  }
+}
+
+@keyframes fill-arc {
+  from {
+    stroke-dashoffset: 100;
+  }
+}
+
+@keyframes count {
+  from {
+    --n: 0;
+  }
+}
+
+@keyframes sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Entrance of a list item, staggered by its --i index (capped). */
+.enter {
+  animation: rise var(--dur-medium) var(--ease-out) both;
+  animation-delay: calc(min(var(--i, 0), var(--stagger-max)) * var(--stagger));
+}
+
+/* Rows that reveal while scrolling, where scroll-driven animations exist. */
+@supports (animation-timeline: view()) {
+  .reveal-on-scroll > * {
+    animation: rise linear both;
+    animation-timeline: view();
+    animation-range: entry 0% entry 70%;
+  }
+}
+
+/*
+ * Reduced motion: nothing travels. Things still arrive with a short fade so the page does not
+ * feel broken, values appear at their final state, and page changes become a plain crossfade.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-medium: 150ms;
+    --dur-long: 0ms;
+    --dur-page: 150ms;
+  }
+
+  .enter,
+  .reveal-on-scroll > * {
+    animation-name: fade;
+    animation-timeline: auto;
+  }
+
+  ::view-transition-group(*) {
+    animation-duration: 0ms;
+  }
+
+  .sweep {
+    display: none;
+  }
+}
