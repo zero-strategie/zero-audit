@@ -9,4 +9,15 @@ describe('RealSleeper', () => {
 
     expect(performance.now() - startedAt).toBeGreaterThanOrEqual(25);
   });
+
+  it('resolves at once when the signal fires, without waiting for the duration', async () => {
+    const controller = new AbortController();
+    const startedAt = performance.now();
+
+    const sleeping = new RealSleeper().sleep(10_000, controller.signal);
+    controller.abort();
+    await sleeping;
+
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
 });
