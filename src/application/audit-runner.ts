@@ -16,6 +16,19 @@ export interface AuditRunnerDependencies {
   delayMs: number;
 }
 
+export interface AuditStartRequest {
+  rootUrl: string;
+  limit: number;
+  /** The account owning the project; absent for a launch without account. */
+  ownerId?: string;
+  launchedBy?: string;
+  /**
+   * Runs under the lock, once no other audit is running, and may refuse the launch by throwing:
+   * the quota check lives here so that two simultaneous launches cannot both pass it.
+   */
+  admit?: () => Promise<void>;
+}
+
 export interface StartedAudit {
   snapshotId: string;
   projectId: string;
@@ -57,10 +70,11 @@ export class AuditRunner {
 
   constructor(private readonly dependencies: AuditRunnerDependencies) {}
 
-  async start(request: { rootUrl: string; limit: number }): Promise<StartedAudit> {
+  async start({ admit, ...request }: AuditStartRequest): Promise<StartedAudit> {
     const active = this.acquireLock();
     try {
       await this.assertNoRunningSnapshotElsewhere();
+      await admit?.();
       return await this.launch(active, request);
     } catch (error) {
       if (!active.snapshotCreated) this.release(active);
@@ -137,7 +151,7 @@ export class AuditRunner {
 
   private async launch(
     active: ActiveAudit,
-    request: { rootUrl: string; limit: number },
+    request: Omit<AuditStartRequest, 'admit'>,
   ): Promise<StartedAudit> {
     const { snapshots, projects, logger, delayMs } = this.dependencies;
     const runAudit = this.dependencies.createRunAudit(noopEvents);

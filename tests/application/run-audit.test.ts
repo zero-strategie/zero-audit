@@ -120,6 +120,53 @@ describe('RunAudit events', () => {
   });
 });
 
+describe('RunAudit ownership', () => {
+  const EPOCH = new Date(0);
+
+  it('keeps the project of the showcase and the launches of the command line without owner', async () => {
+    const { useCase, repository, projects } = build(new FakeCrawler());
+
+    const { snapshot } = await useCase.execute({ rootUrl: ROOT, limit: 10, delayMs: 0 });
+
+    expect((await projects.getById(snapshot.projectId))?.ownerId).toBeNull();
+    expect(await repository.countApiLaunchedSince(EPOCH)).toBe(0);
+  });
+
+  it('audits into a project of the account and records it as the launcher, leaving the showcase alone', async () => {
+    const { useCase, repository, projects } = build(new FakeCrawler());
+    const showcase = await projects.findOrCreateByRootUrl({
+      rootUrl: ROOT,
+      ownerId: null,
+      createdAt: new Date(FIXED_NOW),
+    });
+
+    const { snapshot } = await useCase.execute({
+      rootUrl: ROOT,
+      limit: 10,
+      delayMs: 0,
+      ownerId: 'u1',
+      launchedBy: 'u1',
+    });
+
+    const project = await projects.getById(snapshot.projectId);
+    expect(project?.ownerId).toBe('u1');
+    expect(project?.id).not.toBe(showcase.id);
+    expect(await repository.listLaunchedAtBy('u1', EPOCH)).toHaveLength(1);
+    expect(await repository.listByProject(showcase.id)).toEqual([]);
+    expect((await projects.list(null)).map(({ id }) => id)).toEqual([showcase.id]);
+  });
+
+  it('reuses the project of the account on the next audit', async () => {
+    const { useCase } = build(new FakeCrawler());
+    const request = { rootUrl: ROOT, limit: 10, delayMs: 0, ownerId: 'u1', launchedBy: 'u1' };
+
+    const first = await useCase.execute(request);
+    const second = await useCase.execute(request);
+
+    expect(second.snapshot.projectId).toBe(first.snapshot.projectId);
+  });
+});
+
 describe('RunAudit', () => {
   it('stores the technical files without counting them as crawled pages', async () => {
     const { useCase, repository } = build(new FakeCrawler());

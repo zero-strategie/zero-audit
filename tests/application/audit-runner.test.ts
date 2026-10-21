@@ -3,7 +3,7 @@ import { AuditRunner } from '../../src/application/audit-runner.js';
 import type { Logger } from '../../src/application/ports/logger.js';
 import type { AuditRequest, RunAudit } from '../../src/application/run-audit.js';
 import type { SnapshotDetails } from '../../src/application/ports/snapshot-repository.js';
-import { AuditAlreadyRunning } from '../../src/domain/errors.js';
+import { AuditAlreadyRunning, QuotaExceeded } from '../../src/domain/errors.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 
@@ -60,12 +60,12 @@ class Harness {
       if (this.failBeforeCreation) throw this.failBeforeCreation;
       const startedAt = new Date(this.now);
       const project = await this.projects.findOrCreateByRootUrl({
-        ownerId: null,
+        ownerId: request.ownerId ?? null,
         rootUrl: request.rootUrl,
         createdAt: startedAt,
       });
       const snapshot = await this.snapshots.create({
-        launchedBy: null,
+        launchedBy: request.launchedBy ?? null,
         projectId: project.id,
         pagesLimit: request.limit,
         startedAt,
@@ -103,6 +103,110 @@ describe('AuditRunner.start', () => {
     expect(running.map((snapshot) => snapshot.id)).toEqual([started.snapshotId]);
     expect(running[0]?.projectId).toBe(started.projectId);
     expect(harness.requests[0]).toMatchObject({ rootUrl: ROOT, limit: 100, delayMs: 250 });
+  });
+});
+
+describe('AuditRunner.start ownership', () => {
+  it('hands the owner and the launcher to the audit', async () => {
+    const harness = new Harness();
+
+    const { projectId } = await harness.runner.start({
+      rootUrl: ROOT,
+      limit: 100,
+      ownerId: 'u1',
+      launchedBy: 'u1',
+    });
+
+    expect(harness.requests[0]).toMatchObject({ ownerId: 'u1', launchedBy: 'u1' });
+    expect((await harness.projects.getById(projectId))?.ownerId).toBe('u1');
+  });
+
+  it('leaves both unset for a launch without account', async () => {
+    const harness = new Harness();
+
+    await harness.runner.start({ rootUrl: ROOT, limit: 100 });
+
+    expect(harness.requests[0]?.ownerId).toBeUndefined();
+    expect(harness.requests[0]?.launchedBy).toBeUndefined();
+  });
+});
+
+describe('AuditRunner.start admission', () => {
+  const quotaOfOne = (harness: Harness) => async (): Promise<void> => {
+    const launches = await harness.snapshots.listLaunchedAtBy('u1', new Date(0));
+    if (launches.length >= 1) throw new QuotaExceeded({ reason: 'global' });
+  };
+  const request = (harness: Harness) => ({
+    rootUrl: ROOT,
+    limit: 100,
+    ownerId: 'u1',
+    launchedBy: 'u1',
+    admit: quotaOfOne(harness),
+  });
+
+  it('creates no snapshot and frees the lock when the admission is refused', async () => {
+    const harness = new Harness();
+    const refusal = new QuotaExceeded({ reason: 'global' });
+
+    const rejection = await rejectionOf(
+      harness.runner.start({
+        rootUrl: ROOT,
+        limit: 100,
+        admit: () => Promise.reject(refusal),
+      }),
+    );
+
+    expect(rejection).toBe(refusal);
+    expect(harness.requests).toEqual([]);
+    expect(await harness.snapshots.listRunning()).toEqual([]);
+    await expect(harness.runner.start({ rootUrl: ROOT, limit: 100 })).resolves.toBeDefined();
+  });
+
+  it('is asked after the lock, so that a running audit answers a conflict first', async () => {
+    const harness = new Harness();
+    await harness.runner.start({ rootUrl: ROOT, limit: 100 });
+    let asked = false;
+
+    const rejection = await rejectionOf(
+      harness.runner.start({
+        rootUrl: ROOT,
+        limit: 100,
+        admit: () => {
+          asked = true;
+          return Promise.resolve();
+        },
+      }),
+    );
+
+    expect(rejection).toBeInstanceOf(AuditAlreadyRunning);
+    expect(asked).toBe(false);
+  });
+
+  it('lets a single one of two simultaneous launches through when one audit is left', async () => {
+    const harness = new Harness();
+
+    const outcomes = await Promise.allSettled([
+      harness.runner.start(request(harness)),
+      harness.runner.start(request(harness)),
+    ]);
+
+    expect(outcomes.map(({ status }) => status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect(await harness.snapshots.listLaunchedAtBy('u1', new Date(0))).toHaveLength(1);
+  });
+
+  it('refuses the next launch once the first one is over, without creating a snapshot', async () => {
+    const harness = new Harness();
+    await harness.runner.start(request(harness));
+    harness.crawl.resolve();
+    await vi.waitFor(async () => {
+      expect(await harness.snapshots.listRunning()).toEqual([]);
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const rejection = await rejectionOf(harness.runner.start(request(harness)));
+
+    expect(rejection).toBeInstanceOf(QuotaExceeded);
+    expect(await harness.snapshots.listLaunchedAtBy('u1', new Date(0))).toHaveLength(1);
   });
 });
 
