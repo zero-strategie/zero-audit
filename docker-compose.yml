@@ -1,4 +1,4 @@
-# Full local stack: Postgres 16, one-shot migrations, api and web. The password is never versioned:
+# Full local stack: Postgres 16, one-shot migrations, api, worker and web. The password is never versioned:
 #   POSTGRES_PASSWORD=<your password> docker compose up --build
 # Web on http://127.0.0.1:4321, API on http://127.0.0.1:3000. Every port is published on the loopback
 # only: the API has no authentication.
@@ -37,7 +37,9 @@ services:
     build:
       context: .
       target: api
-    environment: *api-environment
+    environment:
+      <<: *api-environment
+      ZERO_AUDIT_WORKER: external
     ports:
       - '127.0.0.1:3000:3000'
     depends_on:
@@ -54,6 +56,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  worker:
+    build:
+      context: .
+      target: api
+    command: ['worker']
+    environment: *api-environment
+    stop_grace_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD', 'node', 'dist/cli/main.js', 'worker-health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   web:
     build:
