@@ -42,9 +42,9 @@ const groups = groupBySeverity(rows);
       {groups.map(({ severity, rows: groupRows }) => (
         <section data-testid={`group-${severity}`}>
           <h2>{SEVERITY_GROUP_LABELS[severity]}</h2>
-          <ul>
-            {groupRows.map((row) => (
-              <li data-testid={`issue-${String(row.checkId)}`}>
+          <ul class="issue-list">
+            {groupRows.map((row, index) => (
+              <li data-testid={`issue-${String(row.checkId)}`} class="enter" style={`--i: ${String(index)}`}>
                 <SeverityBadge severity={row.severity} />{' '}
                 {row.count > 0 ? (
                   <a href={`/snapshots/${snapshotId}/issues/${String(row.checkId)}`}>{row.label}</a>
