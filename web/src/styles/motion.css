@@ -29,6 +29,12 @@
   animation-timing-function: var(--ease-inout);
 }
 
+/* The progress bar glides to its new length between two refreshes. */
+::view-transition-group(audit-progress) {
+  animation-duration: var(--dur-long);
+  animation-timing-function: var(--ease-out);
+}
+
 @keyframes rise {
   from {
     opacity: 0;

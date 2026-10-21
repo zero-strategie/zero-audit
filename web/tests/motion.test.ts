@@ -47,6 +47,12 @@ describe('motion grammar', () => {
   });
 });
 
+describe('audit progress', () => {
+  it('names the progress bar so it glides between two refreshes instead of jumping', () => {
+    expect(globalCss).toMatch(/\.progress-bar\s*{[^}]*view-transition-name:\s*audit-progress/);
+  });
+});
+
 describe('fonts', () => {
   it('loads only self-hosted woff2 files with font-display: swap', () => {
     const urls = [...fontsCss.matchAll(/url\('([^']+)'\)/g)].map(([, url]) => url);

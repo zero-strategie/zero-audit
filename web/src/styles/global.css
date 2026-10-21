@@ -429,19 +429,35 @@ a.button-primary {
   font-weight: 500;
 }
 
-/* Audit progress bar: pure CSS, the page refreshes itself with a meta tag */
+/* Audit progress: the page refreshes itself (meta refresh). The bar keeps a view-transition name,
+   so between two refreshes it glides to its new length instead of jumping; a light sweep shows
+   that work is going on, removed under reduced motion. */
 .progress {
+  position: relative;
   width: 100%;
-  max-width: 32rem;
-  height: 0.75rem;
+  max-width: 40rem;
+  height: 1.1rem;
+  margin-block: var(--space-3);
   overflow: hidden;
-  border-radius: var(--radius);
+  border: 1px solid var(--color-text);
   background: var(--color-progress-track);
 }
 
 .progress-bar {
+  position: relative;
   height: 100%;
+  overflow: hidden;
   background: var(--color-progress-fill);
+  view-transition-name: audit-progress;
+}
+
+.progress-bar::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--color-surface), transparent);
+  content: '';
+  opacity: 0.35;
+  animation: sweep 1.8s var(--ease-inout) infinite;
 }
 
 /* Messages */

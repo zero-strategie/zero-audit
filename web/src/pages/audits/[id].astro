@@ -37,6 +37,7 @@ const summary = `Audit de ${host} en cours` + (hasCount ? ` — ${count}` : '');
   ) : (
     <Layout title={`Audit de ${host} – zero-audit`}>
       {progress.status === 'running' && <meta slot="head" http-equiv="refresh" content={String(REFRESH_SECONDS)} />}
+      <span class="eyebrow">{progress.status === 'running' ? 'Audit en cours' : 'Audit interrompu'}</span>
       <h1>Audit de {host}</h1>
       {progress.status === 'running' ? (
         <>
