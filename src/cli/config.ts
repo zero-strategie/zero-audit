@@ -25,6 +25,9 @@ export interface CompareConfig extends StoreSelection {
   dbPath: string;
 }
 
+export const WORKER_MODES = ['embedded', 'external'] as const;
+export type WorkerMode = (typeof WORKER_MODES)[number];
+
 export const MAILER_KINDS = ['console', 'brevo'] as const;
 export const DEFAULT_MAIL_FROM = 'no-reply@agents.zero-strategie.dev';
 
@@ -45,6 +48,10 @@ export interface ServeConfig extends StoreSelection {
   adminEmails: string[];
   /** Ceiling of audits launched through the API per 24 hours, all accounts together. */
   launchesPerDay: number;
+  /** `embedded` runs the worker loop inside `serve`; `external` leaves it to a worker process. */
+  workerMode: WorkerMode;
+  /** Ceiling of audits waiting in the queue, all accounts together. */
+  queueMax: number;
 }
 
 export interface MigrateConfig extends StoreSelection {
@@ -66,6 +73,7 @@ export const DEFAULT_DELAY_MS = 1000;
 export const DEFAULT_HOST = '127.0.0.1';
 export const DEFAULT_PORT = 3000;
 export const DEFAULT_LAUNCHES_PER_DAY = 30;
+export const DEFAULT_QUEUE_MAX = 20;
 export const DEFAULT_DB_PATH = './.zero-audit/audit.db';
 
 const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
@@ -77,6 +85,8 @@ const BREVO_API_KEY_ENV = 'ZERO_AUDIT_BREVO_API_KEY';
 const MAIL_FROM_ENV = 'ZERO_AUDIT_MAIL_FROM';
 const ADMIN_EMAILS_ENV = 'ZERO_AUDIT_ADMIN_EMAILS';
 const LAUNCHES_PER_DAY_ENV = 'ZERO_AUDIT_LAUNCHES_PER_DAY';
+const WORKER_ENV = 'ZERO_AUDIT_WORKER';
+const QUEUE_MAX_ENV = 'ZERO_AUDIT_QUEUE_MAX';
 const PUBLIC_URL_ENV = 'ZERO_AUDIT_PUBLIC_URL';
 const HOST_ENV = 'HOST';
 const PORT_ENV = 'PORT';
@@ -100,6 +110,19 @@ const parsePort = (raw: string, name: string): number => {
     throw new UsageError(`${name} must be an integer <= ${String(MAX_PORT)} (received "${raw}")`);
   }
   return port;
+};
+
+const isWorkerMode = (value: string): value is WorkerMode =>
+  WORKER_MODES.some((mode) => mode === value);
+
+const parseWorkerMode = (env: Environment): WorkerMode => {
+  const raw = env[WORKER_ENV] ?? 'embedded';
+  if (!isWorkerMode(raw)) {
+    throw new UsageError(
+      `${WORKER_ENV} must be one of ${WORKER_MODES.join(', ')} (received "${raw}")`,
+    );
+  }
+  return raw;
 };
 
 const isStoreKind = (value: string): value is StoreKind =>
@@ -240,6 +263,8 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
       LAUNCHES_PER_DAY_ENV,
       1,
     ),
+    workerMode: parseWorkerMode(env),
+    queueMax: parseInteger(env[QUEUE_MAX_ENV] ?? String(DEFAULT_QUEUE_MAX), QUEUE_MAX_ENV, 1),
     ...parseStore(values.store, env),
   };
 };

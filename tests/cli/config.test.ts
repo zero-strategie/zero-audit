@@ -123,6 +123,8 @@ describe('parseCommand subcommands', () => {
       mail: { kind: 'disabled', from: 'no-reply@agents.zero-strategie.dev', publicUrl: null },
       adminEmails: [],
       launchesPerDay: 30,
+      workerMode: 'embedded',
+      queueMax: 20,
     });
   });
 
@@ -349,4 +351,48 @@ describe('parseCommand serve: ZERO_AUDIT_LAUNCHES_PER_DAY', () => {
     expect(command).toMatchObject({ kind: 'usage-error' });
     expect(JSON.stringify(command)).toContain('ZERO_AUDIT_LAUNCHES_PER_DAY');
   });
+});
+
+describe('parseCommand serve: ZERO_AUDIT_WORKER and ZERO_AUDIT_QUEUE_MAX', () => {
+  const serveOf = (env: Record<string, string>) => parseCommand(['serve'], env);
+
+  it('runs the worker inside serve by default, with every storage', () => {
+    expect(serveOf({})).toMatchObject({ workerMode: 'embedded' });
+    expect(
+      serveOf({ ZERO_AUDIT_STORE: 'postgres', DATABASE_URL: 'postgresql://x@h/d' }),
+    ).toMatchObject({
+      workerMode: 'embedded',
+    });
+  });
+
+  it.each(['embedded', 'external'])('reads ZERO_AUDIT_WORKER=%s', (mode) => {
+    expect(serveOf({ ZERO_AUDIT_WORKER: mode })).toMatchObject({ workerMode: mode });
+  });
+
+  it.each(['Embedded', 'both', '', 'none'])(
+    'refuses ZERO_AUDIT_WORKER=%j, naming the variable',
+    (value) => {
+      const command = serveOf({ ZERO_AUDIT_WORKER: value });
+
+      expect(command).toMatchObject({ kind: 'usage-error' });
+      expect(JSON.stringify(command)).toContain('ZERO_AUDIT_WORKER');
+      expect(JSON.stringify(command)).toContain('embedded');
+      expect(JSON.stringify(command)).toContain('external');
+    },
+  );
+
+  it('caps the queue at 20 audits by default and reads ZERO_AUDIT_QUEUE_MAX', () => {
+    expect(serveOf({})).toMatchObject({ queueMax: 20 });
+    expect(serveOf({ ZERO_AUDIT_QUEUE_MAX: '5' })).toMatchObject({ queueMax: 5 });
+  });
+
+  it.each(['0', '-1', 'lots', ''])(
+    'refuses ZERO_AUDIT_QUEUE_MAX=%j, naming the variable',
+    (value) => {
+      const command = serveOf({ ZERO_AUDIT_QUEUE_MAX: value });
+
+      expect(command).toMatchObject({ kind: 'usage-error' });
+      expect(JSON.stringify(command)).toContain('ZERO_AUDIT_QUEUE_MAX');
+    },
+  );
 });
