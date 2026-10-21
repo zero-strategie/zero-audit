@@ -95,6 +95,26 @@ describe('PurgeStaleAccounts report', () => {
       createdAt: new Date(NOW.getTime() - 8 * DAY_MS),
     });
 
-    expect(await purge.execute()).toEqual({ accounts: 1, sessions: 0, emailTokens: 0 });
+    expect(await purge.execute()).toEqual({ accounts: 1, sessions: 0, emailTokens: 0, launches: 0 });
+  });
+});
+
+describe('PurgeStaleAccounts launch journal', () => {
+  it('drops the launches older than 24 hours and keeps the others', async () => {
+    const { stores, purge } = setup();
+    const create = (hoursAgo: number) =>
+      stores.snapshots.create({
+        projectId: 'p1',
+        launchedBy: 'u1',
+        pagesLimit: 10,
+        startedAt: new Date(NOW.getTime() - hoursAgo * 60 * 60 * 1000),
+      });
+    await create(25);
+    await create(23);
+
+    const report = await purge.execute();
+
+    expect(report.launches).toBe(1);
+    expect(await stores.snapshots.countApiLaunchedSince(new Date(0))).toBe(1);
   });
 });

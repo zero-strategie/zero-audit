@@ -4,6 +4,7 @@ import { AuditAlreadyRunning, HostNotResolved } from '../../src/domain/errors.js
 import { HOUR_MS, idleAccountDependencies, NOW } from '../support/auth-doubles.js';
 import { SESSION_TTL_MS } from '../../src/domain/session.js';
 import { buildServer } from '../../src/http/server.js';
+import { InMemoryAccountEraser } from '../../src/infrastructure/in-memory-account-eraser.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 import { FakeAuditRunner, FakeHostResolver } from '../support/audit-doubles.js';
@@ -28,7 +29,7 @@ describe('audit launch API', () => {
   let alice: { id: string };
 
   const openSession = async (email: string, id: string): Promise<{ id: string }> => {
-    const user = await account.users.create({ email, passwordHash: 'h', createdAt: NOW });
+    const user = await account.users.create({ email, passwordHash: 'hashed:secret password', createdAt: NOW });
     await account.users.markVerified(user.id, NOW);
     await account.sessions.create({
       id,
@@ -41,10 +42,11 @@ describe('audit launch API', () => {
 
   const serverWith = (allowPrivateTargets: boolean, launchesPerDay = 30): FastifyInstance => {
     projects = new InMemoryProjectRepository();
-    snapshots = new InMemorySnapshotRepository();
+    snapshots = new InMemorySnapshotRepository(account.users);
     runner = new FakeAuditRunner({ snapshots, now: () => account.clock.now() });
     return buildServer({
       ...account,
+      eraser: new InMemoryAccountEraser({ ...account, projects, snapshots }),
       adminEmails: [ADMIN_EMAIL],
       projects,
       snapshots,
@@ -245,6 +247,36 @@ describe('audit launch API', () => {
 
       account.clock.advance(21 * HOUR_MS + 1);
       expect((await post({ url: SITE })).statusCode).toBe(202);
+    });
+
+    it('keeps refusing the fourth audit after the account was deleted and registered again', async () => {
+      await launchOnce();
+      await launchOnce();
+      await launchOnce();
+      const deletion = await app.inject({
+        method: 'DELETE',
+        url: '/auth/me',
+        payload: { password: 'secret password' },
+        headers: { 'x-session-id': ALICE_SESSION },
+      });
+      expect(deletion.statusCode).toBe(204);
+      const again = await account.users.create({
+        email: 'alice@exemple.test',
+        passwordHash: 'h',
+        createdAt: new Date(account.clock.now()),
+      });
+      await account.users.markVerified(again.id, new Date(account.clock.now()));
+      await account.sessions.create({
+        id: 'session-again',
+        userId: again.id,
+        createdAt: new Date(account.clock.now()),
+        expiresAt: new Date(account.clock.now() + SESSION_TTL_MS),
+      });
+
+      const refused = await post({ url: SITE }, 'session-again');
+
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json<ApiError>().error.code).toBe('quota_exceeded');
     });
 
     it('counts neither an anti-SSRF refusal nor a conflict with a running audit', async () => {

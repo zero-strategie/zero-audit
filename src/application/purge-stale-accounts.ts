@@ -1,3 +1,4 @@
+import { QUOTA_WINDOW_MS } from '../domain/quota.js';
 import { UNVERIFIED_ACCOUNT_TTL_MS } from '../domain/user.js';
 import type { AccountEraser } from './ports/account-eraser.js';
 import type { Clock } from './ports/clock.js';
@@ -15,6 +16,8 @@ export interface PurgeReport {
   readonly accounts: number;
   readonly sessions: number;
   readonly emailTokens: number;
+  /** Journal entries older than the quota window, now useless. */
+  readonly launches: number;
 }
 
 export class PurgeStaleAccounts {
@@ -30,6 +33,7 @@ export class PurgeStaleAccounts {
       accounts,
       sessions: await sessions.deleteExpired(now),
       emailTokens: await emailTokens.deleteExpired(now),
+      launches: await eraser.purgeLaunchesBefore(new Date(now.getTime() - QUOTA_WINDOW_MS)),
     };
   }
 }
