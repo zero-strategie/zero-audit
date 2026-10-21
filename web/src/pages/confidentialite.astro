@@ -1,0 +1,41 @@
+---
+import Layout from '../layouts/Layout.astro';
+import { CONTACT_EMAIL } from '../lib/contact';
+---
+
+<Layout title="Confidentialité – zero-audit">
+  <h1>Confidentialité</h1>
+
+  <h2>Données collectées</h2>
+  <ul>
+    <li>Votre adresse e-mail, pour identifier votre compte et vous écrire.</li>
+    <li>L'empreinte du mot de passe : le mot de passe lui-même n'est jamais conservé.</li>
+    <li>Vos sessions de connexion, stockées sous forme d'empreinte.</li>
+    <li>Les URL auditées et les résultats des audits, rattachés à votre compte et visibles de vous seul.</li>
+    <li>
+      Votre adresse IP, utilisée en mémoire pour limiter les abus : elle n'est pas conservée.
+    </li>
+  </ul>
+
+  <h2>Durées de conservation</h2>
+  <ul>
+    <li>Une session dure 30 jours, puis expire.</li>
+    <li>Un compte non vérifié est supprimé au bout de 7 jours.</li>
+    <li>
+      Toutes vos données, audits compris, sont supprimées à la suppression du compte, que vous
+      pouvez demander depuis la page « Mon compte ».
+    </li>
+  </ul>
+
+  <h2>Sous-traitant</h2>
+  <p>
+    Les e-mails de confirmation et de réinitialisation sont envoyés par Brevo, qui reçoit votre
+    adresse e-mail à cette seule fin.
+  </p>
+
+  <h2>Contact</h2>
+  <p>
+    Pour toute question ou demande sur vos données :
+    <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+  </p>
+</Layout>
