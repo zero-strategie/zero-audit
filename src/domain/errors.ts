@@ -105,3 +105,17 @@ export class InvalidPassword extends DomainError {
     this.name = 'InvalidPassword';
   }
 }
+
+export class MailDeliveryFailed extends DomainError {
+  constructor(reason: string) {
+    super(`E-mail delivery failed: ${reason}`);
+    this.name = 'MailDeliveryFailed';
+  }
+}
+
+export class MailerUnavailable extends DomainError {
+  constructor() {
+    super('No mailer is configured');
+    this.name = 'MailerUnavailable';
+  }
+}

@@ -125,9 +125,9 @@ describe('AuditRunner.start locking', () => {
     );
 
     vi.spyOn(harness.snapshots, 'listRunning').mockResolvedValue([]);
-    await expect(
-      harness.runner.start({ rootUrl: ROOT, limit: 100 }),
-    ).rejects.toBeInstanceOf(AuditAlreadyRunning);
+    await expect(harness.runner.start({ rootUrl: ROOT, limit: 100 })).rejects.toBeInstanceOf(
+      AuditAlreadyRunning,
+    );
   });
 
   it('rejects with the start date of a running snapshot created less than 6 hours ago elsewhere', async () => {

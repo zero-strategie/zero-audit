@@ -133,7 +133,9 @@ describe('audit launch API', () => {
       expect(response.statusCode).toBe(409);
       expect(response.json<ApiError>().error.code).toBe('conflict');
       expect(response.json<ApiError>().error.message).toContain('2026-01-01T10:00:00.000Z');
-      expect(response.json<ApiError>().error.message).toContain('Un audit est déjà en cours depuis');
+      expect(response.json<ApiError>().error.message).toContain(
+        'Un audit est déjà en cours depuis',
+      );
     });
 
     it.each(['PUT', 'DELETE', 'GET'] as const)('answers 404 for %s /audits', async (method) => {
