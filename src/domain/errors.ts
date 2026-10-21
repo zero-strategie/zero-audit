@@ -156,3 +156,15 @@ export class TooManyAttempts extends DomainError {
     this.name = 'TooManyAttempts';
   }
 }
+
+export type QuotaDenial =
+  | { readonly reason: 'pages'; readonly maxPages: number }
+  | { readonly reason: 'account'; readonly nextAvailableAt: Date }
+  | { readonly reason: 'global' };
+
+export class QuotaExceeded extends DomainError {
+  constructor(readonly denial: QuotaDenial) {
+    super(`Audit quota exceeded (${denial.reason})`);
+    this.name = 'QuotaExceeded';
+  }
+}
