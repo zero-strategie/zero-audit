@@ -37,6 +37,13 @@ export class InMemoryEmailTokenRepository implements EmailTokenRepository {
     return Promise.resolve(created.length);
   }
 
+  /** For `InMemoryAccountEraser` only. */
+  eraseForUser(userId: string): void {
+    for (const token of [...this.tokens.values()]) {
+      if (token.userId === userId) this.tokens.delete(token.tokenHash);
+    }
+  }
+
   deleteExpired(now: Date): Promise<number> {
     const doomed = [...this.tokens.values()].filter((token) => token.expiresAt <= now);
     for (const { tokenHash } of doomed) this.tokens.delete(tokenHash);

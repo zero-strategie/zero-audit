@@ -19,6 +19,7 @@ import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { withTransaction } from './pool.js';
 import { PostgresProjectRepository } from './postgres-project-repository.js';
+import { PostgresAccountEraser } from './postgres-account-eraser.js';
 import { PostgresEmailTokenRepository } from './postgres-email-token-repository.js';
 import { PostgresSessionRepository } from './postgres-session-repository.js';
 import { PostgresUserRepository } from './postgres-user-repository.js';
@@ -160,12 +161,14 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
   readonly users: PostgresUserRepository;
   readonly sessions: PostgresSessionRepository;
   readonly emailTokens: PostgresEmailTokenRepository;
+  readonly eraser: PostgresAccountEraser;
 
   constructor(private readonly pool: pg.Pool) {
     this.projects = new PostgresProjectRepository(pool);
     this.users = new PostgresUserRepository(pool);
     this.sessions = new PostgresSessionRepository(pool);
     this.emailTokens = new PostgresEmailTokenRepository(pool);
+    this.eraser = new PostgresAccountEraser(pool);
   }
 
   async ping(): Promise<void> {

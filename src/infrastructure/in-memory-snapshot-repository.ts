@@ -145,6 +145,22 @@ export class InMemorySnapshotRepository implements SnapshotRepository, StorageHe
     );
   }
 
+  /** For `InMemoryAccountEraser` only: the port itself stays append-only. */
+  eraseOfProjects(projectIds: readonly string[]): void {
+    for (const [id, { snapshot }] of [...this.stored]) {
+      if (!projectIds.includes(snapshot.projectId)) continue;
+      this.stored.delete(id);
+      this.launchedBy.delete(id);
+    }
+  }
+
+  /** For `InMemoryAccountEraser` only. */
+  unlinkLaunchesOf(userId: string): void {
+    for (const [id, launcher] of [...this.launchedBy]) {
+      if (launcher === userId) this.launchedBy.delete(id);
+    }
+  }
+
   private launchedSince(since: Date): [Snapshot, string][] {
     return [...this.launchedBy].flatMap(([snapshotId, userId]) => {
       const snapshot = this.stored.get(snapshotId)?.snapshot;

@@ -13,6 +13,12 @@ import {
   TEST_DATABASE_URL,
   type TestDatabase,
 } from '../support/postgres-test-database.js';
+import {
+  type AccountStorage,
+  describeAccountEraserContract,
+  seedAccount,
+  seedProject,
+} from '../support/account-eraser-contract.js';
 import { describeEmailTokenRepositoryContract } from '../support/email-token-repository-contract.js';
 import { describeSessionRepositoryContract } from '../support/session-repository-contract.js';
 import { describeSnapshotRepositoryContract } from '../support/snapshot-repository-contract.js';
@@ -79,6 +85,16 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     emailTokens: repository.emailTokens,
     users: repository.users,
   }));
+
+  const storage = (): AccountStorage => ({
+    users: repository.users,
+    projects: repository.projects,
+    snapshots: repository,
+    sessions: repository.sessions,
+    emailTokens: repository.emailTokens,
+    eraser: repository.eraser,
+  });
+  describeAccountEraserContract(storage);
 
   describe('secrets at rest', () => {
     const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
@@ -330,5 +346,61 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     } finally {
       await legacy.dispose();
     }
+  });
+  describe('account erasure', () => {
+    const ALL_TABLES = [
+      'users',
+      'sessions',
+      'email_tokens',
+      'projects',
+      'snapshots',
+      'pages',
+      'links',
+      'site_files',
+      'host_probes',
+      'slash_probes',
+      'check_results',
+      'issue_occurrences',
+    ];
+
+    const rowCounts = async (): Promise<Record<string, number>> =>
+      Object.fromEntries(
+        await Promise.all(ALL_TABLES.map(async (table) => [table, await count(table)] as const)),
+      );
+
+    const seedOthers = async (): Promise<void> => {
+      await seedAccount(storage(), { email: 'v@example.fr' });
+      await seedProject(storage(), { ownerId: null, rootUrl: 'https://showcase.test/' });
+    };
+
+    it('leaves exactly the rows of the other accounts and of the showcase', async () => {
+      await seedOthers();
+      const baseline = await rowCounts();
+      const u = await seedAccount(storage(), { email: 'u@example.fr' });
+
+      await repository.eraser.eraseAccount(u.userId);
+
+      expect(await rowCounts()).toEqual(baseline);
+    });
+
+    it('rolls back every deletion when the erasure fails midway', async () => {
+      await seedOthers();
+      const u = await seedAccount(storage(), { email: 'u@example.fr' });
+      const before = await rowCounts();
+      await database.pool.query(
+        `CREATE FUNCTION fail_user_erasure() RETURNS trigger LANGUAGE plpgsql AS
+         $$ BEGIN RAISE EXCEPTION 'boom'; END $$`,
+      );
+      await database.pool.query(
+        'CREATE TRIGGER fail_user_erasure BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION fail_user_erasure()',
+      );
+      try {
+        await expect(repository.eraser.eraseAccount(u.userId)).rejects.toThrow('boom');
+        expect(await rowCounts()).toEqual(before);
+      } finally {
+        await database.pool.query('DROP TRIGGER fail_user_erasure ON users');
+        await database.pool.query('DROP FUNCTION fail_user_erasure()');
+      }
+    });
   });
 });

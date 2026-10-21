@@ -29,6 +29,18 @@ export class InMemoryUserRepository implements UserRepository {
     return Promise.resolve(this.users.get(id) ?? null);
   }
 
+  /** For `InMemoryAccountEraser` only. */
+  eraseUser(id: string): void {
+    this.users.delete(id);
+  }
+
+  /** For `InMemoryAccountEraser` only. */
+  unverifiedCreatedBefore(date: Date): readonly User[] {
+    return [...this.users.values()].filter(
+      (user) => user.verifiedAt === null && user.createdAt < date,
+    );
+  }
+
   private find(matches: (user: User) => boolean): User | null {
     return [...this.users.values()].find(matches) ?? null;
   }
