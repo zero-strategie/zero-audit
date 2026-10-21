@@ -124,6 +124,22 @@ describe('runCli serve', () => {
     expect(server.calls).toEqual([{ host: '127.0.0.1', port: 4000 }]);
   });
 
+  it('warns that the console mailer is forbidden in production', async () => {
+    const run = capture();
+
+    await serve([], fakeServer(events), {}, run.io, { ZERO_AUDIT_MAILER: 'console' });
+
+    expect(run.err()).toContain('mailer console : interdit en production');
+  });
+
+  it('does not warn about the mailer by default', async () => {
+    const run = capture();
+
+    await serve([], fakeServer(events), {}, run.io);
+
+    expect(run.err()).not.toContain('mailer');
+  });
+
   it('prints an error and exits non-zero for an invalid port, without starting anything', async () => {
     const server = fakeServer(events);
     const run = capture();

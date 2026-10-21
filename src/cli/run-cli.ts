@@ -19,6 +19,7 @@ import {
   type MigrateConfig,
   type ServeConfig,
 } from './config.js';
+import { CONSOLE_MAILER_WARNING } from './mailer-factory.js';
 import { createRunAudit } from './audit-factory.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
@@ -130,6 +131,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
   let server: HttpServer | null = null;
   let runner: AuditRunner | null = null;
   try {
+    if (config.mail.kind === 'console') io.stderr(`Avertissement, ${CONSOLE_MAILER_WARNING}\n`);
     const opened = await (hooks.storageFactory ?? createStorage)(config);
     storage = opened;
     hooks.onStorageOpened?.(opened);
