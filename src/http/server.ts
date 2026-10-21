@@ -18,6 +18,7 @@ import { CompareSnapshots } from '../application/compare-snapshots.js';
 import { GetAuditProgress } from '../application/get-audit-progress.js';
 import { GetSnapshotReport } from '../application/get-snapshot-report.js';
 import { LaunchAudit } from '../application/launch-audit.js';
+import { LaunchQuota } from '../application/launch-quota.js';
 import { ListIssues } from '../application/list-issues.js';
 import { ListOccurrences } from '../application/list-occurrences.js';
 import { ListPages } from '../application/list-pages.js';
@@ -57,6 +58,8 @@ export interface ServerDependencies {
   readonly hostResolver: HostResolver;
   /** Turns the SSRF pre-check of `POST /audits` off (`ZERO_AUDIT_ALLOW_PRIVATE_TARGETS`). */
   readonly allowPrivateTargets: boolean;
+  /** Ceiling of audits launched through the API per 24 hours, all accounts together. */
+  readonly launchesPerDay: number;
   readonly users: UserRepository;
   readonly sessions: SessionRepository;
   readonly emailTokens: EmailTokenRepository;
@@ -78,7 +81,7 @@ export interface HttpServer {
   close(): Promise<void>;
 }
 
-const buildAuthUseCases = (dependencies: ServerDependencies): AuthUseCases => {
+const buildAuthUseCases = (dependencies: ServerDependencies, quota: LaunchQuota): AuthUseCases => {
   const { users, sessions, passwordHasher, mailer, clock, adminEmails, rateLimiter } = dependencies;
   const sendVerificationLink = new SendVerificationLink(dependencies);
   const openSession = new OpenSession(dependencies);
@@ -96,7 +99,7 @@ const buildAuthUseCases = (dependencies: ServerDependencies): AuthUseCases => {
     verifyEmail: new VerifyEmail({ ...dependencies, openSession }),
     login: new Login({ users, passwordHasher, openSession, rateLimiter }),
     logout: new Logout({ resolveSession, sessions }),
-    getCurrentAccount: new GetCurrentAccount({ resolveSession, adminEmails }),
+    getCurrentAccount: new GetCurrentAccount({ resolveSession, adminEmails, quota }),
     requestPasswordReset: new RequestPasswordReset(dependencies),
     confirmPasswordReset: new ConfirmPasswordReset(dependencies),
     deleteAccount: new DeleteAccount({ ...dependencies, resolveSession }),
@@ -108,6 +111,11 @@ export const buildServer = (dependencies: ServerDependencies): FastifyInstance =
   const { projects, snapshots, health, auditRunner, hostResolver, allowPrivateTargets } =
     dependencies;
   const app = Fastify();
+  const quota = new LaunchQuota({
+    snapshots,
+    clock: dependencies.clock,
+    launchesPerDay: dependencies.launchesPerDay,
+  });
   const readerOf = buildReaderOf(
     new ResolveReader({
       resolveSession: new ResolveSession(dependencies),
@@ -115,7 +123,7 @@ export const buildServer = (dependencies: ServerDependencies): FastifyInstance =
     }),
   );
   registerErrorHandlers(app);
-  registerAuthRoutes(app, buildAuthUseCases(dependencies));
+  registerAuthRoutes(app, buildAuthUseCases(dependencies, quota));
   registerProjectRoutes(
     app,
     {
@@ -132,9 +140,11 @@ export const buildServer = (dependencies: ServerDependencies): FastifyInstance =
     },
     readerOf,
   );
-  registerAuditRoutes(app, {
-    launchAudit: new LaunchAudit(auditRunner, hostResolver, allowPrivateTargets),
-  });
+  registerAuditRoutes(
+    app,
+    { launchAudit: new LaunchAudit(auditRunner, hostResolver, allowPrivateTargets, quota) },
+    readerOf,
+  );
   registerIssueRoutes(
     app,
     {

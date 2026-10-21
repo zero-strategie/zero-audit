@@ -147,7 +147,7 @@ describe('POST /auth/logout and GET /auth/me', () => {
     const adminMe = await admin.get('/auth/me', { 'x-session-id': adminSession.sessionId });
     const regularMe = await regular.get('/auth/me', { 'x-session-id': regularSession.sessionId });
 
-    expect(adminMe.json()).toEqual({ email: 'alice@exemple.test', isAdmin: true });
-    expect(regularMe.json()).toEqual({ email: 'alice@exemple.test', isAdmin: false });
+    expect(adminMe.json()).toMatchObject({ email: 'alice@exemple.test', isAdmin: true });
+    expect(regularMe.json()).toMatchObject({ email: 'alice@exemple.test', isAdmin: false });
   });
 });

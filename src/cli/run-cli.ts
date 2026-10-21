@@ -187,6 +187,7 @@ const serve = async (config: ServeConfig, io: CliIo, hooks: CliHooks): Promise<n
       clock,
       publicUrl: config.mail.publicUrl ?? DEFAULT_PUBLIC_URL,
       adminEmails: config.adminEmails,
+      launchesPerDay: config.launchesPerDay,
     });
     hooks.onServerStarted?.(server);
     await server.listen({ host: config.host, port: config.port });

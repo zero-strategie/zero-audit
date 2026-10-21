@@ -43,6 +43,8 @@ export interface ServeConfig extends StoreSelection {
   mail: MailConfig;
   /** Normalized with `normalizeEmail`. */
   adminEmails: string[];
+  /** Ceiling of audits launched through the API per 24 hours, all accounts together. */
+  launchesPerDay: number;
 }
 
 export interface MigrateConfig extends StoreSelection {
@@ -63,6 +65,7 @@ export const DEFAULT_LIMIT = 100;
 export const DEFAULT_DELAY_MS = 1000;
 export const DEFAULT_HOST = '127.0.0.1';
 export const DEFAULT_PORT = 3000;
+export const DEFAULT_LAUNCHES_PER_DAY = 30;
 export const DEFAULT_DB_PATH = './.zero-audit/audit.db';
 
 const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
@@ -73,6 +76,7 @@ const MAILER_ENV = 'ZERO_AUDIT_MAILER';
 const BREVO_API_KEY_ENV = 'ZERO_AUDIT_BREVO_API_KEY';
 const MAIL_FROM_ENV = 'ZERO_AUDIT_MAIL_FROM';
 const ADMIN_EMAILS_ENV = 'ZERO_AUDIT_ADMIN_EMAILS';
+const LAUNCHES_PER_DAY_ENV = 'ZERO_AUDIT_LAUNCHES_PER_DAY';
 const PUBLIC_URL_ENV = 'ZERO_AUDIT_PUBLIC_URL';
 const HOST_ENV = 'HOST';
 const PORT_ENV = 'PORT';
@@ -231,6 +235,11 @@ const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfi
     delayMs: parseInteger(env[DELAY_ENV] ?? String(DEFAULT_DELAY_MS), DELAY_ENV, 0),
     mail: parseMail(env),
     adminEmails: parseAdminEmails(env[ADMIN_EMAILS_ENV]),
+    launchesPerDay: parseInteger(
+      env[LAUNCHES_PER_DAY_ENV] ?? String(DEFAULT_LAUNCHES_PER_DAY),
+      LAUNCHES_PER_DAY_ENV,
+      1,
+    ),
     ...parseStore(values.store, env),
   };
 };

@@ -156,6 +156,7 @@ const describeMatrix = (
         auditRunner: runner,
         hostResolver: new FakeHostResolver(),
         allowPrivateTargets: false,
+        launchesPerDay: 30,
         adminEmails: [ADMIN_EMAIL],
       });
     });

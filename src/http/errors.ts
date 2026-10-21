@@ -11,6 +11,7 @@ import {
   MailerUnavailable,
   PrivateAddressRejected,
   ProjectNotFound,
+  QuotaExceeded,
   SnapshotNotFinished,
   SnapshotNotFound,
   SnapshotsFromDifferentProjects,
@@ -26,6 +27,7 @@ export type ApiErrorCode =
   | 'forbidden'
   | 'conflict'
   | 'too_many_attempts'
+  | 'quota_exceeded'
   | 'unavailable'
   | 'internal_error';
 
@@ -55,7 +57,19 @@ const EMAIL_NOT_VERIFIED_MESSAGE = "Confirmez d'abord votre adresse e-mail";
 const INVALID_TOKEN_MESSAGE = 'Ce lien est invalide ou a expiré';
 const AUDIT_IN_PROGRESS_MESSAGE = 'Un audit est en cours, réessayez à la fin';
 const TOO_MANY_ATTEMPTS_MESSAGE = 'Trop de tentatives, réessayez dans quelques minutes';
+const GLOBAL_QUOTA_MESSAGE =
+  "Le service a atteint sa limite quotidienne d'audits, réessayez dans quelques heures";
 const SIGN_UP_UNAVAILABLE_MESSAGE = 'Les inscriptions sont momentanément indisponibles';
+
+const quotaMessage = ({ denial }: QuotaExceeded): string => {
+  if (denial.reason === 'pages') {
+    return `Votre compte permet ${String(denial.maxPages)} pages par audit`;
+  }
+  if (denial.reason === 'account') {
+    return `Votre quota d'audits est atteint : prochain audit possible à ${denial.nextAvailableAt.toISOString()}`;
+  }
+  return GLOBAL_QUOTA_MESSAGE;
+};
 
 /** Message of a body validation failure, in French for the fields filled in by visitors. */
 const validationMessage = (error: FastifyError): string => {
@@ -86,6 +100,7 @@ export const errorResponseSchema = {
             'forbidden',
             'conflict',
             'too_many_attempts',
+            'quota_exceeded',
             'unavailable',
             'internal_error',
           ],
@@ -145,6 +160,9 @@ export const registerErrorHandlers = (app: FastifyInstance): void => {
     }
     if (error instanceof TooManyAttempts) {
       return send(reply, HTTP_TOO_MANY_REQUESTS, 'too_many_attempts', TOO_MANY_ATTEMPTS_MESSAGE);
+    }
+    if (error instanceof QuotaExceeded) {
+      return send(reply, HTTP_TOO_MANY_REQUESTS, 'quota_exceeded', quotaMessage(error));
     }
     if (error instanceof AuditInProgress) {
       return send(reply, HTTP_CONFLICT, 'conflict', AUDIT_IN_PROGRESS_MESSAGE);

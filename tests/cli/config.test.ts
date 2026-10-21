@@ -122,6 +122,7 @@ describe('parseCommand subcommands', () => {
       delayMs: 1000,
       mail: { kind: 'disabled', from: 'no-reply@agents.zero-strategie.dev', publicUrl: null },
       adminEmails: [],
+      launchesPerDay: 30,
     });
   });
 
@@ -325,5 +326,27 @@ describe('parseCommand administrator addresses', () => {
 
     expect(command).toMatchObject({ kind: 'usage-error' });
     expect(JSON.stringify(command)).toContain('ZERO_AUDIT_ADMIN_EMAILS');
+  });
+});
+
+describe('parseCommand serve: ZERO_AUDIT_LAUNCHES_PER_DAY', () => {
+  const launchesOf = (env: Record<string, string>) => {
+    const command = parseCommand(['serve'], env);
+    return command.kind === 'serve' ? command.launchesPerDay : command;
+  };
+
+  it('defaults to 30 launches per day', () => {
+    expect(launchesOf({})).toBe(30);
+  });
+
+  it('reads a positive integer', () => {
+    expect(launchesOf({ ZERO_AUDIT_LAUNCHES_PER_DAY: '12' })).toBe(12);
+  });
+
+  it.each(['0', '-3', 'many', '2.5', ''])('refuses %j, naming the variable', (value) => {
+    const command = parseCommand(['serve'], { ZERO_AUDIT_LAUNCHES_PER_DAY: value });
+
+    expect(command).toMatchObject({ kind: 'usage-error' });
+    expect(JSON.stringify(command)).toContain('ZERO_AUDIT_LAUNCHES_PER_DAY');
   });
 });

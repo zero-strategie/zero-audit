@@ -101,8 +101,14 @@ const meSchema = {
   response: {
     200: {
       type: 'object',
-      required: ['email', 'isAdmin'],
-      properties: { email: { type: 'string' }, isAdmin: { type: 'boolean' } },
+      required: ['email', 'isAdmin', 'pagesLimitMax', 'auditsRemaining', 'nextAuditAt'],
+      properties: {
+        email: { type: 'string' },
+        isAdmin: { type: 'boolean' },
+        pagesLimitMax: { type: 'integer' },
+        auditsRemaining: { type: ['integer', 'null'] },
+        nextAuditAt: { type: ['string', 'null'] },
+      },
     },
     401: errorResponseSchema,
   },

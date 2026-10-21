@@ -57,20 +57,39 @@ describe('Logout', () => {
   });
 });
 
+const FREE_QUOTA = { pagesLimitMax: 100, auditsRemaining: 3, nextAuditAt: null };
+const quotaOf = (status = FREE_QUOTA) => ({ statusOf: () => Promise.resolve(status) });
+
 describe('GetCurrentAccount', () => {
   it('returns the e-mail and flags administrators case-insensitively', async () => {
     const { first, resolveSession } = await setup();
 
-    const admin = new GetCurrentAccount({ resolveSession, adminEmails: ['alice@exemple.test'] });
-    const other = new GetCurrentAccount({ resolveSession, adminEmails: ['bob@exemple.test'] });
+    const admin = new GetCurrentAccount({
+      resolveSession,
+      quota: quotaOf(),
+      adminEmails: ['alice@exemple.test'],
+    });
+    const other = new GetCurrentAccount({
+      resolveSession,
+      quota: quotaOf(),
+      adminEmails: ['bob@exemple.test'],
+    });
 
-    expect(await admin.execute(first)).toEqual({ email: 'alice@exemple.test', isAdmin: true });
-    expect(await other.execute(first)).toEqual({ email: 'alice@exemple.test', isAdmin: false });
+    expect(await admin.execute(first)).toEqual({
+      email: 'alice@exemple.test',
+      isAdmin: true,
+      ...FREE_QUOTA,
+    });
+    expect(await other.execute(first)).toEqual({
+      email: 'alice@exemple.test',
+      isAdmin: false,
+      ...FREE_QUOTA,
+    });
   });
 
   it('is refused without a valid session', async () => {
     const { resolveSession } = await setup();
-    const current = new GetCurrentAccount({ resolveSession, adminEmails: [] });
+    const current = new GetCurrentAccount({ resolveSession, quota: quotaOf(), adminEmails: [] });
 
     await expect(current.execute(undefined)).rejects.toThrow(Unauthenticated);
   });
