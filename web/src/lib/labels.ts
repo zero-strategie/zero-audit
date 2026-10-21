@@ -35,6 +35,7 @@ export const SEVERITY_GROUP_LABELS = {
 } as const;
 
 export const SNAPSHOT_STATUS_LABELS = {
+  queued: 'en file',
   running: 'en cours',
   finished: 'terminé',
   failed: 'échoué',

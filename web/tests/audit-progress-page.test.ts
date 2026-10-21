@@ -78,3 +78,60 @@ it('shows no relaunch form to an anonymous visitor of a failed audit', async () 
   expect(html).not.toContain('Relancer');
   expect(html).not.toContain('action="/audits/new"');
 });
+
+it('shows the queue position of a queued audit with a refresh', async () => {
+  const html = await (
+    await render(
+      Promise.resolve(anAuditProgress({ status: 'queued', pagesCrawled: 0, queuePosition: 2 })),
+    )
+  ).text();
+
+  expect(html).toContain('En file d&#39;attente — position 2');
+  expect(html).toContain('<meta http-equiv="refresh" content="3">');
+  expect(html).not.toContain('Audit interrompu');
+  expect(html).not.toContain('Reprise en cours');
+  expect(html).not.toContain('a échoué');
+});
+
+it('announces the resumption of a running audit on its second attempt', async () => {
+  const html = await (await render(Promise.resolve(anAuditProgress({ attempts: 2 })))).text();
+
+  expect(html).toContain('Reprise en cours (tentative 2/2)');
+  expect(html).toContain('<meta http-equiv="refresh" content="3">');
+});
+
+it('shows both the position and the resumption for a requeued audit', async () => {
+  const html = await (
+    await render(
+      Promise.resolve(
+        anAuditProgress({ status: 'queued', pagesCrawled: 0, queuePosition: 1, attempts: 2 }),
+      ),
+    )
+  ).text();
+
+  expect(html).toContain('position 1');
+  expect(html).toContain('Reprise en cours (tentative 2/2)');
+});
+
+it.each(['running', 'queued'] as const)(
+  'mentions no resumption for a first attempt (%s)',
+  async (status) => {
+    const html = await (
+      await render(
+        Promise.resolve(anAuditProgress({ status, queuePosition: status === 'queued' ? 3 : null })),
+      )
+    ).text();
+
+    expect(html).not.toContain('Reprise en cours');
+  },
+);
+
+it('adds no script to the progress page', async () => {
+  const html = await (
+    await render(
+      Promise.resolve(anAuditProgress({ status: 'queued', queuePosition: 2, attempts: 2 })),
+    )
+  ).text();
+
+  expect(html).not.toContain('<script');
+});

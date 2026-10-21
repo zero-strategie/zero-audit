@@ -47,6 +47,9 @@ const { projects, canRelaunch } = Astro.props;
             {latestRun?.status === 'running' && (
               <a class="chip chip-running" href={`/audits/${latestRun.id}`}>en cours…</a>
             )}
+            {latestRun?.status === 'queued' && (
+              <a class="chip chip-queued" href={`/audits/${latestRun.id}`}>en file</a>
+            )}
             {latestRun?.status === 'failed' && <span class="chip chip-failed">échoué</span>}
           </td>
           {canRelaunch && (

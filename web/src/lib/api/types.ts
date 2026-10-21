@@ -15,7 +15,7 @@ export interface ProjectOverview {
   latestRun: { id: string; status: SnapshotStatus; startedAt: string } | null;
 }
 
-export type SnapshotStatus = 'running' | 'finished' | 'failed';
+export type SnapshotStatus = 'queued' | 'running' | 'finished' | 'failed';
 
 export interface StartedAudit {
   snapshotId: string;
@@ -28,6 +28,10 @@ export interface AuditProgress {
   pagesLimit: number;
   startedAt: string;
   rootUrl: string;
+  /** 1-based rank in the waiting line, `null` once the audit has been picked up. */
+  queuePosition: number | null;
+  /** Crawl attempts started so far: above 1, the audit is being resumed after an interruption. */
+  attempts: number;
 }
 
 export interface Score {

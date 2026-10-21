@@ -162,6 +162,8 @@ export const anAuditProgress = (overrides: Partial<AuditProgress> = {}): AuditPr
   pagesLimit: 100,
   startedAt: '2026-03-05T09:00:00.000Z',
   rootUrl: 'https://alpha.test/',
+  queuePosition: null,
+  attempts: 1,
   ...overrides,
 });
 
