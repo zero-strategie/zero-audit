@@ -47,6 +47,13 @@ export class SqliteUserRepository implements UserRepository {
     return Promise.resolve(this.findOne('email', email));
   }
 
+  markVerified(id: string, verifiedAt: Date): Promise<void> {
+    this.db
+      .prepare('UPDATE users SET verified_at = ? WHERE id = ?')
+      .run(verifiedAt.toISOString(), id);
+    return Promise.resolve();
+  }
+
   findById(id: string): Promise<User | null> {
     return Promise.resolve(this.findOne('id', id));
   }

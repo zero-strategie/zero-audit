@@ -33,6 +33,16 @@ export const describeUserRepositoryContract = (
       expect(await users.findById(created.id)).toEqual(created);
     });
 
+    it('records the verification date of an account', async () => {
+      const users = await factory();
+      const created = await users.create({ email: 'a@x.fr', passwordHash: 'h', createdAt });
+      const verifiedAt = new Date('2026-01-02T08:30:00.456Z');
+
+      await users.markVerified(created.id, verifiedAt);
+
+      expect(await users.findById(created.id)).toEqual({ ...created, verifiedAt });
+    });
+
     it('returns null for an unknown e-mail or id', async () => {
       const users = await factory();
       expect(await users.findByEmail('nobody@example.fr')).toBeNull();

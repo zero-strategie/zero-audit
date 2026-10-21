@@ -19,6 +19,12 @@ export class InMemoryUserRepository implements UserRepository {
     return Promise.resolve(this.find((user) => user.email === email));
   }
 
+  markVerified(id: string, verifiedAt: Date): Promise<void> {
+    const user = this.users.get(id);
+    if (user) this.users.set(id, { ...user, verifiedAt });
+    return Promise.resolve();
+  }
+
   findById(id: string): Promise<User | null> {
     return Promise.resolve(this.users.get(id) ?? null);
   }

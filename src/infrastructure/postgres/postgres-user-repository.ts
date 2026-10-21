@@ -46,6 +46,10 @@ export class PostgresUserRepository implements UserRepository {
     return this.findOne('email', email);
   }
 
+  async markVerified(id: string, verifiedAt: Date): Promise<void> {
+    await this.pool.query('UPDATE users SET verified_at = $1 WHERE id = $2', [verifiedAt, id]);
+  }
+
   findById(id: string): Promise<User | null> {
     return this.findOne('id', id);
   }
