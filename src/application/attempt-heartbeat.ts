@@ -10,7 +10,7 @@ export class AttemptHeartbeat {
   private lastPages = 0;
   private lastAt: number;
   private pending: Promise<void> = Promise.resolve();
-  private failure: unknown = null;
+  private failure: Error | null = null;
 
   constructor(
     private readonly queue: AuditQueue,
@@ -33,7 +33,7 @@ export class AttemptHeartbeat {
       this.queue
         .heartbeat(this.snapshot.id, this.snapshot.attempts, crawled, new Date(now))
         .catch((error: unknown) => {
-          this.failure ??= error;
+          this.failure ??= error instanceof Error ? error : new Error(String(error));
         }),
     );
   }
