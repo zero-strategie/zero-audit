@@ -18,9 +18,81 @@ describe('parseCommand defaults', () => {
       delayMs: 1000,
       dbPath: './.zero-audit/audit.db',
       jsonPath: null,
+      mode: 'queue',
       store: 'sqlite',
       databaseUrl: null,
     });
+  });
+});
+
+describe('parseCommand audit mode', () => {
+  it('waits for the worker with --wait', () => {
+    expect(auditConfig([URL_ARG, '--wait']).mode).toBe('wait');
+  });
+
+  it('crawls in the process with --direct', () => {
+    expect(auditConfig([URL_ARG, '--direct']).mode).toBe('direct');
+  });
+
+  it('rejects --wait together with --direct', () => {
+    expect(parseCommand([URL_ARG, '--wait', '--direct'], {}).kind).toBe('usage-error');
+  });
+
+  it('rejects an unknown flag', () => {
+    expect(parseCommand([URL_ARG, '--bogus'], {}).kind).toBe('usage-error');
+  });
+});
+
+describe('parseCommand worker', () => {
+  it('defaults to one audit at a time, the SSRF guard on and the default storage', () => {
+    expect(parseCommand(['worker'], {})).toEqual({
+      kind: 'worker',
+      concurrency: 1,
+      allowPrivateTargets: false,
+      delayMs: 1000,
+      dbPath: './.zero-audit/audit.db',
+      store: 'sqlite',
+      databaseUrl: null,
+    });
+  });
+
+  it('reads the concurrency, the delay and the private-target switch from the environment', () => {
+    expect(
+      parseCommand(['worker'], {
+        ZERO_AUDIT_WORKER_CONCURRENCY: '3',
+        ZERO_AUDIT_DELAY_MS: '250',
+        ZERO_AUDIT_ALLOW_PRIVATE_TARGETS: 'true',
+      }),
+    ).toMatchObject({ concurrency: 3, delayMs: 250, allowPrivateTargets: true });
+  });
+
+  it.each(['0', '-1', '1.5', 'abc', ''])('rejects the concurrency "%s"', (value) => {
+    const command = parseCommand(['worker'], { ZERO_AUDIT_WORKER_CONCURRENCY: value });
+
+    expect(command).toMatchObject({ kind: 'usage-error' });
+    expect(command.kind === 'usage-error' && command.message).toContain(
+      'ZERO_AUDIT_WORKER_CONCURRENCY',
+    );
+  });
+});
+
+describe('parseCommand worker-health', () => {
+  it('uses the storage selection and the concurrency of the worker', () => {
+    expect(
+      parseCommand(['worker-health', '--db', 'x.db'], { ZERO_AUDIT_WORKER_CONCURRENCY: '2' }),
+    ).toEqual({
+      kind: 'worker-health',
+      concurrency: 2,
+      dbPath: 'x.db',
+      store: 'sqlite',
+      databaseUrl: null,
+    });
+  });
+
+  it('rejects an invalid concurrency', () => {
+    expect(
+      parseCommand(['worker-health'], { ZERO_AUDIT_WORKER_CONCURRENCY: '0' }).kind,
+    ).toBe('usage-error');
   });
 });
 
