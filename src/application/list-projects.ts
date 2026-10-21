@@ -30,7 +30,7 @@ export class ListProjects {
   ) {}
 
   async execute(): Promise<ProjectOverview[]> {
-    const projects = await this.projects.list();
+    const projects = await this.projects.list(null);
     return Promise.all(projects.map((project) => this.overview(project)));
   }
 

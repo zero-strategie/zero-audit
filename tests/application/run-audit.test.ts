@@ -223,7 +223,7 @@ describe('RunAudit', () => {
 
       const details = await audit(useCase, 'https://x.test');
 
-      const [project] = await projects.list();
+      const [project] = await projects.list(null);
       expect(project).toMatchObject({ rootUrl: 'https://x.test/', createdAt: new Date(FIXED_NOW) });
       expect(details.snapshot.projectId).toBe(project?.id);
     });
@@ -235,7 +235,7 @@ describe('RunAudit', () => {
       const second = await audit(useCase, 'https://x.test/');
 
       expect(second.snapshot.projectId).toBe(first.snapshot.projectId);
-      expect(await projects.list()).toHaveLength(1);
+      expect(await projects.list(null)).toHaveLength(1);
     });
 
     it.each(['http://x.test/', 'https://www.x.test/'])(
@@ -247,7 +247,7 @@ describe('RunAudit', () => {
         const other = await audit(useCase, variant);
 
         expect(other.snapshot.projectId).not.toBe(base.snapshot.projectId);
-        expect(await projects.list()).toHaveLength(2);
+        expect(await projects.list(null)).toHaveLength(2);
       },
     );
   });

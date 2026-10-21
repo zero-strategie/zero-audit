@@ -225,7 +225,7 @@ describe('runCli storage wiring', () => {
       expect(code).toBe(0);
       const storage = await createStorage(spy.configs[0] as StorageConfig);
       try {
-        const projects = await storage.projects.list();
+        const projects = await storage.projects.list(null);
         const project = projects.find(({ rootUrl }) => rootUrl.startsWith(server.baseUrl));
         expect(project).toBeDefined();
         const snapshot = await storage.snapshots.getById(snapshotId);

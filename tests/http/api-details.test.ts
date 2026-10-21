@@ -52,7 +52,7 @@ describe('read-only HTTP API: issues, pages, compare and checks', () => {
   };
 
   const newProject = (rootUrl: string) =>
-    projects.findOrCreateByRootUrl({ rootUrl, createdAt: minutes(0) });
+    projects.findOrCreateByRootUrl({ ownerId: null, rootUrl, createdAt: minutes(0) });
 
   const expectError = (
     response: { statusCode: number; json: () => unknown },

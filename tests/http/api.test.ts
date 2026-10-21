@@ -55,7 +55,7 @@ describe('read-only HTTP API', () => {
   };
 
   const newProject = (rootUrl: string, createdAt = minutes(0)) =>
-    projects.findOrCreateByRootUrl({ rootUrl, createdAt });
+    projects.findOrCreateByRootUrl({ ownerId: null, rootUrl, createdAt });
 
   beforeEach(() => {
     projects = new InMemoryProjectRepository();

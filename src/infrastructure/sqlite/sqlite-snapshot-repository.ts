@@ -18,6 +18,7 @@ import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
+import { SqliteUserRepository } from './sqlite-user-repository.js';
 import { migrate } from './migrate.js';
 import { openDatabase } from './open-database.js';
 
@@ -155,9 +156,11 @@ const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
 
 export class SqliteSnapshotRepository implements SnapshotRepository {
   readonly projects: SqliteProjectRepository;
+  readonly users: SqliteUserRepository;
 
   private constructor(private readonly db: SqliteDatabase) {
     this.projects = new SqliteProjectRepository(db);
+    this.users = new SqliteUserRepository(db);
   }
 
   static open(path: string): SqliteSnapshotRepository {

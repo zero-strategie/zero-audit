@@ -27,6 +27,7 @@ const build = async () => {
   const repository = new InMemorySnapshotRepository();
   const projects = new InMemoryProjectRepository();
   const project = await projects.findOrCreateByRootUrl({
+    ownerId: null,
     rootUrl: ROOT_URL,
     createdAt: minutes(0),
   });

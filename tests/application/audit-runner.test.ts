@@ -60,6 +60,7 @@ class Harness {
       if (this.failBeforeCreation) throw this.failBeforeCreation;
       const startedAt = new Date(this.now);
       const project = await this.projects.findOrCreateByRootUrl({
+        ownerId: null,
         rootUrl: request.rootUrl,
         createdAt: startedAt,
       });
@@ -131,6 +132,7 @@ describe('AuditRunner.start locking', () => {
   it('rejects with the start date of a running snapshot created less than 6 hours ago elsewhere', async () => {
     const harness = new Harness();
     const project = await harness.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: ROOT,
       createdAt: new Date(NOW),
     });
@@ -147,6 +149,7 @@ describe('AuditRunner.start locking', () => {
   it('starts when the running snapshot is older than 6 hours', async () => {
     const harness = new Harness();
     const project = await harness.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: ROOT,
       createdAt: new Date(NOW),
     });
@@ -234,6 +237,7 @@ describe('AuditRunner.progress', () => {
   it('reports 0 pages for a running snapshot created by another process', async () => {
     const harness = new Harness();
     const project = await harness.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: ROOT,
       createdAt: new Date(NOW),
     });

@@ -34,6 +34,7 @@ export class RunAudit {
     const startedAt = new Date(clock.now());
     const project = await projects.findOrCreateByRootUrl({
       rootUrl: normalizeUrl(request.rootUrl),
+      ownerId: null,
       createdAt: startedAt,
     });
     const snapshot = await repository.create({

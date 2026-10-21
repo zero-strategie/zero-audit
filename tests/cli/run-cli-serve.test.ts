@@ -211,6 +211,7 @@ describe('runCli serve', () => {
       databaseUrl: null,
     });
     const project = await seeded.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: 'https://exemple.com/',
       createdAt: new Date(),
     });

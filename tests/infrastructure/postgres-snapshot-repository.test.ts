@@ -13,10 +13,17 @@ import {
   type TestDatabase,
 } from '../support/postgres-test-database.js';
 import { describeSnapshotRepositoryContract } from '../support/snapshot-repository-contract.js';
+import { describeUserRepositoryContract } from '../support/user-repository-contract.js';
 
 const startedAt = new Date('2026-01-01T10:00:00.123Z');
+
+interface ProjectRow {
+  id: string;
+  root_url: string;
+  owner_id: string | null;
+}
 const CONTENT_TABLES =
-  'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects';
+  'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects, email_tokens, sessions, users';
 
 const readMigration = (file: string): string =>
   readFileSync(
@@ -55,7 +62,11 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     snapshots: repository,
     projects: repository.projects,
   }));
-  describeProjectRepositoryContract(() => repository.projects);
+  describeProjectRepositoryContract(() => ({
+    projects: repository.projects,
+    users: repository.users,
+  }));
+  describeUserRepositoryContract(() => repository.users);
 
   describe('ping', () => {
     it('resolves when the database answers', async () => {
@@ -72,6 +83,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
 
   const createRunning = async (): Promise<string> => {
     const project = await repository.projects.findOrCreateByRootUrl({
+      ownerId: null,
       rootUrl: 'https://x.test/',
       createdAt: startedAt,
     });
@@ -157,7 +169,8 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       const columnsOf = async (): Promise<unknown[]> => {
         const { rows } = await legacy.pool.query<Record<string, string>>(
           `SELECT table_name, column_name, data_type FROM information_schema.columns
-           WHERE table_schema = current_schema() AND table_name <> 'slash_probes' AND column_name <> 'text_ratio'
+           WHERE table_schema = current_schema() AND table_name NOT IN ('slash_probes', 'users', 'sessions', 'email_tokens')
+             AND column_name NOT IN ('text_ratio', 'owner_id', 'launched_by')
            ORDER BY table_name, column_name`,
         );
         return rows;
@@ -168,7 +181,12 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
 
       expect(await columnsOf()).toEqual(before);
       const versions = await legacy.pool.query('SELECT version FROM schema_migrations ORDER BY 1');
-      expect(versions.rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      expect(versions.rows).toEqual([
+        { version: 1 },
+        { version: 2 },
+        { version: 3 },
+        { version: 4 },
+      ]);
       await expect(legacy.pool.query('SELECT * FROM slash_probes')).resolves.toBeDefined();
     } finally {
       await legacy.dispose();
@@ -204,7 +222,53 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         is_nullable: 'YES',
       });
       const versions = await legacy.pool.query('SELECT version FROM schema_migrations ORDER BY 1');
-      expect(versions.rows).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      expect(versions.rows).toEqual([
+        { version: 1 },
+        { version: 2 },
+        { version: 3 },
+        { version: 4 },
+      ]);
+    } finally {
+      await legacy.dispose();
+    }
+  });
+  it('replaces the unique root_url constraint by two partial indexes without touching rows', async () => {
+    const legacy = await createTestDatabase(TEST_DATABASE_URL ?? '');
+    try {
+      for (const file of ['001_init.sql', '002_slash_probes.sql', '003_page_text_ratio.sql']) {
+        await legacy.pool.query(readMigration(file));
+      }
+      await legacy.pool.query(
+        'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+      );
+      await legacy.pool.query('INSERT INTO schema_migrations (version) VALUES (1), (2), (3)');
+      await legacy.pool.query(
+        `INSERT INTO projects (id, root_url, created_at) VALUES ('p1', 'https://a.test/', now()), ('p2', 'https://b.test/', now())`,
+      );
+      const rowsBefore = (await legacy.pool.query<ProjectRow>('SELECT * FROM projects ORDER BY id'))
+        .rows;
+
+      await migrate(legacy.pool);
+
+      const constraints = await legacy.pool.query(
+        `SELECT conname FROM pg_constraint WHERE conname = 'projects_root_url_key'`,
+      );
+      const indexes = await legacy.pool.query<{ indexdef: string }>(
+        `SELECT indexdef FROM pg_indexes
+         WHERE schemaname = current_schema() AND tablename = 'projects' AND indexdef LIKE '%UNIQUE%WHERE%'
+         ORDER BY indexname`,
+      );
+      const rowsAfter = (await legacy.pool.query<ProjectRow>('SELECT * FROM projects ORDER BY id'))
+        .rows;
+      expect(constraints.rows).toEqual([]);
+      expect(indexes.rows.map(({ indexdef }) => indexdef.replace(/^.* WHERE /, ''))).toEqual([
+        '(owner_id IS NOT NULL)',
+        '(owner_id IS NULL)',
+      ]);
+      expect(rowsAfter.map(({ owner_id: ownerId }) => ownerId)).toEqual([null, null]);
+      expect(rowsAfter.map(({ id, root_url: rootUrl }) => [id, rootUrl])).toEqual(
+        rowsBefore.map(({ id, root_url: rootUrl }) => [id, rootUrl]),
+      );
     } finally {
       await legacy.dispose();
     }

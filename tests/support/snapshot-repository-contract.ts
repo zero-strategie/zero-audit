@@ -77,6 +77,7 @@ export const describeSnapshotRepositoryContract = (
       const { snapshots: repo, projects } = await factory();
       const project = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://example.test/',
+        ownerId: null,
         createdAt: startedAt,
       });
       const snapshot = await repo.create({ projectId: project.id, pagesLimit: 100, startedAt });
@@ -343,6 +344,7 @@ export const describeSnapshotRepositoryContract = (
       const { snapshots, projects } = await factory();
       const project = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://example.test/',
+        ownerId: null,
         createdAt: startedAt,
       });
       const start = async (projectId: string, offsetMs: number) =>
@@ -365,6 +367,7 @@ export const describeSnapshotRepositoryContract = (
       const { snapshots, projects, project, start } = await setup();
       const other = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://other.test/',
+        ownerId: null,
         createdAt: startedAt,
       });
       const mine = await start(project.id, 1);
@@ -415,6 +418,7 @@ export const describeSnapshotRepositoryContract = (
       const { snapshots, projects, project, start } = await setup();
       const other = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://other.test/',
+        ownerId: null,
         createdAt: startedAt,
       });
       const mine = await start(project.id, 1);
