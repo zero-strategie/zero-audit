@@ -332,43 +332,129 @@ a.button-primary {
   color: var(--color-error-text);
 }
 
-/* Health gauge */
+/* Health gauge: an instrument dial. The needle (transform), the arc (stroke-dashoffset) and the
+   counter (--n) arrive together; the final state is in the markup, so it is complete at rest. */
 .health-gauge {
   position: relative;
-  width: 10rem;
-  height: 10rem;
+  width: 100%;
+  max-width: 19rem;
   margin: var(--space-3) 0;
+  view-transition-name: health-gauge;
 }
 
 .health-gauge svg {
+  display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
+  overflow: visible;
 }
 
 .gauge-track,
-.gauge-arc {
+.gauge-arc,
+.gauge-ticks,
+.gauge-ticks-major {
   fill: none;
-  stroke-width: 10;
 }
 
 .gauge-track {
-  stroke: var(--color-border);
+  stroke: var(--color-grid-major);
+  stroke-width: 14;
+}
+
+.gauge-ticks {
+  stroke: var(--color-text-muted);
+  stroke-width: 7;
+  stroke-dasharray: 0.35 4.65;
+}
+
+.gauge-ticks-major {
+  stroke: var(--color-text);
+  stroke-width: 12;
+  stroke-dasharray: 0.6 24.4;
 }
 
 .gauge-arc {
   stroke: var(--color-gauge-arc);
-  stroke-linecap: round;
+  stroke-width: 14;
+  animation: fill-arc var(--dur-long) var(--ease-needle) both;
 }
 
+.gauge-scale {
+  fill: var(--color-text-muted);
+  font-family: var(--font-data);
+  font-size: 9px;
+}
+
+.gauge-needle {
+  transform: rotate(calc(-135deg + var(--score) * 2.7deg));
+  transform-origin: 120px 120px;
+  animation: swing var(--dur-long) var(--ease-needle) both;
+}
+
+.gauge-needle line {
+  stroke: var(--color-text);
+  stroke-linecap: round;
+  stroke-width: 2.5;
+}
+
+.gauge-needle circle {
+  fill: var(--color-text);
+}
+
+.health-gauge[data-state='na'] .gauge-ticks-major,
+.health-gauge[data-state='na'] .gauge-needle {
+  opacity: 0.45;
+}
+
+.gauge-readout {
+  position: absolute;
+  inset: 52% 0 auto;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  pointer-events: none;
+}
+
+/* Fixed width and tabular digits: the counter repaints, it never moves the layout. */
+.gauge-value {
+  min-width: 3ch;
+  counter-reset: n var(--n);
+  font-size: clamp(3.4rem, 8vw, 4.8rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  text-align: center;
+  animation: count var(--dur-long) var(--ease-out) both;
+}
+
+.gauge-value::after {
+  content: counter(n) / '';
+}
+
+.gauge-value-na {
+  color: var(--color-text-muted);
+  animation: none;
+}
+
+.gauge-value-na::after {
+  content: none;
+}
+
+.gauge-trend {
+  color: var(--color-text-muted);
+  font-family: var(--font-data);
+  font-size: var(--text-xs);
+}
+
+/* The accessible label is the image's name; it stays in the DOM for non-CSS readers. */
 .gauge-label {
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-3);
-  font-size: 1.25rem;
-  text-align: center;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .variation-positive {
