@@ -10,4 +10,9 @@ export interface AccountEraser {
   eraseAccount(userId: string): Promise<void>;
   /** Erases every account still unverified and created strictly before `date`; returns their count. */
   purgeUnverifiedBefore(date: Date): Promise<number>;
+  /**
+   * Erasing an account keeps its launch journal (a hash of the address and a date) so that the
+   * audit quotas survive a delete-and-register loop; this drops the entries older than `date`.
+   */
+  purgeLaunchesBefore(date: Date): Promise<number>;
 }

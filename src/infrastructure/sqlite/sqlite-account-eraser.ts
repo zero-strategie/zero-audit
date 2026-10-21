@@ -45,6 +45,17 @@ export class SqliteAccountEraser implements AccountEraser {
     }
   }
 
+  purgeLaunchesBefore(date: Date): Promise<number> {
+    try {
+      const { changes } = this.db
+        .prepare('DELETE FROM api_launches WHERE launched_at < ?')
+        .run(date.toISOString());
+      return Promise.resolve(changes);
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
   private eraseOne(userId: string): void {
     for (const table of SNAPSHOT_CHILD_TABLES) {
       this.db.prepare(`DELETE FROM ${table} WHERE snapshot_id IN (${OWNED_SNAPSHOTS})`).run(userId);

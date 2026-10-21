@@ -7,10 +7,11 @@ import { InMemoryUserRepository } from '../../src/infrastructure/in-memory-user-
 import { describeAccountEraserContract } from '../support/account-eraser-contract.js';
 
 describeAccountEraserContract(() => {
+  const users = new InMemoryUserRepository();
   const stores = {
-    users: new InMemoryUserRepository(),
+    users,
     projects: new InMemoryProjectRepository(),
-    snapshots: new InMemorySnapshotRepository(),
+    snapshots: new InMemorySnapshotRepository(users),
     sessions: new InMemorySessionRepository(),
     emailTokens: new InMemoryEmailTokenRepository(),
   };

@@ -32,7 +32,7 @@ interface ProjectRow {
   owner_id: string | null;
 }
 const CONTENT_TABLES =
-  'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects, email_tokens, sessions, users';
+  'pages, links, site_files, host_probes, slash_probes, check_results, issue_occurrences, snapshots, projects, email_tokens, sessions, users, api_launches';
 
 const readMigration = (file: string): string =>
   readFileSync(
@@ -243,7 +243,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       const columnsOf = async (): Promise<unknown[]> => {
         const { rows } = await legacy.pool.query<Record<string, string>>(
           `SELECT table_name, column_name, data_type FROM information_schema.columns
-           WHERE table_schema = current_schema() AND table_name NOT IN ('slash_probes', 'users', 'sessions', 'email_tokens')
+           WHERE table_schema = current_schema() AND table_name NOT IN ('slash_probes', 'users', 'sessions', 'email_tokens', 'api_launches')
              AND column_name NOT IN ('text_ratio', 'owner_id', 'launched_by')
            ORDER BY table_name, column_name`,
         );
@@ -260,6 +260,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         { version: 2 },
         { version: 3 },
         { version: 4 },
+        { version: 5 },
       ]);
       await expect(legacy.pool.query('SELECT * FROM slash_probes')).resolves.toBeDefined();
     } finally {
@@ -301,6 +302,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         { version: 2 },
         { version: 3 },
         { version: 4 },
+        { version: 5 },
       ]);
     } finally {
       await legacy.dispose();

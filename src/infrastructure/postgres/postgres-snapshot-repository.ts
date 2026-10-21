@@ -17,6 +17,7 @@ import type {
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
+import { hashToken } from '../hash-token.js';
 import { withTransaction } from './pool.js';
 import { PostgresProjectRepository } from './postgres-project-repository.js';
 import { PostgresAccountEraser } from './postgres-account-eraser.js';
@@ -183,32 +184,51 @@ export class PostgresSnapshotRepository implements SnapshotRepository {
   }): Promise<Snapshot> {
     const { launchedBy, ...props } = input;
     const snapshot = Snapshot.start({ id: randomUUID(), ...props });
-    await this.pool.query(
-      `INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit)
-       VALUES ($1, $2, $3, $4, $5, 0, $6)`,
-      [
-        snapshot.id,
-        snapshot.projectId,
-        launchedBy,
-        snapshot.status,
-        snapshot.startedAt,
-        snapshot.pagesLimit,
-      ],
-    );
+    await withTransaction(this.pool, async (client) => {
+      await client.query(
+        `INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit)
+         VALUES ($1, $2, $3, $4, $5, 0, $6)`,
+        [
+          snapshot.id,
+          snapshot.projectId,
+          launchedBy,
+          snapshot.status,
+          snapshot.startedAt,
+          snapshot.pagesLimit,
+        ],
+      );
+      if (launchedBy === null) return;
+      const emailHash = await this.emailHashOf(client, launchedBy);
+      if (emailHash === null) return;
+      await client.query(
+        'INSERT INTO api_launches (id, email_hash, launched_at) VALUES ($1, $2, $3)',
+        [snapshot.id, emailHash, snapshot.startedAt],
+      );
+    });
     return snapshot;
   }
 
+  private async emailHashOf(db: pg.Pool | pg.PoolClient, userId: string): Promise<string | null> {
+    const { rows } = await db.query<{ email: string }>('SELECT email FROM users WHERE id = $1', [
+      userId,
+    ]);
+    const email = rows[0]?.email;
+    return email === undefined ? null : hashToken(email);
+  }
+
   async listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
-    const { rows } = await this.pool.query<{ started_at: Date }>(
-      'SELECT started_at FROM snapshots WHERE launched_by = $1 AND started_at >= $2 ORDER BY started_at',
-      [userId, since],
+    const emailHash = await this.emailHashOf(this.pool, userId);
+    if (emailHash === null) return [];
+    const { rows } = await this.pool.query<{ launched_at: Date }>(
+      'SELECT launched_at FROM api_launches WHERE email_hash = $1 AND launched_at >= $2 ORDER BY launched_at',
+      [emailHash, since],
     );
-    return rows.map((row) => row.started_at);
+    return rows.map((row) => row.launched_at);
   }
 
   async countApiLaunchedSince(since: Date): Promise<number> {
     const { rows } = await this.pool.query<{ n: string }>(
-      'SELECT COUNT(*) AS n FROM snapshots WHERE launched_by IS NOT NULL AND started_at >= $1',
+      'SELECT COUNT(*) AS n FROM api_launches WHERE launched_at >= $1',
       [since],
     );
     return Number(rows[0]?.n);

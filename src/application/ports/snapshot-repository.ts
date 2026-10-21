@@ -37,9 +37,12 @@ export interface SnapshotRepository {
   listByProject(projectId: string): Promise<readonly Snapshot[]>;
   /** Snapshots still `running`, every project included, most recent first. */
   listRunning(): Promise<readonly Snapshot[]>;
-  /** Start dates, oldest first, of the snapshots launched by the account since the date, whatever their status. */
+  /**
+   * Start dates, oldest first, of the launches since the date by the account's e-mail address,
+   * whatever their status. They come from a journal that outlives the account and its snapshots.
+   */
   listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]>;
-  /** Snapshots launched through the API (by any account) since the date; CLI launches are ignored. */
+  /** Launches through the API (by any account, erased or not) since the date; CLI launches are ignored. */
   countApiLaunchedSince(since: Date): Promise<number>;
   /** Latest `finished` snapshot of the project whose `startedAt` is strictly before the given date. */
   findPreviousFinished(projectId: string, beforeStartedAt: Date): Promise<Snapshot | null>;

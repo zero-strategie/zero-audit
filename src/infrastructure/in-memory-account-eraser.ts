@@ -19,10 +19,13 @@ export class InMemoryAccountEraser implements AccountEraser {
   async eraseAccount(userId: string): Promise<void> {
     const { users, projects, snapshots, sessions, emailTokens } = this.stores;
     snapshots.eraseOfProjects(projects.eraseOwnedBy(userId));
-    snapshots.unlinkLaunchesOf(userId);
     await sessions.deleteAllForUser(userId);
     emailTokens.eraseForUser(userId);
     users.eraseUser(userId);
+  }
+
+  purgeLaunchesBefore(date: Date): Promise<number> {
+    return Promise.resolve(this.stores.snapshots.purgeLaunchesBefore(date));
   }
 
   async purgeUnverifiedBefore(date: Date): Promise<number> {

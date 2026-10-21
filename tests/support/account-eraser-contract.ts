@@ -177,6 +177,70 @@ export const describeAccountEraserContract = (
       expect(await storage.projects.list(null)).toHaveLength(1);
     });
 
+    describe('launch journal', () => {
+      const HOUR_MS = 60 * 60 * 1000;
+      const since = new Date(NOW.getTime() - DAY_MS);
+
+      const registerAndLaunch = async (storage: AccountStorage, email: string, launches: number) => {
+        const user = await storage.users.create({ email, passwordHash: 'h', createdAt: NOW });
+        const { id: projectId } = await storage.projects.findOrCreateByRootUrl({
+          ownerId: user.id,
+          rootUrl: 'https://journal.test/',
+          createdAt: NOW,
+        });
+        for (let n = 0; n < launches; n += 1) {
+          await storage.snapshots.create({
+            projectId,
+            launchedBy: user.id,
+            pagesLimit: 10,
+            startedAt: new Date(NOW.getTime() - (n + 1) * HOUR_MS),
+          });
+        }
+        return user.id;
+      };
+
+      it('keeps counting the launches of an erased account, for the same address and globally', async () => {
+        const storage = await factory();
+        const first = await registerAndLaunch(storage, 'again@example.fr', 3);
+
+        await storage.eraser.eraseAccount(first);
+        const second = await storage.users.create({
+          email: 'again@example.fr',
+          passwordHash: 'h',
+          createdAt: NOW,
+        });
+
+        expect(await storage.snapshots.listLaunchedAtBy(second.id, since)).toHaveLength(3);
+        expect(await storage.snapshots.countApiLaunchedSince(since)).toBe(3);
+      });
+
+      it('does not give the launches of an erased account to another address', async () => {
+        const storage = await factory();
+        const first = await registerAndLaunch(storage, 'a@example.fr', 1);
+        const other = await storage.users.create({
+          email: 'b@example.fr',
+          passwordHash: 'h',
+          createdAt: NOW,
+        });
+
+        await storage.eraser.eraseAccount(first);
+
+        expect(await storage.snapshots.listLaunchedAtBy(other.id, since)).toEqual([]);
+      });
+
+      it('purges the journal entries older than the given date only', async () => {
+        const storage = await factory();
+        await registerAndLaunch(storage, 'old@example.fr', 2);
+
+        const purged = await storage.eraser.purgeLaunchesBefore(
+          new Date(NOW.getTime() - 90 * 60 * 1000),
+        );
+
+        expect(purged).toBe(1);
+        expect(await storage.snapshots.countApiLaunchedSince(new Date(0))).toBe(1);
+      });
+    });
+
     it('purges only the accounts left unverified for more than 7 days', async () => {
       const storage = await factory();
       const old = await seedAccount(storage, {

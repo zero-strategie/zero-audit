@@ -34,6 +34,13 @@ export class PostgresAccountEraser implements AccountEraser {
     });
   }
 
+  async purgeLaunchesBefore(date: Date): Promise<number> {
+    const { rowCount } = await this.pool.query('DELETE FROM api_launches WHERE launched_at < $1', [
+      date,
+    ]);
+    return rowCount ?? 0;
+  }
+
   private async eraseOne(client: pg.PoolClient, userId: string): Promise<void> {
     for (const table of SNAPSHOT_CHILD_TABLES) {
       await client.query(`DELETE FROM ${table} WHERE snapshot_id IN (${OWNED_SNAPSHOTS})`, [

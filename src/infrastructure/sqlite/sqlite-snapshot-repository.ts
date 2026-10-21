@@ -17,6 +17,7 @@ import type {
 import { SnapshotNotFound } from '../../domain/errors.js';
 import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
+import { hashToken } from '../hash-token.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
 import { SqliteAccountEraser } from './sqlite-account-eraser.js';
 import { SqliteEmailTokenRepository } from './sqlite-email-token-repository.js';
@@ -197,31 +198,51 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     return this.run(() => {
       const { launchedBy, ...props } = input;
       const snapshot = Snapshot.start({ id: randomUUID(), ...props });
-      this.db
-        .prepare(
-          'INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        )
-        .run(
-          snapshot.id,
-          snapshot.projectId,
-          launchedBy,
-          snapshot.status,
-          snapshot.startedAt.toISOString(),
-          0,
-          snapshot.pagesLimit,
-        );
+      this.db.transaction(() => {
+        this.db
+          .prepare(
+            'INSERT INTO snapshots (id, project_id, launched_by, status, started_at, pages_crawled, pages_limit) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          )
+          .run(
+            snapshot.id,
+            snapshot.projectId,
+            launchedBy,
+            snapshot.status,
+            snapshot.startedAt.toISOString(),
+            0,
+            snapshot.pagesLimit,
+          );
+        if (launchedBy !== null) this.journalLaunch(launchedBy, snapshot);
+      })();
       return snapshot;
     });
   }
 
+  private emailHashOf(userId: string): string | null {
+    const row = this.db.prepare('SELECT email FROM users WHERE id = ?').get(userId) as
+      | { email: string }
+      | undefined;
+    return row ? hashToken(row.email) : null;
+  }
+
+  private journalLaunch(userId: string, snapshot: Snapshot): void {
+    const emailHash = this.emailHashOf(userId);
+    if (emailHash === null) return;
+    this.db
+      .prepare('INSERT INTO api_launches (id, email_hash, launched_at) VALUES (?, ?, ?)')
+      .run(snapshot.id, emailHash, snapshot.startedAt.toISOString());
+  }
+
   listLaunchedAtBy(userId: string, since: Date): Promise<readonly Date[]> {
     return this.run(() => {
+      const emailHash = this.emailHashOf(userId);
+      if (emailHash === null) return [];
       const rows = this.db
         .prepare(
-          'SELECT started_at FROM snapshots WHERE launched_by = ? AND started_at >= ? ORDER BY started_at',
+          'SELECT launched_at FROM api_launches WHERE email_hash = ? AND launched_at >= ? ORDER BY launched_at',
         )
-        .all(userId, since.toISOString()) as { started_at: string }[];
-      return rows.map((row) => new Date(row.started_at));
+        .all(emailHash, since.toISOString()) as { launched_at: string }[];
+      return rows.map((row) => new Date(row.launched_at));
     });
   }
 
@@ -229,7 +250,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository {
     return this.run(() => {
       const row = this.db
         .prepare(
-          'SELECT COUNT(*) AS n FROM snapshots WHERE launched_by IS NOT NULL AND started_at >= ?',
+          'SELECT COUNT(*) AS n FROM api_launches WHERE launched_at >= ?',
         )
         .get(since.toISOString()) as { n: number };
       return row.n;
