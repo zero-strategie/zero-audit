@@ -61,12 +61,19 @@ export class SequentialTokenGenerator implements TokenGenerator {
 
 export class FakePasswordHasher implements PasswordHasher {
   dummyCalls = 0;
+  verifyCalls = 0;
+
+  /** Every scrypt-costly check, against a real hash or the dummy one. */
+  get verifications(): number {
+    return this.dummyCalls + this.verifyCalls;
+  }
 
   hash(password: string): Promise<string> {
     return Promise.resolve(`hashed:${password}`);
   }
 
   verify(password: string, storedHash: string): Promise<boolean> {
+    this.verifyCalls += 1;
     return Promise.resolve(storedHash === `hashed:${password}`);
   }
 

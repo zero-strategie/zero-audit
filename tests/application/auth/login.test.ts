@@ -104,13 +104,13 @@ describe('Login', () => {
       for (let attempt = 0; attempt < 20; attempt += 1) {
         await failAs(login, `user${String(attempt)}@exemple.test`, IP, 1);
       }
-      const dummyCallsBefore = kit.passwordHasher.dummyCalls;
+      const verificationsBefore = kit.passwordHasher.verifications;
 
       await expect(
         login.execute({ email: 'alice@exemple.test', password: PASSWORD, ip: IP }),
       ).rejects.toThrow(TooManyAttempts);
 
-      expect(kit.passwordHasher.dummyCalls).toBe(dummyCallsBefore);
+      expect(kit.passwordHasher.verifications).toBe(verificationsBefore);
       await expect(
         login.execute({ email: 'alice@exemple.test', password: PASSWORD, ip: '198.51.100.9' }),
       ).resolves.toEqual(expect.any(String));

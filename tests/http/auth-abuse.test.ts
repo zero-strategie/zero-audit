@@ -39,13 +39,14 @@ describe('login limits', () => {
         from('203.0.113.7'),
       );
     }
-    const dummyCalls = kit.passwordHasher.dummyCalls;
+    const verificationsBefore = kit.passwordHasher.verifications;
 
     const blocked = await post('/auth/login', credentials, from('203.0.113.7'));
+    const verificationsAfter = kit.passwordHasher.verifications;
     const other = await post('/auth/login', credentials, from('203.0.113.8'));
 
     expect(blocked.statusCode).toBe(429);
-    expect(kit.passwordHasher.dummyCalls).toBe(dummyCalls);
+    expect(verificationsAfter).toBe(verificationsBefore);
     expect(other.statusCode).toBe(200);
   });
 
