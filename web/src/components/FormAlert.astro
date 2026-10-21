@@ -1,0 +1,15 @@
+---
+interface Props {
+  message: string | null;
+  kind?: 'error' | 'info';
+}
+const { message, kind = 'error' } = Astro.props;
+---
+
+{
+  message && (
+    <p class:list={['alert', { 'alert-error': kind === 'error' }]} role={kind === 'error' ? 'alert' : 'status'}>
+      {message}
+    </p>
+  )
+}
