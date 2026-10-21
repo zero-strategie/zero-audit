@@ -46,7 +46,11 @@ it('links to the audit launch form', async () => {
 it('shows a running project as in progress with a link to its audit', async () => {
   const html = await (
     await render(() =>
-      Promise.resolve([aProject({ latestRun: { id: 'r7', status: 'running', startedAt: '2026-03-06T09:00:00.000Z' } })]),
+      Promise.resolve([
+        aProject({
+          latestRun: { id: 'r7', status: 'running', startedAt: '2026-03-06T09:00:00.000Z' },
+        }),
+      ]),
     )
   ).text();
 
@@ -56,7 +60,11 @@ it('shows a running project as in progress with a link to its audit', async () =
 it('shows a failed project as failed', async () => {
   const html = await (
     await render(() =>
-      Promise.resolve([aProject({ latestRun: { id: 'r8', status: 'failed', startedAt: '2026-03-06T09:00:00.000Z' } })]),
+      Promise.resolve([
+        aProject({
+          latestRun: { id: 'r8', status: 'failed', startedAt: '2026-03-06T09:00:00.000Z' },
+        }),
+      ]),
     )
   ).text();
 
@@ -66,7 +74,9 @@ it('shows a failed project as failed', async () => {
 it('offers a relaunch form posting the root URL with 100 pages', async () => {
   const html = await (await render(() => Promise.resolve([aProject()]))).text();
 
-  expect(html).toMatch(/<form[^>]*action="\/audits\/new"[^]*?name="url" value="https:\/\/alpha.test\/"[^]*?name="limit" value="100"[^]*?Relancer/);
+  expect(html).toMatch(
+    /<form[^>]*action="\/audits\/new"[^]*?name="url" value="https:\/\/alpha.test\/"[^]*?name="limit" value="100"[^]*?Relancer/,
+  );
 });
 
 it('names the site in each relaunch button for screen readers', async () => {

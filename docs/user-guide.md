@@ -160,7 +160,8 @@ For a production build of the dashboard, run `pnpm --filter web build`, then `pn
 
 | Screen | What it shows |
 |---|---|
-| Projects | Every audited site, with its latest health score, date and status, a **New audit** button and a **Relancer** (relaunch) button per site. |
+| Projects | **Mes projets** (signed-in accounts, shown first) and **Vitrine**, with each site's latest health score, date and status. Signed-in accounts get a **Nouvel audit** button and a **Relancer** (relaunch) button per site. |
+| Confidentialité | The data collected, how long it is kept, the e-mail processor and the contact address. Linked from every footer. |
 | Overview | A **Relancer l'audit** button, health gauge, theme cards, counts per severity, page groups, top 5 issues, status of robots.txt, sitemap and llms.txt. An audit selector opens older audits. |
 | Issues | All checks grouped by severity, passed ones included, with an optional severity filter. |
 | Issue detail | The occurrences of one check, paginated. |
@@ -169,11 +170,25 @@ For a production build of the dashboard, run `pnpm --filter web build`, then `pn
 
 The dashboard works on mobile and follows your system's dark mode.
 
+### Accounts
+
+Visitors can read the showcase; launching audits needs an account.
+
+- **Sign up** at `/inscription` with an e-mail address and a password. The answer is always the same message, whether or not the address is already registered.
+- **Confirm** the address with the link sent by e-mail (valid 24 hours). The page asks you to click **Activer mon compte**, which activates the account and signs you in. An account that stays unconfirmed is deleted after 7 days. The sign-in page can send the link again (3 links per hour at most).
+- **Sign in** at `/connexion`. The session lasts 30 days, then you sign in again. **Se déconnecter** ends the current session.
+- **Forgot your password?** Use `/mot-de-passe-oublie`: you receive a link (valid 1 hour) to choose a new password. All your sessions are then closed.
+- **Delete your account** from **Mon compte**, with your password. Your projects, audits and sessions are deleted. The deletion is refused while one of your audits is running.
+
+Your audits are private to your account. The **Vitrine** lists the projects that have no owner (audits run from the command line). An account relaunching a showcase site gets its own private project.
+
+**Quotas** for a regular account: 100 pages per audit (the form offers 50 and 100) and 3 audits per rolling 24 hours, counting every audit started, even a failed one. When the quota is reached, the message gives the time of the next possible audit. A global ceiling (`ZERO_AUDIT_LAUNCHES_PER_DAY`, 30 by default) also caps the audits launched through the dashboard, all accounts together. Administrators have no personal quota and can pick up to 500 pages, but the global ceiling still applies to them. The command line has no quota.
+
 ### Launch an audit from the dashboard
 
-Click **Nouvel audit** on the projects page, enter the site address (with `https://`) and choose the maximum number of pages: 50, 100 (default), 250 or 500. The page then follows the audit and refreshes itself until it ends.
+Sign in, click **Nouvel audit** on the projects page, enter the site address (with `https://`) and choose the maximum number of pages: 50, 100 (default), 250 or 500, within your account's limit. The page then follows the audit and refreshes itself until it ends.
 
-- **Relaunch**: the projects page relaunches a site with 100 pages. The overview relaunches with the page limit of the audit you are viewing, if it is one of the four choices, otherwise with 100.
+- **Relaunch**: the projects page relaunches a site with 100 pages, in your own project. The overview relaunches with the page limit of the audit you are viewing, if it is one of the four choices, otherwise with 100.
 - **Internal addresses are refused.** The server rejects addresses that resolve to a private, loopback or link-local network, so the dashboard cannot be used to reach your internal services. Developers can lift this guard on a trusted machine with `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true`.
 - **One audit at a time.** While an audit started from the dashboard is running, any other launch is refused with a message giving the start date of the running audit.
 - **Manual unlock after a crash.** If the server stops during an audit, that audit stays `running` and blocks new launches. Either wait 6 hours, after which it is ignored, or set the snapshot status to `failed` in the database.
@@ -213,9 +228,9 @@ The `migrate` service is built from the `api` image and its command is replaced,
 
 ## Self-host it
 
-zero-audit has **no authentication** of its own. The API and the dashboard must only be published on `127.0.0.1`, behind a reverse proxy that adds TLS and authentication. In Docker, publish them as `127.0.0.1:3000:3000`, never as `3000:3000`.
+The dashboard has its own accounts (see [Accounts](#accounts)); the API does not and trusts the dashboard. The API and the dashboard must only be published on `127.0.0.1`, behind a reverse proxy that adds TLS, and never expose the API publicly. Mail sending must be configured (`ZERO_AUDIT_MAILER=brevo`, never `console` in production), see `.env.example`. In Docker, publish them as `127.0.0.1:3000:3000`, never as `3000:3000`.
 
-With [Caddy](https://caddyserver.com), for example:
+With [Caddy](https://caddyserver.com), for example (the `basic_auth` block is no longer needed once accounts are open to the public; it is removed from the infrastructure repository after this change ships):
 
 ```caddyfile
 audit.example.com {
@@ -232,7 +247,7 @@ audit.example.com {
 }
 ```
 
-The dashboard can start audits, so the machine now makes outgoing requests to any public site you type in. Keep the authentication on, and know that the weekly timer below can run while an audit started from the dashboard is in progress.
+The dashboard can start audits, so the machine now makes outgoing requests to any public site you type in. Know that the weekly timer below can run while an audit started from the dashboard is in progress.
 
 Only expose the dashboard. It calls the API from the server side, so the API never needs to be reachable from outside.
 

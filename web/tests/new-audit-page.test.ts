@@ -88,7 +88,11 @@ it.each([
 });
 
 it('sends an anonymous visitor to the sign-in page, then back to the launch form', async () => {
-  const response = await render(fakeApiClient({}), new Request('http://localhost/audits/new'), null);
+  const response = await render(
+    fakeApiClient({}),
+    new Request('http://localhost/audits/new'),
+    null,
+  );
 
   expect(response.status).toBe(303);
   expect(response.headers.get('location')).toBe('/connexion?retour=/audits/new');
@@ -117,7 +121,8 @@ it('offers only 50 and 100 pages to a free account', async () => {
 });
 
 it('shows the quota message of the API and keeps the typed fields on a 429', async () => {
-  const message = 'Limite de 3 audits par 24 h atteinte : prochain audit possible le 06/03/2026 à 10:00';
+  const message =
+    'Limite de 3 audits par 24 h atteinte : prochain audit possible le 06/03/2026 à 10:00';
   const html = await (
     await render(
       fakeApiClient({ startAudit: () => Promise.reject(new TooManyRequests(message)) }),
