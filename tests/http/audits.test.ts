@@ -245,6 +245,26 @@ describe('audit launch API', () => {
       expect(await snapshots.countQueued()).toBe(1);
     });
 
+    it('creates no project when the launch is refused with 409', async () => {
+      expect((await post({ url: SITE })).statusCode).toBe(202);
+      const before = await projects.list(alice.id);
+
+      const response = await post({ url: 'https://other-site.test/' });
+
+      expect(response.statusCode).toBe(409);
+      expect(await projects.list(alice.id)).toEqual(before);
+    });
+
+    it('creates no project when the launch is refused with 429 because the queue is full', async () => {
+      for (let index = 0; index < 20; index += 1) await enqueueFor(`other-${String(index)}`);
+      const before = await projects.list(alice.id);
+
+      const response = await post({ url: 'https://other-site.test/' });
+
+      expect(response.statusCode).toBe(429);
+      expect(await projects.list(alice.id)).toEqual(before);
+    });
+
     it('answers 409 to an account whose audit is running', async () => {
       await enqueueFor(alice.id, { running: true });
 

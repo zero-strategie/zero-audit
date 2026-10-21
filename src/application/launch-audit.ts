@@ -2,7 +2,7 @@ import { InvalidAuditUrl, PrivateAddressRejected, Unauthenticated } from '../dom
 import { isIpLiteral, isPublicAddress, normalizeIpLiteral } from '../domain/network-address.js';
 import type { Reader } from '../domain/reader.js';
 import { normalizeUrl } from '../domain/url.js';
-import type { AuditQueue } from './ports/audit-queue.js';
+import type { AdmissionView, AuditQueue } from './ports/audit-queue.js';
 import type { Clock } from './ports/clock.js';
 import type { ProjectRepository } from './ports/project-repository.js';
 import type { LaunchQuota } from './launch-quota.js';
@@ -34,7 +34,7 @@ const hostOf = (url: string): string => {
  */
 export class LaunchAudit {
   constructor(
-    private readonly queue: Pick<AuditQueue, 'enqueue'>,
+    private readonly queue: Pick<AuditQueue, 'enqueue'> & AdmissionView,
     private readonly projects: Pick<ProjectRepository, 'findOrCreateByRootUrl'>,
     private readonly resolver: HostResolver,
     private readonly allowPrivateTargets: boolean,
@@ -48,6 +48,8 @@ export class LaunchAudit {
     const account = { userId: reader.userId, isAdmin: reader.isAdmin };
     await this.quota.assertAllowed(account, limit);
     if (!this.allowPrivateTargets) await this.assertPublicTarget(host);
+    // Refused before any project is created, so a refusal leaves nothing behind.
+    await this.quota.assertAdmitted(this.queue, account, limit);
     const requestedAt = new Date(this.clock.now());
     const project = await this.projects.findOrCreateByRootUrl({
       rootUrl: normalizeUrl(url),

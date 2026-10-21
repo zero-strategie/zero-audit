@@ -190,6 +190,7 @@ Sign in, click **Nouvel audit** on the projects page, enter the site address (wi
 
 - **Relaunch**: the projects page relaunches a site with 100 pages, in your own project. The overview relaunches with the page limit of the audit you are viewing, if it is one of the four choices, otherwise with 100.
 - **Internal addresses are refused.** The server rejects addresses that resolve to a private, loopback or link-local network, so the dashboard cannot be used to reach your internal services. Developers can lift this guard on a trusted machine with `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true`.
+- **Read-only dashboard.** Audits are started from the command line or a scheduler, not from the UI.
 - **Queue.** Audits are processed one after another by a worker. After you launch one, the page shows "En file d'attente" with your position (1 means you are next); it refreshes itself and switches to the progress display when your audit starts. The queue is shared by all accounts and holds 20 waiting audits by default: beyond that the launch is refused with "La file d'attente est pleine", and you can try again later.
 - **One audit per account.** While one of your audits is waiting or running, you cannot launch another (administrators included): the message points to the audit in progress.
 - **Automatic resumption.** If the server or the worker restarts during your audit (for example a deployment), the audit starts again from zero and the page shows "Reprise en cours (tentative 2/2)". At most 2 attempts are made: if it is interrupted a second time, it ends as failed and you can launch it again.
@@ -309,7 +310,7 @@ An option takes precedence over its environment variable, which takes precedence
 | 0 | success |
 | 1 | the audit failed (the snapshot is marked `failed`); unknown or unfinished snapshot in `compare` |
 | 2 | invalid usage; nothing was requested or stored |
-| 130 / 143 | interrupted by Ctrl+C or `SIGTERM` (an audit in progress is marked `failed`) |
+| 130 / 143 | interrupted by Ctrl+C or `SIGTERM` (`--direct`: the audit in progress is marked `failed`; `worker`: the audit goes back to the queue, and fails at attempt 2 of 2) |
 
 `.env.example` lists every variable.
 
@@ -318,6 +319,7 @@ An option takes precedence over its environment variable, which takes precedence
 - **No JavaScript rendering.** Pages are analysed as served by the server. Content injected by client-side JavaScript is not seen.
 - **Single user.** There are no accounts. Protect the deployment with your reverse proxy.
 - **Read-only dashboard.** Audits are started from the command line or a scheduler, not from the UI.
+- **Queue.** Audits wait in a queue (one per account, 20 waiting at most through the API) and a worker crawls them one after the other.
 - **No performance metrics** such as Core Web Vitals or Lighthouse yet. Response times are measured but not scored.
 - **One site per project.** Subdomains are not crawled. Only `www.` and the apex domain are probed, for check 1000.
 
