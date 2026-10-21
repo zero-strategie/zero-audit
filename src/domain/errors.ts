@@ -84,3 +84,17 @@ export class InvalidAuditUrl extends DomainError {
     this.name = 'InvalidAuditUrl';
   }
 }
+
+export class InvalidEmail extends DomainError {
+  constructor() {
+    super('E-mail address is invalid');
+    this.name = 'InvalidEmail';
+  }
+}
+
+export class EmailAlreadyRegistered extends DomainError {
+  constructor() {
+    super('An account already exists for this e-mail address');
+    this.name = 'EmailAlreadyRegistered';
+  }
+}
