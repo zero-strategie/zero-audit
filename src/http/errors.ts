@@ -1,3 +1,4 @@
+import { formatParisDateTime } from './format-date.js';
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   AuditAlreadyRunning,
@@ -43,7 +44,7 @@ const INTERNAL_MESSAGE = 'Internal server error';
 const PRIVATE_ADDRESS_MESSAGE =
   'Adresse interne refusée : le site cible une adresse réseau non publique';
 const auditAlreadyRunningMessage = (error: AuditAlreadyRunning): string =>
-  `Un audit est déjà en cours depuis ${error.startedAt.toISOString()} : attendez qu'il se termine avant d'en lancer un autre`;
+  `Un audit est déjà en cours depuis le ${formatParisDateTime(error.startedAt)} : attendez qu'il se termine avant d'en lancer un autre`;
 const HOST_NOT_RESOLVED_MESSAGE = 'Site introuvable : le nom de domaine ne résout pas';
 
 const INVALID_URL_MESSAGE =
@@ -66,7 +67,7 @@ const quotaMessage = ({ denial }: QuotaExceeded): string => {
     return `Votre compte permet ${String(denial.maxPages)} pages par audit`;
   }
   if (denial.reason === 'account') {
-    return `Votre quota d'audits est atteint : prochain audit possible à ${denial.nextAvailableAt.toISOString()}`;
+    return `Votre quota d'audits est atteint : prochain audit possible le ${formatParisDateTime(denial.nextAvailableAt)}`;
   }
   return GLOBAL_QUOTA_MESSAGE;
 };

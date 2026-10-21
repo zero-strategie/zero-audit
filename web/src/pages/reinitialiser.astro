@@ -8,6 +8,7 @@ import { isUserFacingError } from '../lib/user-facing-error';
 
 const HTTP_FORBIDDEN = 403;
 const HTTP_SEE_OTHER = 303;
+const PASSWORD_MISMATCH = 'Les deux mots de passe ne correspondent pas';
 
 let token = Astro.url.searchParams.get('token') ?? '';
 let message: string | null = null;
@@ -17,11 +18,11 @@ if (Astro.request.method === 'POST') {
   if (!isSameOrigin(Astro.request)) return new Response('Forbidden', { status: HTTP_FORBIDDEN });
   const form = await Astro.request.formData();
   token = String(form.get('token') ?? '');
-  try {
-    await Astro.locals.apiClient.confirmPasswordReset({
-      token,
-      password: String(form.get('password') ?? ''),
-    });
+  const password = String(form.get('password') ?? '');
+  if (password !== String(form.get('password_confirm') ?? '')) {
+    message = PASSWORD_MISMATCH;
+  } else try {
+    await Astro.locals.apiClient.confirmPasswordReset({ token, password });
     return Astro.redirect('/connexion?reinitialise=1', HTTP_SEE_OTHER);
   } catch (error) {
     if (isUserFacingError(error)) {
@@ -46,6 +47,10 @@ if (Astro.request.method === 'POST') {
         <label>
           Nouveau mot de passe (12 caractères minimum)
           <input type="password" name="password" autocomplete="new-password" minlength="12" required />
+        </label>
+        <label>
+          Confirmer le mot de passe
+          <input type="password" name="password_confirm" autocomplete="new-password" minlength="12" required />
         </label>
         <button type="submit" class="button-primary">Changer mon mot de passe</button>
       </form>

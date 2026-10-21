@@ -1,3 +1,4 @@
+import { formatParisDateTime } from '../../src/http/format-date.js';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuditAlreadyRunning, HostNotResolved } from '../../src/domain/errors.js';
@@ -197,7 +198,8 @@ describe('audit launch API', () => {
 
       expect(response.statusCode).toBe(409);
       expect(response.json<ApiError>().error.code).toBe('conflict');
-      expect(response.json<ApiError>().error.message).toContain('2026-01-01T10:00:00.000Z');
+      expect(response.json<ApiError>().error.message).toContain('depuis le 01/01/2026 à 11:00');
+      expect(response.json<ApiError>().error.message).not.toContain('2026-01-01T10:00:00.000Z');
       expect(response.json<ApiError>().error.message).toContain(
         'Un audit est déjà en cours depuis',
       );
@@ -243,7 +245,10 @@ describe('audit launch API', () => {
       expect(refused.statusCode).toBe(429);
       expect(refused.json<ApiError>().error.code).toBe('quota_exceeded');
       const nextAt = new Date(NOW.getTime() + 24 * HOUR_MS).toISOString();
-      expect(refused.json<ApiError>().error.message).toContain(nextAt);
+      expect(refused.json<ApiError>().error.message).toContain(
+        `possible le ${formatParisDateTime(new Date(nextAt))}`,
+      );
+      expect(refused.json<ApiError>().error.message).not.toContain(nextAt);
       expect((await me(ALICE_SESSION)).json()).toMatchObject({
         auditsRemaining: 0,
         nextAuditAt: nextAt,

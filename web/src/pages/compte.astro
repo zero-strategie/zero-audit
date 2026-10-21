@@ -17,7 +17,6 @@ if (Astro.request.method === 'POST' && !isSameOrigin(Astro.request)) {
 }
 if (!user) return Astro.redirect('/connexion?retour=/compte', HTTP_SEE_OTHER);
 
-let notice: string | null = null;
 let message: string | null = null;
 let failure = null;
 
@@ -29,7 +28,6 @@ if (Astro.request.method === 'POST') {
       Astro.cookies.delete(SESSION_COOKIE, { path: '/' });
       return Astro.redirect('/', HTTP_SEE_OTHER);
     }
-    notice = await Astro.locals.apiClient.resendVerification(user.email);
   } catch (error) {
     if (isUserFacingError(error)) {
       message = error.message;
@@ -48,7 +46,6 @@ if (Astro.request.method === 'POST') {
     <Layout title="Mon compte – zero-audit">
       <h1>Mon compte</h1>
       <FormAlert message={message} />
-      <FormAlert message={notice} kind="info" />
       <dl>
         <dt>Adresse e-mail</dt>
         <dd>{user.email}</dd>
@@ -63,10 +60,6 @@ if (Astro.request.method === 'POST') {
           )
         }
       </dl>
-      <form method="post" action="/compte">
-        <input type="hidden" name="intent" value="resend" />
-        <button type="submit">Renvoyer le lien de confirmation</button>
-      </form>
       <h2>Supprimer mon compte</h2>
       <p>Vos projets et vos audits seront définitivement supprimés.</p>
       <form method="post" action="/compte">

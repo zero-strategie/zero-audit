@@ -43,34 +43,16 @@ it('shows unlimited audits to an administrator', async () => {
   expect(html).not.toContain('Prochain audit possible');
 });
 
-it('offers to resend the confirmation link and to delete the account with the password', async () => {
+it('offers to delete the account with the password, not to resend a confirmation link', async () => {
   const html = await (
     await renderPage(AccountPage, get('/compte'), fakeApiClient({}), anAccount())
   ).text();
 
-  expect(html).toContain('Renvoyer le lien de confirmation');
+  // A signed-in account is always confirmed: unconfirmed accounts cannot sign in.
+  expect(html).not.toContain('Renvoyer le lien de confirmation');
   expect(html).toMatch(/<form[^>]+method="post"[^>]+action="\/compte"/);
   expect(html).toMatch(/<input[^>]+type="password"[^>]+name="password"/);
   expect(html).toContain('Supprimer mon compte');
-});
-
-it('resends the link to the e-mail of the account', async () => {
-  const sent: string[] = [];
-  const apiClient = fakeApiClient({
-    resendVerification: (email) => {
-      sent.push(email);
-      return Promise.resolve(
-        'Si cette adresse peut être utilisée, un e-mail vient de vous être envoyé',
-      );
-    },
-  });
-
-  const html = await (
-    await renderPage(AccountPage, post('/compte', { intent: 'resend' }), apiClient, anAccount())
-  ).text();
-
-  expect(sent).toEqual(['ada@example.test']);
-  expect(html).toContain('un e-mail vient de vous être envoyé');
 });
 
 it('deletes the account, clears the cookie and goes home', async () => {

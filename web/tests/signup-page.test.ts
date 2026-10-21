@@ -4,7 +4,12 @@ import SignupPage from '../src/pages/inscription.astro';
 import { get, post, renderPage } from './account-page-helpers';
 import { fakeApiClient } from './fake-api-client';
 
-const FIELDS = { email: 'ada@example.test', password: 'a long enough password', website: '' };
+const FIELDS = {
+  email: 'ada@example.test',
+  password: 'a long enough password',
+  password_confirm: 'a long enough password',
+  website: '',
+};
 
 it('shows an e-mail field, a password field and the honeypot', async () => {
   const html = await (await renderPage(SignupPage, get('/inscription'), fakeApiClient({}))).text();
@@ -38,7 +43,10 @@ it('relays the form to the API and shows its generic message', async () => {
 
   const html = await (await renderPage(SignupPage, post('/inscription', FIELDS), apiClient)).text();
 
-  expect(calls).toEqual([FIELDS]);
+  // The confirmation is checked by the page and never sent to the API.
+  expect(calls).toEqual([
+    { email: FIELDS.email, password: FIELDS.password, website: FIELDS.website },
+  ]);
   expect(html).toContain('un e-mail vient de vous être envoyé');
 });
 
@@ -59,4 +67,23 @@ it.each([
   const response = await renderPage(SignupPage, post('/inscription', FIELDS), apiClient);
 
   expect(await response.text()).toContain(error.message);
+});
+
+it('asks to type the password twice', async () => {
+  const html = await (await renderPage(SignupPage, get('/inscription'), fakeApiClient({}))).text();
+
+  expect(html).toMatch(/<input[^>]+type="password"[^>]+name="password_confirm"/);
+});
+
+it('refuses two different passwords without calling the API', async () => {
+  const html = await (
+    await renderPage(
+      SignupPage,
+      post('/inscription', { ...FIELDS, password_confirm: 'another long password' }),
+      fakeApiClient({}),
+    )
+  ).text();
+
+  expect(html).toContain('Les deux mots de passe ne correspondent pas');
+  expect(html).toContain('value="ada@example.test"');
 });

@@ -51,7 +51,11 @@ it('confirms the new password with the API and redirects to the sign-in page', a
 
   const response = await renderPage(
     ResetPage,
-    post('/reinitialiser', { token: 'abc', password: 'a brand new password' }),
+    post('/reinitialiser', {
+      token: 'abc',
+      password: 'a brand new password',
+      password_confirm: 'a brand new password',
+    }),
     apiClient,
   );
 
@@ -68,10 +72,31 @@ it('shows the API error when the link or the password is refused', async () => {
 
   const response = await renderPage(
     ResetPage,
-    post('/reinitialiser', { token: 'abc', password: 'x' }),
+    post('/reinitialiser', { token: 'abc', password: 'x', password_confirm: 'x' }),
     apiClient,
   );
 
   expect(response.status).toBe(200);
   expect(await response.text()).toContain('Ce lien est invalide ou a expiré');
+});
+
+it('asks to type the new password twice and refuses two different ones', async () => {
+  const form = await (
+    await renderPage(ResetPage, get('/reinitialiser?token=abc'), fakeApiClient({}))
+  ).text();
+  expect(form).toMatch(/<input[^>]+type="password"[^>]+name="password_confirm"/);
+
+  const html = await (
+    await renderPage(
+      ResetPage,
+      post('/reinitialiser', {
+        token: 'abc',
+        password: 'a brand new password',
+        password_confirm: 'not the same password',
+      }),
+      fakeApiClient({}),
+    )
+  ).text();
+  expect(html).toContain('Les deux mots de passe ne correspondent pas');
+  expect(html).toContain('value="abc"');
 });
