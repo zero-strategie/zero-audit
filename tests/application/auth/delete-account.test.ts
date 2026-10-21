@@ -50,7 +50,7 @@ const setup = async () => {
 
 describe('DeleteAccount', () => {
   it('refuses a wrong password and erases nothing', async () => {
-    const { kit, user, snapshot, snapshots, snapshots: repo, deleteAccount } = await setup();
+    const { kit, user, snapshot, snapshots, deleteAccount } = await setup();
     await snapshots.finish(snapshot.id, { finishedAt: NOW, pagesCrawled: 0 });
 
     await expect(
@@ -58,7 +58,7 @@ describe('DeleteAccount', () => {
     ).rejects.toThrow(Unauthenticated);
 
     expect(await kit.users.findById(user.id)).not.toBeNull();
-    expect(await repo.getById(snapshot.id)).not.toBeNull();
+    expect(await snapshots.getById(snapshot.id)).not.toBeNull();
   });
 
   it('refuses a missing or unknown session', async () => {
