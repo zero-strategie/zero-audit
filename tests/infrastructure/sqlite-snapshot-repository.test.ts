@@ -65,7 +65,7 @@ describe('SqliteSnapshotRepository file handling', () => {
     const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'nested', 'deeper', 'audit.db');
     SqliteSnapshotRepository.open(path).close();
     expect(existsSync(path)).toBe(true);
-    expect(schemaVersion(path)).toBe(11);
+    expect(schemaVersion(path)).toBe(12);
   });
 
   it('does not replay migrations and keeps existing snapshots readable', async () => {
@@ -89,7 +89,7 @@ describe('SqliteSnapshotRepository file handling', () => {
     second.close();
 
     expect(details?.snapshot.pagesLimit).toBe(5);
-    expect(schemaVersion(path)).toBe(11);
+    expect(schemaVersion(path)).toBe(12);
   });
 
   it('leaves the row count unchanged when a write on a finished snapshot is refused', async () => {
@@ -203,7 +203,7 @@ describe('migration 002 on a milestone 1 database', () => {
     SqliteSnapshotRepository.open(path).close();
     SqliteSnapshotRepository.open(path).close();
 
-    expect(schemaVersion(path)).toBe(11);
+    expect(schemaVersion(path)).toBe(12);
     expect(count(path, 'projects')).toBe(2);
   });
 
@@ -240,6 +240,23 @@ describe('migration 002 on a milestone 1 database', () => {
       { theme: 'status' },
       { theme: 'links' },
     ]);
+  });
+
+  it('keeps a stored markup theme for the markup check 45 and maps it to on-page for check 3', async () => {
+    const path = buildMilestone1Database();
+    const db = new Database(path);
+    db.prepare(
+      "INSERT INTO check_results (snapshot_id, check_id, severity, theme, count, examined) VALUES ('with-pages', 45, 'error', 'markup', 1, 2)",
+    ).run();
+    db.close();
+    const repo = SqliteSnapshotRepository.open(path);
+    const details = await repo.getById('with-pages');
+    repo.close();
+
+    const themeOf = (id: number): string | undefined =>
+      details?.checkResults.find(({ checkId }) => checkId === id)?.theme;
+    expect(themeOf(3)).toBe('on-page');
+    expect(themeOf(45)).toBe('markup');
   });
 
   it('reads a milestone 1 snapshot with an empty list of site files', async () => {
@@ -290,9 +307,9 @@ describe('migration 008 on a database at migration 007', () => {
     reopened.close();
 
     expect(after.slice(0, before.length)).toEqual(before);
-    expect(after).toHaveLength(before.length + 1);
-    expect(after.at(-1)).toMatchObject({ name: 'text_ratio', type: 'REAL', notnull: 0 });
-    expect(schemaVersion(path)).toBe(11);
+    expect(after).toHaveLength(before.length + 3);
+    expect(after.at(before.length)).toMatchObject({ name: 'text_ratio', type: 'REAL', notnull: 0 });
+    expect(schemaVersion(path)).toBe(12);
     expect(details?.pages[0]?.textRatio).toBeNull();
   });
 });
@@ -352,7 +369,7 @@ describe('migration 009 on a database at migration 008', () => {
       ]);
       expect(db.prepare('SELECT COUNT(*) AS n FROM pages').get()).toEqual({ n: 1 });
       expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
-      expect(schemaVersion(path)).toBe(11);
+      expect(schemaVersion(path)).toBe(12);
     });
   });
 
@@ -462,7 +479,7 @@ describe('migration 011 on a database at migration 010', () => {
         { name: 'idx_snapshots_status_queued' },
       ]);
       expect(db.prepare('SELECT COUNT(*) AS n FROM workers').get()).toEqual({ n: 0 });
-      expect(schemaVersion(path)).toBe(11);
+      expect(schemaVersion(path)).toBe(12);
     });
   });
 
@@ -519,5 +536,37 @@ describe('SqliteSnapshotRepository launch journal', () => {
     expect(rows).toEqual([
       { email_hash: createHash('sha256').update('journal@example.test').digest('hex') },
     ]);
+  });
+});
+
+describe('migration 012 on a database at migration 011', () => {
+  const MIGRATIONS_DIR = join(import.meta.dirname, '../../src/infrastructure/sqlite/migrations');
+  const LAST_VERSION_BEFORE_FACTS = 11;
+
+  it('reads a snapshot written before the migration with null facts', async () => {
+    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
+    const db = new Database(path);
+    db.exec('CREATE TABLE schema_version (version INTEGER PRIMARY KEY)');
+    for (const [index, file] of readdirSync(MIGRATIONS_DIR).sort().entries()) {
+      if (index >= LAST_VERSION_BEFORE_FACTS) break;
+      db.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
+      db.prepare('INSERT INTO schema_version (version) VALUES (?)').run(index + 1);
+    }
+    db.exec(
+      `INSERT INTO projects (id, root_url, created_at) VALUES ('p1', 'https://a.test/', '2025-12-01T10:00:00.000Z');
+       INSERT INTO snapshots (id, project_id, status, started_at, pages_limit)
+       VALUES ('s1', 'p1', 'finished', '2025-12-01T10:00:00.000Z', 10);
+       INSERT INTO pages (snapshot_id, url, depth, redirect_chain, headers, response_time_ms, is_html, h1)
+       VALUES ('s1', 'https://a.test/', 0, '[]', '{}', 5, 1, '[]');
+       INSERT INTO site_files (snapshot_id, kind, url, status) VALUES ('s1', 'robots', 'https://a.test/robots.txt', 200)`,
+    );
+    db.close();
+
+    const repository = SqliteSnapshotRepository.open(path);
+    const details = await repository.getById('s1');
+    repository.close();
+
+    expect(details?.pages.map((p) => [p.htmlFacts, p.inSitemap])).toEqual([[null, null]]);
+    expect(details?.siteFiles.map((file) => file.facts)).toEqual([null]);
   });
 });

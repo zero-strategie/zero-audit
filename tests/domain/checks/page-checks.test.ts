@@ -555,18 +555,37 @@ describe('registry metadata', () => {
       4: 'notice',
       9: 'error',
       11: 'error',
+      18: 'error',
+      23: 'error',
+      24: 'error',
+      25: 'error',
       26: 'error',
+      30: 'error',
       31: 'warning',
       33: 'error',
       38: 'error',
+      39: 'error',
+      40: 'error',
+      44: 'error',
       113: 'warning',
+      115: 'warning',
+      116: 'warning',
+      110: 'warning',
+      121: 'warning',
+      128: 'warning',
+      21: 'error',
+      220: 'notice',
+      222: 'notice',
+      114: 'warning',
       122: 'warning',
       129: 'warning',
       136: 'warning',
       201: 'notice',
       109: 'warning',
       111: 'error',
+      204: 'notice',
       209: 'notice',
+      207: 'notice',
       212: 'notice',
       214: 'notice',
       101: 'warning',
@@ -583,6 +602,9 @@ describe('registry metadata', () => {
       216: 'notice',
       217: 'notice',
       215: 'notice',
+      20: 'error',
+      45: 'error',
+      46: 'error',
     });
   });
 
@@ -881,6 +903,74 @@ describe('check 215 (linked resources)', () => {
     expect(flaggedUrls(result)).toEqual([]);
   });
 
+  describe('feeds', () => {
+    const xmlPage = (name: string, overrides: Partial<Page> = {}): Page =>
+      resourcePage(name, { contentType: 'application/xml', ...overrides });
+
+    it.each(['rss.xml', 'feed.xml', 'atom.xml', 'index.xml'])(
+      'does not flag a link to the conventional feed name %s served as xml',
+      (name) => {
+        const result = runCheck(
+          pageChecks,
+          215,
+          crawlLinking(u(name), 'internal', xmlPage(u(name))),
+        );
+        expect(flaggedUrls(result)).toEqual([]);
+      },
+    );
+
+    it('does not flag a target declared by a link rel=alternate feed', () => {
+      const declaring = makePage(u('a'), { htmlFacts: { declaredFeeds: [u('data/flux.xml')] } });
+      const result = runCheck(
+        pageChecks,
+        215,
+        crawlOf([declaring], [makeLink(u('a'), u('data/flux.xml'))]),
+      );
+      expect(flaggedUrls(result)).toEqual([]);
+    });
+
+    it('does not flag a crawled target served as rss or atom', () => {
+      for (const contentType of ['application/rss+xml', 'application/atom+xml; charset=utf-8']) {
+        const result = runCheck(
+          pageChecks,
+          215,
+          crawlLinking(
+            u('data/flux.xml'),
+            'internal',
+            xmlPage(u('data/flux.xml'), { contentType }),
+          ),
+        );
+        expect(flaggedUrls(result)).toEqual([]);
+      }
+    });
+
+    it('does not flag a path ending in .rss or .atom', () => {
+      for (const name of ['news.rss', 'news.ATOM']) {
+        const result = runCheck(
+          pageChecks,
+          215,
+          crawlLinking(u(name), 'internal', xmlPage(u(name))),
+        );
+        expect(flaggedUrls(result)).toEqual([]);
+      }
+    });
+
+    it('still flags an undeclared generic xml file', () => {
+      const result = runCheck(
+        pageChecks,
+        215,
+        crawlLinking(u('data/export.xml'), 'internal', xmlPage(u('data/export.xml'))),
+      );
+      expect(flaggedUrls(result)).toEqual([u('a')]);
+    });
+
+    it('keeps flagging the other listed extensions', () => {
+      expect(flaggedUrls(runCheck(pageChecks, 215, crawlLinking(u('x.json'), 'internal')))).toEqual(
+        [u('a')],
+      );
+    });
+  });
+
   it('emits one occurrence per page with sorted targets and ignores resource links', () => {
     const result = runCheck(
       pageChecks,
@@ -1043,6 +1133,758 @@ describe('check 111 (slow response)', () => {
       ]),
     );
     expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('checks 20 and 46 (viewport)', () => {
+  const withViewport = (name: string, viewport: string | null, overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { viewport }, ...overrides });
+
+  it('flags a page without viewport with 20 only', () => {
+    const pages = [withViewport('a', null)];
+    expect(flaggedUrls(run(20, pages))).toEqual([u('a')]);
+    expect(flaggedUrls(run(46, pages))).toEqual([]);
+  });
+
+  it.each(['initial-scale=1', '', 'minimum-scale=1, user-scalable=no'])(
+    'flags the viewport "%s" without width with 46 only',
+    (viewport) => {
+      const pages = [withViewport('a', viewport)];
+      expect(flaggedUrls(run(46, pages))).toEqual([u('a')]);
+      expect(flaggedUrls(run(20, pages))).toEqual([]);
+    },
+  );
+
+  it.each(['width=device-width, initial-scale=1', 'initial-scale=1,WIDTH = 980', 'width=500'])(
+    'flags nothing for the viewport "%s"',
+    (viewport) => {
+      const pages = [withViewport('a', viewport)];
+      expect(flaggedUrls(run(20, pages))).toEqual([]);
+      expect(flaggedUrls(run(46, pages))).toEqual([]);
+      expect(run(20, pages).examined).toBe(1);
+      expect(run(46, pages).examined).toBe(1);
+    },
+  );
+
+  it('does not read a width-like token as a width', () => {
+    expect(flaggedUrls(run(46, [withViewport('a', 'min-width=300')]))).toEqual([u('a')]);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const pages = [
+      withViewport('gone', null, { status: 404 }),
+      withViewport('img', null, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ];
+    for (const id of [20, 46]) {
+      const result = run(id, pages);
+      expect(flaggedUrls(result)).toEqual([]);
+      expect(result.examined).toBe(0);
+    }
+  });
+});
+
+describe('check 115 (encoding not declared)', () => {
+  const withCharset = (
+    name: string,
+    charset: string | null,
+    contentType: string | null,
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { charset }, contentType, ...overrides });
+
+  it('flags a page with neither a meta charset nor a header charset', () => {
+    const result = run(115, [withCharset('a', null, 'text/html')]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('flags a page without Content-Type header and without meta charset', () => {
+    expect(flaggedUrls(run(115, [withCharset('a', null, null)]))).toEqual([u('a')]);
+  });
+
+  it.each([
+    ['text/html; charset=utf-8', null],
+    ['text/html; Charset = "ISO-8859-1"', null],
+    ['text/html', 'utf-8'],
+  ])('does not flag the Content-Type "%s" with meta charset %s', (contentType, charset) => {
+    expect(flaggedUrls(run(115, [withCharset('a', charset, contentType)]))).toEqual([]);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(115, [
+      withCharset('gone', null, 'text/html', { status: 404 }),
+      withCharset('img', null, 'image/png', { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null, contentType: 'text/html' }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 116 (doctype not declared)', () => {
+  const withDoctype = (name: string, hasDoctype: boolean, overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { hasDoctype }, ...overrides });
+
+  it('flags a page without doctype and not one with a doctype', () => {
+    const result = run(116, [withDoctype('bare', false), withDoctype('ok', true)]);
+    expect(flaggedUrls(result)).toEqual([u('bare')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(116, [
+      withDoctype('gone', false, { status: 404 }),
+      withDoctype('img', false, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 110 (images without alt)', () => {
+  const withImages = (
+    name: string,
+    total: number,
+    examples: string[],
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { imagesWithoutAlt: { total, examples } }, ...overrides });
+
+  it('flags a page with 2 images without alt, with the total and the examples', () => {
+    const result = run(110, [withImages('bad', 2, ['/a.png', '/b.png']), withImages('ok', 0, [])]);
+    expect(flaggedUrls(result)).toEqual([u('bad')]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 2, examples: ['/a.png', '/b.png'] });
+    expect(result.examined).toBe(2);
+  });
+
+  it('keeps the real total when the examples are capped (50 images)', () => {
+    const examples = Array.from({ length: 20 }, (_, i) => `/i${String(i)}.png`);
+    const result = run(110, [withImages('many', 50, examples)]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 50, examples });
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(110, [
+      withImages('gone', 3, ['/a.png'], { status: 404 }),
+      withImages('img', 3, ['/a.png'], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 121 (frames)', () => {
+  const withFrames = (name: string, hasFrames: boolean, overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { hasFrames }, ...overrides });
+
+  it('flags a page built with frames and not one without', () => {
+    const result = run(121, [withFrames('framed', true), withFrames('plain', false)]);
+    expect(flaggedUrls(result)).toEqual([u('framed')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(121, [
+      withFrames('gone', true, { status: 404 }),
+      withFrames('img', true, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 220 (too much content)', () => {
+  it('flags 10001 words but not 10000, with the word count', () => {
+    const result = run(220, [
+      makePage(u('long'), { wordCount: 10_001 }),
+      makePage(u('limit'), { wordCount: 10_000 }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('long')]);
+    expect(result.occurrences[0]?.info).toEqual({ words: 10_001 });
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or unknown word counts', () => {
+    const result = run(220, [
+      makePage(u('gone'), { status: 404, wordCount: 20_000 }),
+      makePage(u('img'), { isHtml: false, wordCount: 20_000 }),
+      makePage(u('old'), { wordCount: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 21 (large HTML page)', () => {
+  const withBytes = (name: string, htmlBytes: number, overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { htmlBytes }, ...overrides });
+
+  it('flags 2097153 bytes but not 2097152, with the byte size', () => {
+    const result = run(21, [withBytes('big', 2_097_153), withBytes('limit', 2_097_152)]);
+    expect(flaggedUrls(result)).toEqual([u('big')]);
+    expect(result.occurrences[0]?.info).toEqual({ bytes: 2_097_153 });
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(21, [
+      withBytes('gone', 3_000_000, { status: 404 }),
+      withBytes('img', 3_000_000, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 39 (multiple canonicals)', () => {
+  const withCanonicals = (name: string, urls: string[], overrides: Partial<Page> = {}) =>
+    makePage(u(name), {
+      htmlFacts: { canonicalCount: urls.length, canonicalUrls: urls },
+      ...overrides,
+    });
+
+  it('flags two canonicals, even identical, with their URLs', () => {
+    const result = run(39, [
+      withCanonicals('same', [u('a'), u('a')]),
+      withCanonicals('diff', [u('a'), u('b')]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('same'), u('diff')]);
+    expect(result.occurrences[1]?.info).toEqual({ urls: [u('a'), u('b')] });
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not flag one canonical or none', () => {
+    const result = run(39, [withCanonicals('one', [u('a')]), withCanonicals('none', [])]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(39, [
+      withCanonicals('gone', [u('a'), u('b')], { status: 404 }),
+      withCanonicals('img', [u('a'), u('b')], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 40 (meta refresh)', () => {
+  const withRefresh = (
+    name: string,
+    metaRefresh: { delaySeconds: number; target: string | null } | null,
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { metaRefresh }, ...overrides });
+
+  it('flags a refresh with a target, with its delay and target', () => {
+    const result = run(40, [
+      withRefresh('jump', { delaySeconds: 5, target: u('next') }),
+      withRefresh('none', null),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('jump')]);
+    expect(result.occurrences[0]?.info).toEqual({ delaySeconds: 5, target: u('next') });
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not flag a plain reload without a target', () => {
+    const result = run(40, [withRefresh('reload', { delaySeconds: 30, target: null })]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const refresh = { delaySeconds: 0, target: u('x') };
+    const result = run(40, [
+      withRefresh('gone', refresh, { status: 404 }),
+      withRefresh('img', refresh, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 44 (malformed links)', () => {
+  const withMalformed = (
+    name: string,
+    total: number,
+    examples: string[],
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { malformedLinks: { total, examples } }, ...overrides });
+
+  it('flags a page with 3 malformed hrefs, with the total and the raw hrefs', () => {
+    const hrefs = ['http:/x', 'htp://y', 'https//z'];
+    const result = run(44, [withMalformed('bad', 3, hrefs), withMalformed('ok', 0, [])]);
+    expect(flaggedUrls(result)).toEqual([u('bad')]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 3, examples: hrefs });
+    expect(result.examined).toBe(2);
+  });
+
+  it('keeps the real total when the examples are capped', () => {
+    const examples = Array.from({ length: 20 }, (_, i) => `http:/${String(i)}`);
+    const result = run(44, [withMalformed('many', 35, examples)]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 35, examples });
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(44, [
+      withMalformed('gone', 3, ['http:/x'], { status: 404 }),
+      withMalformed('img', 3, ['http:/x'], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 30 (mixed content)', () => {
+  const withInsecure = (
+    url: string,
+    total: number,
+    examples: string[],
+    overrides: Partial<Page> = {},
+  ) => makePage(url, { htmlFacts: { insecureResources: { total, examples } }, ...overrides });
+
+  it('flags an https page loading an http image, with the total and the URLs', () => {
+    const urls = ['http://cdn.exemple.com/a.png', 'http://cdn.exemple.com/b.js'];
+    const result = run(30, [withInsecure(u('mixed'), 2, urls), withInsecure(u('clean'), 0, [])]);
+    expect(flaggedUrls(result)).toEqual([u('mixed')]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 2, urls });
+    expect(result.examined).toBe(2);
+  });
+
+  it('keeps the real total when the URLs are capped', () => {
+    const urls = Array.from({ length: 20 }, (_, i) => `http://cdn.exemple.com/${String(i)}.png`);
+    const result = run(30, [withInsecure(u('many'), 31, urls)]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 31, urls });
+  });
+
+  it('does not examine http pages, error pages, non-HTML pages or pages without facts', () => {
+    const insecure = ['http://cdn.exemple.com/a.png'];
+    const result = run(30, [
+      withInsecure('http://exemple.com/plain', 1, insecure),
+      withInsecure(u('gone'), 1, insecure, { status: 404 }),
+      withInsecure(u('img'), 1, insecure, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 114 (language not declared)', () => {
+  const withLanguage = (
+    name: string,
+    lang: string | null,
+    hreflang: { lang: string; url: string }[],
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { lang, hreflang }, ...overrides });
+
+  it('flags a page with neither lang nor hreflang, but not with one of them', () => {
+    const result = run(114, [
+      withLanguage('none', null, []),
+      withLanguage('lang', 'fr', []),
+      withLanguage('alternate', null, [{ lang: 'fr', url: u('fr') }]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('none')]);
+    expect(result.examined).toBe(3);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(114, [
+      withLanguage('gone', null, [], { status: 404 }),
+      withLanguage('img', null, [], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 23 (invalid hreflang values)', () => {
+  const withHreflang = (name: string, values: string[], overrides: Partial<Page> = {}) =>
+    makePage(u(name), {
+      htmlFacts: { lang: 'en', hreflang: values.map((lang) => ({ lang, url: u('alt') })) },
+      ...overrides,
+    });
+
+  it('accepts valid codes whatever their case', () => {
+    const result = run(23, [
+      withHreflang('ok', ['en-GB', 'fr', 'zh-Hant-TW', 'X-Default', 'EN-gb']),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('flags a page with invalid codes and lists them', () => {
+    const result = run(23, [
+      withHreflang('bad', ['en-UK', 'fr', 'english', 'fr_FR']),
+      withHreflang('good', ['fr']),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('bad')]);
+    expect(result.occurrences[0]?.info).toEqual({ invalid: ['en-UK', 'english', 'fr_FR'] });
+    expect(result.examined).toBe(2);
+  });
+
+  it('only examines HTML 2xx pages with hreflang facts', () => {
+    const result = run(23, [
+      withHreflang('gone', ['xx'], { status: 404 }),
+      withHreflang('none', []),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 24 (hreflang conflicts)', () => {
+  const alternates = (name: string, entries: [string, string][], overrides: Partial<Page> = {}) =>
+    makePage(u(name), {
+      htmlFacts: { lang: 'en', hreflang: entries.map(([lang, url]) => ({ lang, url })) },
+      ...overrides,
+    });
+
+  it('flags one language pointing to two different URLs, case ignored', () => {
+    const result = run(24, [
+      alternates('p', [
+        ['en', u('p')],
+        ['EN', u('other')],
+        ['fr', u('fr')],
+      ]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('p')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      reasons: ['conflict'],
+      conflicts: [{ lang: 'en', urls: [u('p'), u('other')] }],
+    });
+  });
+
+  it('does not flag the same URL repeated, even with a fragment', () => {
+    const result = run(24, [
+      alternates('p', [
+        ['en', u('p')],
+        ['en', `${u('p')}#top`],
+      ]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('flags alternates that never point to the page or its canonical', () => {
+    const result = run(24, [alternates('p', [['fr', u('fr')]])]);
+    expect(result.occurrences[0]?.info).toEqual({ reasons: ['missing-self-reference'] });
+  });
+
+  it('accepts a self-reference through the canonical', () => {
+    const result = run(24, [alternates('p', [['fr', u('c')]], { canonical: u('c') })]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('does not flag a coherent set with a self-reference', () => {
+    const result = run(24, [
+      alternates('p', [
+        ['en', u('p')],
+        ['fr', u('fr')],
+      ]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('only examines HTML 2xx pages with hreflang facts', () => {
+    const result = run(24, [
+      alternates('gone', [['fr', u('fr')]], { status: 404 }),
+      alternates('none', []),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 25 (hreflang to an error or redirected page)', () => {
+  const withHreflang = (name: string, entries: [string, string][]): Page =>
+    makePage(u(name), {
+      htmlFacts: { lang: 'en', hreflang: entries.map(([lang, url]) => ({ lang, url })) },
+    });
+
+  it('flags a hreflang to a crawled 404 or redirected page with the target and its status', () => {
+    const result = run(25, [
+      withHreflang('p', [
+        ['fr', u('gone')],
+        ['de', `${u('moved')}#top`],
+      ]),
+      makePage(u('gone'), { status: 404, isHtml: false }),
+      makePage(u('moved'), { status: 301, isHtml: false }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('p')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      targets: [
+        { lang: 'fr', url: u('gone'), status: 404 },
+        { lang: 'de', url: `${u('moved')}#top`, status: 301 },
+      ],
+    });
+    expect(result.examined).toBe(1);
+  });
+
+  it('flags a hreflang to a 5xx page or to a network failure', () => {
+    const result = run(25, [
+      withHreflang('a', [['fr', u('down')]]),
+      withHreflang('b', [['fr', u('net')]]),
+      makePage(u('down'), { status: 503, isHtml: false }),
+      makePage(u('net'), { status: null, error: 'timeout', isHtml: false }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('a'), u('b')]);
+    expect(result.occurrences[1]?.info).toEqual({
+      targets: [{ lang: 'fr', url: u('net'), status: null }],
+    });
+  });
+
+  it('ignores uncrawled targets, healthy targets and pages without judgeable hreflang', () => {
+    const result = run(25, [
+      withHreflang('ok', [['fr', u('fine')]]),
+      withHreflang('unknown', [['fr', u('never-crawled')]]),
+      makePage(u('none')),
+      makePage(u('old'), { htmlFacts: null }),
+      makePage(u('fine')),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(2);
+  });
+});
+
+describe('check 204 (hreflang language differs from the target language)', () => {
+  const withHreflang = (name: string, entries: [string, string][]): Page =>
+    makePage(u(name), {
+      htmlFacts: { lang: 'en', hreflang: entries.map(([lang, url]) => ({ lang, url })) },
+    });
+  const speaking = (name: string, lang: string | undefined, overrides: Partial<Page> = {}): Page =>
+    makePage(u(name), {
+      htmlFacts: lang === undefined ? { hreflang: [] } : { lang, hreflang: [] },
+      ...overrides,
+    });
+
+  it('flags hreflang=de pointing to a crawled page declared in French', () => {
+    const result = run(204, [withHreflang('p', [['de', u('fr')]]), speaking('fr', 'fr')]);
+    expect(flaggedUrls(result)).toEqual([u('p')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      targets: [{ lang: 'de', url: u('fr'), targetLang: 'fr' }],
+    });
+    expect(result.examined).toBe(1);
+  });
+
+  it('compares the primary language only, case ignored', () => {
+    const result = run(204, [
+      withHreflang('p', [
+        ['fr', u('a')],
+        ['FR-ca', u('b')],
+        ['fr-FR', u('c')],
+      ]),
+      speaking('a', 'fr-FR'),
+      speaking('b', 'FR'),
+      speaking('c', 'fr_CA'),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('ignores x-default, uncrawled targets and targets whose language cannot be read', () => {
+    const result = run(204, [
+      withHreflang('p', [
+        ['x-default', u('fr')],
+        ['de', u('never-crawled')],
+        ['de', u('no-lang')],
+        ['de', u('blank')],
+        ['de', u('gone')],
+        ['de', u('plain')],
+      ]),
+      speaking('fr', 'fr'),
+      speaking('no-lang', undefined),
+      speaking('blank', ''),
+      speaking('gone', 'fr', { status: 404 }),
+      makePage(u('plain'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+});
+
+describe('check 45 (invalid structured data)', () => {
+  const withJsonLd = (
+    name: string,
+    jsonLd: { count: number; invalid: number; invalidReasons: string[] },
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { jsonLd: { types: [], ...jsonLd } }, ...overrides });
+
+  it('flags a page with invalid JSON-LD blocks, with their count and reasons', () => {
+    const result = run(45, [
+      withJsonLd('none', { count: 0, invalid: 0, invalidReasons: [] }),
+      withJsonLd('valid', { count: 2, invalid: 0, invalidReasons: [] }),
+      withJsonLd('broken', {
+        count: 3,
+        invalid: 2,
+        invalidReasons: ['unparseable', 'missing-type'],
+      }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('broken')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      invalid: 2,
+      reasons: ['unparseable', 'missing-type'],
+    });
+    expect(result.examined).toBe(3);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const broken = { count: 1, invalid: 1, invalidReasons: ['missing-context'] };
+    const result = run(45, [
+      withJsonLd('gone', broken, { status: 404 }),
+      withJsonLd('img', broken, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 222 (no semantic HTML elements)', () => {
+  const withSemantics = (name: string, semanticElements: string[], overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { semanticElements }, ...overrides });
+
+  it('flags a page with no semantic element, but not with a single footer', () => {
+    const result = run(222, [
+      withSemantics('div-soup', []),
+      withSemantics('footer-only', ['footer']),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('div-soup')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(222, [
+      withSemantics('gone', [], { status: 404 }),
+      withSemantics('img', [], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 18 (sitemap URL in error or redirected)', () => {
+  const inSitemap = (name: string, overrides: Partial<Page> = {}): Page =>
+    makePage(name, { inSitemap: true, ...overrides });
+
+  it('flags sitemap pages in 4xx, 5xx, redirected or failing, with their status', () => {
+    const result = run(18, [
+      inSitemap(u('nf'), { status: 404 }),
+      inSitemap(u('down'), { status: 500 }),
+      inSitemap(u('moved'), { status: 301, redirectTarget: u('target') }),
+      inSitemap(u('net'), { status: null, isHtml: false, error: 'ECONNRESET' }),
+      inSitemap(u('ok')),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('nf'), u('down'), u('moved'), u('net')]);
+    expect(result.occurrences.map((occurrence) => occurrence.info)).toEqual([
+      { status: 404, error: null },
+      { status: 500, error: null },
+      { status: 301, error: null },
+      { status: null, error: 'ECONNRESET' },
+    ]);
+    expect(result.examined).toBe(5);
+  });
+
+  it('does not examine pages absent from the sitemap or when no sitemap was read', () => {
+    const result = run(18, [
+      makePage(u('a'), { status: 404, inSitemap: false }),
+      makePage(u('b'), { status: 404, inSitemap: null }),
+    ]);
+    expect(result.count).toBe(0);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 128 (http sitemap URL on an https site)', () => {
+  const httpUrl = (name: string): string => `http://exemple.com/${name}`;
+  const httpsRoot = 'https://exemple.com/';
+
+  it('flags sitemap pages listed over http when the site is https', () => {
+    const result = run(128, [
+      makePage(httpsRoot, { inSitemap: true }),
+      makePage(httpUrl('a'), { inSitemap: true, status: 301 }),
+      makePage(httpUrl('b'), { inSitemap: false }),
+      makePage(httpUrl('c'), { inSitemap: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([httpUrl('a')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('flags nothing on an http site', () => {
+    const crawl = crawlOf([
+      makePage(httpUrl('root'), { inSitemap: true }),
+      makePage(httpUrl('a'), { inSitemap: true }),
+    ]);
+    const result = runCheck(pageChecks, 128, { ...crawl, rootUrl: httpUrl('root') });
+    expect(result.count).toBe(0);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 207 (sitemap page that no other page links to)', () => {
+  const listed = (name: string, overrides: Partial<Page> = {}): Page =>
+    makePage(u(name), { inSitemap: true, ...overrides });
+
+  it('flags a sitemap page with no incoming internal link', () => {
+    const result = run(207, [listed('orphan'), listed('home')]);
+    expect(flaggedUrls(result)).toEqual([u('orphan'), u('home')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('flags a page that only links to itself', () => {
+    const result = runCheck(
+      pageChecks,
+      207,
+      crawlOf([listed('self')], [makeLink(u('self'), u('self'))]),
+    );
+    expect(flaggedUrls(result)).toEqual([u('self')]);
+  });
+
+  it('does not flag a sitemap page linked from another page', () => {
+    const result = runCheck(
+      pageChecks,
+      207,
+      crawlOf([listed('a'), listed('b')], [makeLink(u('a'), u('b')), makeLink(u('b'), u('a'))]),
+    );
+    expect(result.count).toBe(0);
+  });
+
+  it('counts a link that reaches the page through a redirect', () => {
+    const pages = [
+      listed('a'),
+      listed('new'),
+      makePage(u('old'), { status: 301, isHtml: false, redirectTarget: u('new') }),
+    ];
+    const links = [makeLink(u('a'), u('old')), makeLink(u('new'), u('a'))];
+    const result = runCheck(pageChecks, 207, crawlOf(pages, links));
+    expect(result.count).toBe(0);
+  });
+
+  it('ignores external and resource links as incoming links', () => {
+    const links = [
+      makeLink(u('a'), u('b'), { type: 'resource' }),
+      makeLink(u('a'), u('b'), { type: 'external' }),
+    ];
+    const result = runCheck(pageChecks, 207, crawlOf([listed('a'), listed('b')], links));
+    expect(flaggedUrls(result)).toEqual([u('a'), u('b')]);
+  });
+
+  it('only examines HTML 2xx pages listed in the sitemap', () => {
+    const result = run(207, [
+      makePage(u('not-listed'), { inSitemap: false }),
+      makePage(u('unknown'), { inSitemap: null }),
+      listed('gone', { status: 404 }),
+      listed('pdf', { isHtml: false }),
+    ]);
+    expect(result.count).toBe(0);
     expect(result.examined).toBe(0);
   });
 });

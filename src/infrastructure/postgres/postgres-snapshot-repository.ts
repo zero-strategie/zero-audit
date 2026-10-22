@@ -12,6 +12,8 @@ import type {
   LinkType,
   Page,
   SiteFile,
+  SiteFileFacts,
+  HtmlFacts,
   SiteFileKind,
   SlashVariantProbe,
 } from '../../domain/crawl.js';
@@ -21,6 +23,7 @@ import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { hashToken } from '../hash-token.js';
 import { withTransaction } from './pool.js';
 import { PostgresProjectRepository } from './postgres-project-repository.js';
+import { stringifyFacts, stringifyJson } from '../facts-serialization.js';
 
 type Queryable = pg.Pool | pg.PoolClient;
 
@@ -59,6 +62,8 @@ type PageRow = {
   text_ratio: number | null;
   content_hash: string | null;
   blocked_by_robots: boolean;
+  html_facts: HtmlFacts | null;
+  in_sitemap: boolean | null;
 };
 
 type LinkRow = {
@@ -70,6 +75,7 @@ type LinkRow = {
 };
 
 type SiteFileRow = {
+  facts: SiteFileFacts | null;
   kind: SiteFileKind;
   url: string;
   status: number | null;
@@ -144,6 +150,8 @@ const toPage = (row: PageRow): Page => ({
   textRatio: row.text_ratio,
   contentHash: row.content_hash,
   blockedByRobots: row.blocked_by_robots,
+  htmlFacts: row.html_facts,
+  inSitemap: row.in_sitemap,
 });
 
 const toLink = (row: LinkRow): Link => ({
@@ -159,6 +167,7 @@ const toSiteFile = (row: SiteFileRow): SiteFile => ({
   url: row.url,
   status: row.status,
   error: row.error,
+  facts: row.facts,
 });
 
 const toHostProbe = (row: HostProbeRow): HostProbe => ({
@@ -438,8 +447,8 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
         await db.query(
           `INSERT INTO pages (snapshot_id, url, depth, status, error, redirect_target, redirect_chain,
              headers, response_time_ms, content_type, is_html, title, meta_description, canonical, h1,
-             word_count, text_ratio, content_hash, blocked_by_robots)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)`,
+             word_count, text_ratio, content_hash, blocked_by_robots, html_facts, in_sitemap)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)`,
           [
             id,
             page.url,
@@ -460,6 +469,8 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
             page.textRatio,
             page.contentHash,
             page.blockedByRobots,
+            stringifyFacts(page.htmlFacts),
+            page.inSitemap,
           ],
         );
       }
@@ -481,8 +492,8 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
     return this.writeToRunning(id, async (db) => {
       for (const file of files) {
         await db.query(
-          'INSERT INTO site_files (snapshot_id, kind, url, status, error) VALUES ($1, $2, $3, $4, $5)',
-          [id, file.kind, file.url, file.status, file.error],
+          'INSERT INTO site_files (snapshot_id, kind, url, status, error, facts) VALUES ($1, $2, $3, $4, $5, $6)',
+          [id, file.kind, file.url, file.status, file.error, stringifyFacts(file.facts)],
         );
       }
     });
@@ -526,7 +537,7 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
         for (const occurrence of result.occurrences) {
           await db.query(
             'INSERT INTO issue_occurrences (snapshot_id, check_id, page_url, info) VALUES ($1, $2, $3, $4)',
-            [id, occurrence.checkId, occurrence.pageUrl, JSON.stringify(occurrence.info)],
+            [id, occurrence.checkId, occurrence.pageUrl, stringifyJson(occurrence.info)],
           );
         }
       }
@@ -623,7 +634,7 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
     return results.rows.map((row) => ({
       checkId: row.check_id,
       severity: row.severity,
-      theme: toTheme(row.theme),
+      theme: toTheme(row.theme, row.check_id),
       count: row.count,
       examined: row.examined,
       occurrences: occurrences.rows

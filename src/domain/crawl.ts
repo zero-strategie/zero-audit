@@ -1,3 +1,22 @@
+import { MAX_FACT_EXAMPLES } from './thresholds.js';
+
+export type FactValue =
+  string | number | boolean | null | readonly FactValue[] | { readonly [key: string]: FactValue };
+
+export { MAX_FACT_EXAMPLES };
+
+/** Capped list of examples with the real total, so a huge page cannot bloat a snapshot. */
+export interface CappedExamples<T extends FactValue> {
+  readonly total: number;
+  readonly examples: readonly T[];
+}
+
+/** Facts extracted from the HTML of a page; sections are added by the checks that need them. */
+export type HtmlFacts = { readonly [section: string]: FactValue };
+
+/** Facts extracted from a technical site file (robots.txt, sitemap or llms.txt). */
+export type SiteFileFacts = { readonly [section: string]: FactValue };
+
 export interface Page {
   readonly url: string;
   readonly depth: number;
@@ -20,6 +39,10 @@ export interface Page {
   readonly contentHash: string | null;
   /** Internal URL forbidden by robots.txt: recorded without any request. */
   readonly blockedByRobots: boolean;
+  /** Null for non-HTML pages, pages not yet analysed and snapshots written before facts existed. */
+  readonly htmlFacts: HtmlFacts | null;
+  /** Whether the sitemap lists this page; null when no sitemap was read or for older snapshots. */
+  readonly inSitemap: boolean | null;
 }
 
 export type LinkType = 'internal' | 'external' | 'resource';
@@ -41,6 +64,8 @@ export interface SiteFile {
   readonly status: number | null;
   /** Network failure kind when no response was received. */
   readonly error: string | null;
+  /** Null when nothing was extracted and for snapshots written before facts existed. */
+  readonly facts: SiteFileFacts | null;
 }
 
 /** Single request to the home page of the alternate host (www. or apex); never a crawled page. */
@@ -75,6 +100,8 @@ export interface CrawlResult {
   readonly blockedPages: readonly Page[];
   readonly links: readonly Link[];
   readonly siteFiles: readonly SiteFile[];
+  /** Normalized internal page URLs listed by the sitemaps, children included; not persisted. */
+  readonly sitemapUrls: readonly string[];
   /** Null when the root host is an IP or localhost: no alternate host exists. */
   readonly hostProbe: HostProbe | null;
   readonly slashProbes: readonly SlashVariantProbe[];

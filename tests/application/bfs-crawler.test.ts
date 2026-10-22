@@ -286,6 +286,45 @@ describe('BfsCrawler traversal', () => {
   });
 });
 
+describe('BfsCrawler sitemap membership', () => {
+  it('marks each crawled page by its presence in the sitemap and exposes the sitemap URLs', async () => {
+    const { result } = await crawl({
+      [`${SITE}/`]: page('/c'),
+      [`${SITE}/sitemap.xml`]: sitemap(`${SITE}/a`, `${SITE}/b/`),
+      [`${SITE}/a`]: page(),
+      [`${SITE}/b/`]: page(),
+      [`${SITE}/c`]: page(),
+    });
+
+    expect(result.sitemapUrls).toEqual([`${SITE}/a`, `${SITE}/b/`]);
+    expect(result.pages.map((p) => [p.url, p.inSitemap])).toEqual([
+      [`${SITE}/`, false],
+      [`${SITE}/a`, true],
+      [`${SITE}/b/`, true],
+      [`${SITE}/c`, false],
+    ]);
+  });
+
+  it('marks a robots-blocked page present in the sitemap', async () => {
+    const { result } = await crawl({
+      [`${SITE}/`]: page(),
+      [`${SITE}/robots.txt`]: text('User-agent: *\nDisallow: /private'),
+      [`${SITE}/sitemap.xml`]: sitemap(`${SITE}/private`),
+    });
+
+    expect(result.blockedPages.map((p) => [p.url, p.inSitemap])).toEqual([
+      [`${SITE}/private`, true],
+    ]);
+  });
+
+  it('leaves inSitemap null when no sitemap was found', async () => {
+    const { result } = await crawl({ [`${SITE}/`]: page('/a'), [`${SITE}/a`]: page() });
+
+    expect(result.sitemapUrls).toEqual([]);
+    expect(result.pages.map((p) => p.inSitemap)).toEqual([null, null]);
+  });
+});
+
 describe('BfsCrawler technical files', () => {
   it('returns the technical files apart from the crawled pages', async () => {
     const { result } = await crawl({
@@ -295,9 +334,15 @@ describe('BfsCrawler technical files', () => {
     });
 
     expect(result.siteFiles).toEqual([
-      { kind: 'robots', url: `${SITE}/robots.txt`, status: 200, error: null },
-      { kind: 'sitemap', url: `${SITE}/sitemap.xml`, status: 404, error: null },
-      { kind: 'llms', url: `${SITE}/llms.txt`, status: null, error: 'timeout' },
+      {
+        kind: 'robots',
+        url: `${SITE}/robots.txt`,
+        status: 200,
+        error: null,
+        facts: { invalidLines: [], invalidCount: 0, sitemapDeclarations: 0 },
+      },
+      { kind: 'sitemap', url: `${SITE}/sitemap.xml`, status: 404, error: null, facts: null },
+      { kind: 'llms', url: `${SITE}/llms.txt`, status: null, error: 'timeout', facts: null },
     ]);
     expect(result.pages.map((p) => p.url)).toEqual([`${SITE}/`]);
   });

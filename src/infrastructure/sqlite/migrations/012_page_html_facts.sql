@@ -1,0 +1,3 @@
+ALTER TABLE pages ADD COLUMN html_facts TEXT;
+ALTER TABLE pages ADD COLUMN in_sitemap INTEGER;
+ALTER TABLE site_files ADD COLUMN facts TEXT;

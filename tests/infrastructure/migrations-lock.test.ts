@@ -19,6 +19,7 @@ const POSTGRES_LOCK: MigrationLock = {
   '004_accounts.sql': 'ab1e6228bd5b17d782f5986dbf417b592bb4a734324b8745a3d60f7471d4371c',
   '005_api_launches.sql': 'd02a2f7a43c816d7aa93968aaf2151fd275577a2c095cc0ea3223d6181a68f75',
   '006_audit_queue.sql': 'fe1e06cd84788d34ab87c9fdbea4ccc10de5515530d2275497da5ceedd1d9f8a',
+  '007_page_html_facts.sql': '7d774f939fb078732e4e6774f80e3197d146b52e2ea1888eba6e218f41ca871f',
 };
 
 const SQLITE_LOCK: MigrationLock = {
@@ -33,6 +34,7 @@ const SQLITE_LOCK: MigrationLock = {
   '009_accounts.sql': '0a205928d375b5cd9b3f551d52d5b0227a52c5e06b9c93e001e5d3bf368852c4',
   '010_api_launches.sql': '215380afbf0041308dd60f0609eff574e1e818ccd084111a8f413831d60d885c',
   '011_audit_queue.sql': '7c86f70877c72759d1341d8ad5895252567bb4f4ebf35961cdfbeffb3bab611e',
+  '012_page_html_facts.sql': '326bf2e32bcbc6a127939f5eebe6ec0a12275239aa4e27166067893c0e394345',
 };
 
 const readMigrationFingerprints = (directory: string): MigrationLock =>
@@ -74,17 +76,17 @@ describe('diffMigrationLock', () => {
 });
 
 describe('existing migrations', () => {
-  it('keeps exactly the 6 Postgres migrations unchanged', () => {
+  it('keeps exactly the 7 Postgres migrations unchanged', () => {
     const actual = readMigrationFingerprints('src/infrastructure/postgres/migrations');
 
-    expect(Object.keys(actual)).toHaveLength(6);
+    expect(Object.keys(actual)).toHaveLength(7);
     expect(diffMigrationLock(POSTGRES_LOCK, actual)).toEqual([]);
   });
 
-  it('keeps exactly the 11 SQLite migrations unchanged', () => {
+  it('keeps exactly the 12 SQLite migrations unchanged', () => {
     const actual = readMigrationFingerprints('src/infrastructure/sqlite/migrations');
 
-    expect(Object.keys(actual)).toHaveLength(11);
+    expect(Object.keys(actual)).toHaveLength(12);
     expect(diffMigrationLock(SQLITE_LOCK, actual)).toEqual([]);
   });
 });

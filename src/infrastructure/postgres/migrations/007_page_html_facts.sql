@@ -1,0 +1,3 @@
+ALTER TABLE pages ADD COLUMN html_facts JSONB;
+ALTER TABLE pages ADD COLUMN in_sitemap BOOLEAN;
+ALTER TABLE site_files ADD COLUMN facts JSONB;

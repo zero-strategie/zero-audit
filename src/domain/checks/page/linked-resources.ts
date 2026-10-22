@@ -1,4 +1,5 @@
 import type { Link, Page } from '../../crawl.js';
+import { isFeedTarget } from './feed-targets.js';
 
 const RESOURCE_EXTENSIONS: ReadonlySet<string> = new Set([
   'pdf',
@@ -48,7 +49,12 @@ const isNonHtmlSuccess = (page: Page | undefined): boolean =>
   page.status >= 200 &&
   page.status <= 299;
 
-/** An internal target is judged on its crawled response too; an external one on its extension only. */
-export const isLinkedResource = (link: Link, pagesByUrl: ReadonlyMap<string, Page>): boolean =>
-  hasResourceExtension(link.targetUrl) ||
-  (link.type === 'internal' && isNonHtmlSuccess(pagesByUrl.get(link.targetUrl)));
+/** An internal target is judged on its crawled response too; an external one on its extension only. Feeds are not files to flag. */
+export const isLinkedResource = (
+  link: Link,
+  pagesByUrl: ReadonlyMap<string, Page>,
+  declaredFeeds: ReadonlySet<string>,
+): boolean =>
+  !isFeedTarget(link.targetUrl, pagesByUrl.get(link.targetUrl), declaredFeeds) &&
+  (hasResourceExtension(link.targetUrl) ||
+    (link.type === 'internal' && isNonHtmlSuccess(pagesByUrl.get(link.targetUrl))));
