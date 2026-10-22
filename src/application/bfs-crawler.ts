@@ -9,6 +9,7 @@ import {
   toggleTrailingSlash,
 } from '../domain/url.js';
 import { DiscoverSite } from './discover-site.js';
+import { toHtmlFacts } from './html-facts.js';
 import { PoliteHttpClient } from './polite-http-client.js';
 import type { Clock } from './ports/clock.js';
 import type { HtmlParser, ParsedHtml } from './ports/html-parser.js';
@@ -264,7 +265,7 @@ class CrawlRun {
       textRatio: parsed?.textRatio ?? null,
       contentHash: parsed?.contentHash ?? null,
       blockedByRobots: false,
-      htmlFacts: null,
+      htmlFacts: parsed === null ? null : toHtmlFacts(parsed),
       inSitemap: null,
     };
     if (isNetworkFailure(response)) {
