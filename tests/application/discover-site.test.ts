@@ -5,6 +5,7 @@ import type {
   HttpResponse,
   NetworkFailure,
 } from '../../src/application/ports/http-client.js';
+import { MAX_FACT_EXAMPLES } from '../../src/domain/crawl.js';
 import { RobotsParserAdapter } from '../../src/infrastructure/robots-parser-adapter.js';
 import { FastXmlSitemapReader } from '../../src/infrastructure/fast-xml-sitemap-reader.js';
 
@@ -12,7 +13,9 @@ const ROOT = 'https://exemple.com/';
 const HOST = 'exemple.com';
 const NS = 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"';
 
-type Reply = { status: number; body?: string } | 'network-error';
+type Reply =
+  | { status: number; body?: string; headers?: Record<string, string>; truncated?: boolean }
+  | 'network-error';
 
 class FakeHttpClient implements HttpClient {
   readonly requested: string[] = [];
@@ -28,9 +31,9 @@ class FakeHttpClient implements HttpClient {
     return Promise.resolve({
       url,
       status: reply.status,
-      headers: {},
+      headers: reply.headers ?? {},
       body: reply.body ?? '',
-      truncated: false,
+      truncated: reply.truncated ?? false,
       responseTimeMs: 1,
     });
   }
@@ -216,6 +219,16 @@ describe('DiscoverSite sitemaps', () => {
   });
 });
 
+const oneUrlFacts = (body: string) => ({
+  malformedXml: false,
+  truncated: false,
+  sizeBytes: Buffer.byteLength(body),
+  contentLength: null,
+  contentEncoding: null,
+  urlCount: 1,
+  issues: { total: 0, examples: [] },
+});
+
 describe('DiscoverSite technical files', () => {
   it('records robots.txt, sitemap.xml and llms.txt with their absolute URL and status', async () => {
     const { result } = await discover({
@@ -236,7 +249,7 @@ describe('DiscoverSite technical files', () => {
         url: 'https://exemple.com/sitemap.xml',
         status: 200,
         error: null,
-        facts: null,
+        facts: oneUrlFacts(urlset('https://exemple.com/a')),
       },
       { kind: 'llms', url: 'https://exemple.com/llms.txt', status: 404, error: null, facts: null },
     ]);
@@ -252,7 +265,13 @@ describe('DiscoverSite technical files', () => {
     });
 
     expect(result.siteFiles.filter(({ kind }) => kind === 'sitemap')).toEqual([
-      { kind: 'sitemap', url: 'https://exemple.com/s1.xml', status: 200, error: null, facts: null },
+      {
+        kind: 'sitemap',
+        url: 'https://exemple.com/s1.xml',
+        status: 200,
+        error: null,
+        facts: oneUrlFacts(urlset('https://exemple.com/one')),
+      },
       { kind: 'sitemap', url: 'https://exemple.com/s2.xml', status: 404, error: null, facts: null },
     ]);
     expect(http.requested).not.toContain('https://exemple.com/sitemap.xml');
@@ -277,5 +296,125 @@ describe('DiscoverSite technical files', () => {
     });
 
     expect(result.siteFiles.filter(({ kind }) => kind === 'sitemap')).toHaveLength(1);
+  });
+});
+
+describe('DiscoverSite sitemap facts', () => {
+  const sitemapFacts = async (replies: Record<string, Reply>) => {
+    const { result } = await discover(replies);
+    return {
+      result,
+      facts: result.siteFiles.find((file) => file.kind === 'sitemap')?.facts,
+    };
+  };
+  const SITEMAP = 'https://exemple.com/sitemap.xml';
+
+  it('records size, declared headers, url count and format issues of a urlset', async () => {
+    const body = `<urlset ${NS}><url><loc>https://exemple.com/a</loc><priority>7</priority></url><url><loc>/b</loc></url></urlset>`;
+    const { facts, result } = await sitemapFacts({
+      [SITEMAP]: {
+        status: 200,
+        body,
+        headers: { 'content-length': '4096', 'content-encoding': 'gzip' },
+      },
+    });
+
+    expect(result.sitemapFound).toBe(true);
+    expect(facts).toEqual({
+      malformedXml: false,
+      truncated: false,
+      sizeBytes: Buffer.byteLength(body),
+      contentLength: 4096,
+      contentEncoding: 'gzip',
+      urlCount: 2,
+      issues: {
+        total: 2,
+        examples: [
+          { type: 'invalid-priority', source: SITEMAP, loc: 'https://exemple.com/a', value: '7' },
+          { type: 'relative-loc', source: SITEMAP, loc: '/b', value: null },
+        ],
+      },
+    });
+  });
+
+  it('flags malformed XML without finding a sitemap', async () => {
+    const { facts, result } = await sitemapFacts({
+      [SITEMAP]: { status: 200, body: '<urlset><url></urlset>' },
+    });
+
+    expect(result.sitemapFound).toBe(false);
+    expect(facts).toMatchObject({ malformedXml: true, truncated: false, urlCount: 0 });
+  });
+
+  it('reports a truncated body as truncated rather than malformed', async () => {
+    const { facts } = await sitemapFacts({
+      [SITEMAP]: { status: 200, body: '<urlset><url><lo', truncated: true },
+    });
+
+    expect(facts).toMatchObject({ malformedXml: false, truncated: true });
+  });
+
+  it('keeps facts null when the sitemap is not served', async () => {
+    const { facts } = await sitemapFacts({});
+
+    expect(facts).toBeNull();
+  });
+
+  it('aggregates the facts of the children of an index', async () => {
+    const { facts, result } = await sitemapFacts({
+      [SITEMAP]: {
+        status: 200,
+        body: index('https://exemple.com/s1.xml', 'https://exemple.com/s2.xml'),
+      },
+      'https://exemple.com/s1.xml': {
+        status: 200,
+        body: urlset('https://exemple.com/a', 'https://exemple.com/b'),
+      },
+      'https://exemple.com/s2.xml': {
+        status: 200,
+        body: `<urlset ${NS}><url><loc>https://exemple.com/c</loc><changefreq>soon</changefreq></url></urlset>`,
+        truncated: true,
+      },
+    });
+
+    expect(result.sitemapUrls).toHaveLength(3);
+    expect(facts).toMatchObject({
+      urlCount: 3,
+      truncated: true,
+      malformedXml: false,
+      issues: {
+        total: 1,
+        examples: [
+          {
+            type: 'invalid-changefreq',
+            source: 'https://exemple.com/s2.xml',
+            loc: 'https://exemple.com/c',
+            value: 'soon',
+          },
+        ],
+      },
+    });
+  });
+
+  it('flags an index whose child is malformed', async () => {
+    const { facts } = await sitemapFacts({
+      [SITEMAP]: { status: 200, body: index('https://exemple.com/s1.xml') },
+      'https://exemple.com/s1.xml': { status: 200, body: 'not xml' },
+    });
+
+    expect(facts).toMatchObject({ malformedXml: true, urlCount: 0 });
+  });
+
+  it('caps the listed issues and keeps the real total', async () => {
+    const entries = Array.from(
+      { length: MAX_FACT_EXAMPLES + 5 },
+      (_, n) => `<url><loc>/p${String(n)}</loc></url>`,
+    ).join('');
+    const { facts } = await sitemapFacts({
+      [SITEMAP]: { status: 200, body: `<urlset ${NS}>${entries}</urlset>` },
+    });
+
+    expect(facts).toMatchObject({ issues: { total: MAX_FACT_EXAMPLES + 5 } });
+    expect((facts?.['issues'] as { examples: unknown[] }).examples).toHaveLength(MAX_FACT_EXAMPLES);
   });
 });

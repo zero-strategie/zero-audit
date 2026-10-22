@@ -9,6 +9,18 @@ import {
 } from './ports/http-client.js';
 import type { RobotsPolicy, RobotsPolicyFactory } from './ports/robots-policy.js';
 import type { ParsedSitemap, SitemapReader } from './ports/sitemap-reader.js';
+import { observeSitemap, toSitemapFacts, type SitemapObservation } from './sitemap-facts.js';
+
+interface SitemapReading {
+  file: SiteFile;
+  sitemap: ParsedSitemap | null;
+  observation: SitemapObservation | null;
+}
+
+interface ReadChild {
+  sitemap: ParsedSitemap | null;
+  observation: SitemapObservation | null;
+}
 
 export interface SiteDiscovery {
   robotsPolicy: RobotsPolicy;
@@ -40,6 +52,22 @@ const toSiteFile = (
     ? { kind, url, status: null, error: response.kind, facts: null }
     : { kind, url, status: response.status, error: null, facts: null };
 
+const withFacts = (
+  file: SiteFile,
+  observation: SitemapObservation | null,
+  children: readonly ReadChild[],
+  isIndex = false,
+): SiteFile => {
+  if (observation === null) return file;
+  const childObservations = children.flatMap((child) =>
+    child.observation === null ? [] : [child.observation],
+  );
+  return { ...file, facts: toSitemapFacts(observation, childObservations, isIndex) };
+};
+
+const urlsetOf = ({ sitemap }: ReadChild): ParsedSitemap[] =>
+  sitemap?.kind === 'urlset' ? [sitemap] : [];
+
 const isGzipped = (url: string): boolean => new URL(url).pathname.endsWith(GZIP_EXTENSION);
 
 export class DiscoverSite {
@@ -59,11 +87,16 @@ export class DiscoverSite {
     const urls = new Set<string>();
     let sitemapFound = false;
     for (const sitemapUrl of this.fetchable(entryPoints, internalHost)) {
-      const sitemap = await this.readSitemap(sitemapUrl, siteFiles);
-      if (sitemap === null) continue;
+      const { file, sitemap, observation } = await this.readSitemap(sitemapUrl);
+      if (sitemap === null) {
+        siteFiles.push(withFacts(file, observation, []));
+        continue;
+      }
       sitemapFound = true;
-      const leaves =
-        sitemap.kind === 'urlset' ? [sitemap] : await this.readChildren(sitemap, internalHost);
+      const children =
+        sitemap.kind === 'index' ? await this.readChildren(sitemap, internalHost) : [];
+      siteFiles.push(withFacts(file, observation, children, sitemap.kind === 'index'));
+      const leaves = sitemap.kind === 'urlset' ? [sitemap] : children.flatMap(urlsetOf);
       for (const leaf of leaves) this.collectPageUrls(leaf, sitemapUrl, internalHost, urls);
     }
 
@@ -88,19 +121,22 @@ export class DiscoverSite {
     return { policy: robotsFactory.fromRobotsTxt(robotsUrl, response.body), found: true };
   }
 
-  /** Only first-level sitemaps are recorded as technical files; children are read silently. */
-  private async readSitemap(url: string, siteFiles?: SiteFile[]): Promise<ParsedSitemap | null> {
+  private async readSitemap(url: string): Promise<SitemapReading> {
     const response = await this.dependencies.http.get(url);
-    siteFiles?.push(toSiteFile('sitemap', url, response));
-    if (isNetworkFailure(response) || !this.isSuccess(response.status)) return null;
-    return this.dependencies.sitemapReader.parse(response.body).sitemap;
+    const file = toSiteFile('sitemap', url, response);
+    if (isNetworkFailure(response) || !this.isSuccess(response.status)) {
+      return { file, sitemap: null, observation: null };
+    }
+    const read = this.dependencies.sitemapReader.parse(response.body);
+    return { file, sitemap: read.sitemap, observation: observeSitemap(url, response, read) };
   }
 
-  private async readChildren(index: ParsedSitemap, internalHost: string): Promise<ParsedSitemap[]> {
-    const children: ParsedSitemap[] = [];
-    for (const childUrl of this.fetchable(index.locs, internalHost)) {
-      const child = await this.readSitemap(childUrl);
-      if (child?.kind === 'urlset') children.push(child);
+  /** Children are read silently: only their facts are folded into the declared sitemap. */
+  private async readChildren(index: ParsedSitemap, internalHost: string): Promise<ReadChild[]> {
+    const children: ReadChild[] = [];
+    for (const url of this.fetchable(index.locs, internalHost)) {
+      const { sitemap, observation } = await this.readSitemap(url);
+      children.push({ sitemap, observation });
     }
     return children;
   }
