@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 25 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 26 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page` or `other`. Each theme gets its own score.
@@ -21,6 +21,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 9 | error | crawlability | page | A page did not answer within the crawler's time limit (`timeout`). | Look at the server's performance and load. |
 | 11 | error | crawlability | page | A page could not be reached: connection, DNS, blocked or other network failure. `info.kind` gives the failure. | Check the host, DNS and firewall, then the URL itself. |
 | 15 | error | on-page | page | Several pages share the same meta description. | Write a specific description for each page. |
+| 33 | error | crawlability | page | A redirecting URL goes through at least 2 redirects before reaching its destination, or leads into a loop. `info` gives the `chain` (the URLs followed in order, without the starting URL) and `loop`, plus `truncated` when the 10-hop cap was reached. | Redirect straight to the final destination and update the links. |
 | 101 | warning | on-page | page | The title is shorter than 30 characters. | Make the title more descriptive. |
 | 102 | warning | on-page | page | The title is longer than 60 characters. | Shorten it so it is not truncated in search results. |
 | 103 | warning | on-page | page | An HTML page has no `<h1>`. | Add one main heading. |
@@ -46,6 +47,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 4 always applies: its `examined` is the number of pages explored, and the occurrences come from the URLs the crawler skipped because of `robots.txt`.
   - Check 8 applies to every page that has internal links.
   - Checks 109 and 214 apply to every page that got an HTTP response. A page redirects when its status is 302, 303 or 307 (109) or 301 or 308 (214); a 304 is not a redirect. The page is reported where it redirects, not where it is linked.
+  - Check 33 applies to every page that answers with a redirect. Each crawled URL whose own chain has at least 2 hops, or ends in a loop (including a page redirecting to itself), is reported: in X→A→B→C, X and A are reported and B is not. A chain is cut at 10 hops and marked `truncated`.
   - Checks 9 and 11 always apply: their `examined` is the number of pages explored. A timeout goes to 9, every other network failure to 11. Check 8 also reports internal links to these pages, so the same failure can appear in both (on the linking page for 8, on the failed page for 9 and 11).
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**

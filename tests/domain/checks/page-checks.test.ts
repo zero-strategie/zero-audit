@@ -153,6 +153,58 @@ describe('checks 109 and 214 (redirects)', () => {
   });
 });
 
+describe('check 33 (redirect chains and loops)', () => {
+  const hop = (name: string, target: string, status = 301): Page =>
+    makePage(name, { status, isHtml: false, redirectTarget: target });
+
+  it('flags every redirecting URL with at least 2 hops, listing the chain in order', () => {
+    const result = run(33, [
+      hop(u('x'), u('a')),
+      hop(u('a'), u('b')),
+      hop(u('b'), u('c')),
+      makePage(u('c')),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('x'), u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      chain: [u('a'), u('b'), u('c')],
+      loop: false,
+    });
+    expect(result.occurrences[1]?.info).toEqual({ chain: [u('b'), u('c')], loop: false });
+  });
+
+  it('flags every URL of a loop with loop = true', () => {
+    const result = run(33, [hop(u('a'), u('b'), 302), hop(u('b'), u('a'))]);
+    expect(flaggedUrls(result)).toEqual([u('a'), u('b')]);
+    expect(result.occurrences.map((o) => o.info['loop'])).toEqual([true, true]);
+  });
+
+  it('flags a page redirecting to itself', () => {
+    const result = run(33, [hop(u('a'), u('a'))]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ chain: [u('a')], loop: true });
+  });
+
+  it('marks a chain reaching the 10 hop cap as truncated', () => {
+    const pages = Array.from({ length: 12 }, (_, i) =>
+      hop(u(`p${String(i)}`), u(`p${String(i + 1)}`)),
+    );
+    const first = run(33, pages).occurrences[0];
+    expect(first?.pageUrl).toBe(u('p0'));
+    expect(first?.info['truncated']).toBe(true);
+    expect(first?.info['chain']).toHaveLength(10);
+  });
+
+  it('ignores a single redirect', () => {
+    const result = run(33, [hop(u('a'), u('b')), makePage(u('b'))]);
+    expect(result.count).toBe(0);
+  });
+
+  it('examines the redirecting pages only', () => {
+    const result = run(33, [hop(u('a'), u('b')), makePage(u('b')), makePage(u('c'))]);
+    expect(result.examined).toBe(1);
+  });
+});
+
 describe('check 3 (title missing)', () => {
   it('flags null and empty titles on HTML 2xx pages only', () => {
     const result = run(3, [
@@ -313,6 +365,7 @@ describe('registry metadata', () => {
       4: 'notice',
       9: 'error',
       11: 'error',
+      33: 'error',
       109: 'warning',
       214: 'notice',
       101: 'warning',
