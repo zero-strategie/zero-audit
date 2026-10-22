@@ -2,41 +2,51 @@
 
 zero-audit is a technical SEO audit tool. It crawls a website the way a search engine would, runs [20 checks](checks.md) on what it finds, gives the site a health score, and tracks how it changes from one audit to the next.
 
-It has three parts:
-
-- a **command line** (`zero-audit`) that runs audits and compares them;
-- an **HTTP API** (`zero-audit serve`);
-- a **web dashboard** that reads the API.
-
-Every audit is stored as an immutable **snapshot**, in SQLite (the default) or in Postgres.
+You use it through its **command line**, `zero-audit`. Every audit is stored as an immutable **snapshot**, in SQLite (the default) or in Postgres.
 
 - [Install](#install)
 - [Run your first audit](#run-your-first-audit)
 - [Read the results](#read-the-results)
-- [Compare two audits](#compare-two-audits)
-- [Use the dashboard](#use-the-dashboard)
+- [Commands](#commands)
 - [Store audits in Postgres](#store-audits-in-postgres)
-- [Run with Docker](#run-with-docker)
-- [Self-host it](#self-host-it)
-- [Command reference](#command-reference)
+- [Environment variables](#environment-variables)
+- [Exit codes](#exit-codes)
 - [Limitations](#limitations)
 - [FAQ](#faq)
 
 ## Install
 
-You need **Node.js 22** and **pnpm**. Docker is optional; see [Run with Docker](#run-with-docker).
+You need **Node.js 22**. Run it without installing anything:
 
 ```sh
-git clone https://github.com/zero-strategie/zero-audit.git
-cd zero-audit
-pnpm install
+npx @zero-strategie/zero-audit-core https://example.com
 ```
+
+Or install it, which provides the `zero-audit` binary:
+
+```sh
+npm install @zero-strategie/zero-audit-core
+npx zero-audit https://example.com
+```
+
+From a clone of the repository (uses **pnpm**):
+
+```sh
+pnpm install
+pnpm zero-audit https://example.com
+```
+
+The examples below write `zero-audit`; prefix it with `npx` or `pnpm` as needed.
+
+**Language.** The messages of the CLI (summary, errors, usage) are in French. Identifiers, check numbers and this guide are in English.
 
 ## Run your first audit
 
 ```sh
-pnpm zero-audit https://example.com
+zero-audit https://example.com --direct
 ```
+
+`--direct` crawls in the current process. Without it, the audit is only queued for a worker (see [`audit`](#audit)).
 
 zero-audit starts from the URL you give it:
 
@@ -63,14 +73,14 @@ Checks déclenchés
   ...
 ```
 
-The interface is in French.
+The messages are in French.
 
 Useful options:
 
 ```sh
-pnpm zero-audit https://example.com --limit 500       # crawl up to 500 pages
-pnpm zero-audit https://example.com --delay 250       # be faster, on your own site only
-pnpm zero-audit https://example.com --json audit.json # also export the full snapshot
+zero-audit https://example.com --limit 500       # crawl up to 500 pages
+zero-audit https://example.com --delay 250       # be faster, on your own site only
+zero-audit https://example.com --json audit.json # also export the full snapshot
 ```
 
 > **Be polite.** Only audit sites you own or are allowed to crawl. zero-audit:
@@ -135,8 +145,34 @@ A project groups the audits of one start URL, normalised. `https://example.com` 
 
 ## Compare two audits
 
+To see what changed between two audits, use [`compare`](#compare).
+
+## Commands
+
+Run `zero-audit --help` for the usage. The word `audit` is optional: `zero-audit <url>` is the same as `zero-audit audit <url>`.
+
+### audit
+
 ```sh
-pnpm zero-audit compare <A> <B>
+zero-audit audit <url> [--limit <n>] [--delay <ms>] [--wait | --direct] [--json <file>]
+```
+
+Audits a site, starting from an `http` or `https` URL.
+
+- By default the audit is **queued** and the command prints its id and its position. A [`worker`](#worker) then processes it.
+- `--wait` waits for the end of the audit and prints the summary. It warns when no worker is active, and cannot be combined with `--direct`.
+- `--direct` crawls in the current process, without the queue or a worker.
+- `--json <file>` also writes the full snapshot as JSON (with `--wait` or `--direct`).
+
+```sh
+zero-audit https://example.com --wait --limit 200
+zero-audit https://example.com --direct --json audit.json
+```
+
+### compare
+
+```sh
+zero-audit compare <A> <B>
 ```
 
 `A` is the base and `B` the target. Use the snapshot ids printed by the audit summary. The output shows, for each check:
@@ -147,141 +183,49 @@ pnpm zero-audit compare <A> <B>
 
 Both audits must be finished and belong to the same site.
 
-## Use the dashboard
+```sh
+zero-audit compare 9abf37ed-0000-0000-0000-000000000001 3c1d52aa-0000-0000-0000-000000000002
+```
 
-The dashboard is a separate web server that reads the API. Run each command in its own terminal:
+### migrate
 
 ```sh
-pnpm zero-audit serve                  # API on http://127.0.0.1:3000
-pnpm --filter web dev                  # dashboard on http://127.0.0.1:4321
+zero-audit migrate [--store <type>] [--db <path>]
 ```
 
-For a production build of the dashboard, run `pnpm --filter web build`, then `pnpm --filter web start`.
-
-| Screen | What it shows |
-|---|---|
-| Projects | **Mes projets** (signed-in accounts, shown first) and **Vitrine**, with each site's latest health score, date and status. Signed-in accounts get a **Nouvel audit** button and a **Relancer** (relaunch) button per site. |
-| Confidentialité | The data collected, how long it is kept, the e-mail processor and the contact address. Linked from every footer. |
-| Overview | A **Relancer l'audit** button, health gauge, theme cards, counts per severity, page groups, top 5 issues, status of robots.txt, sitemap and llms.txt. An audit selector opens older audits. |
-| Issues | All checks grouped by severity, passed ones included, with an optional severity filter. |
-| Issue detail | The occurrences of one check, paginated. |
-| Crawled pages | Every page with its status, depth, group, issue count and response time. Sortable and paginated. |
-| Compare | Pick two audits of the same site and see scores and differences side by side. |
-
-The dashboard works on mobile and follows your system's dark mode.
-
-### Accounts
-
-Visitors can read the showcase; launching audits needs an account.
-
-- **Sign up** at `/inscription` with an e-mail address and a password. The answer is always the same message, whether or not the address is already registered.
-- **Confirm** the address with the link sent by e-mail (valid 24 hours). The page asks you to click **Activer mon compte**, which activates the account and signs you in. An account that stays unconfirmed is deleted after 7 days. The sign-in page can send the link again (3 links per hour at most).
-- **Sign in** at `/connexion`. The session lasts 30 days, then you sign in again. **Se déconnecter** ends the current session.
-- **Forgot your password?** Use `/mot-de-passe-oublie`: you receive a link (valid 1 hour) to choose a new password. All your sessions are then closed.
-- **Delete your account** from **Mon compte**, with your password. Your projects, audits and sessions are deleted. The deletion is refused while one of your audits is running.
-
-Your audits are private to your account. The **Vitrine** lists the projects that have no owner (audits run from the command line). An account relaunching a showcase site gets its own private project.
-
-**Quotas** for a regular account: 100 pages per audit (the form offers 50 and 100) and 3 audits per rolling 24 hours, counting every audit started, even a failed one. When the quota is reached, the message gives the time of the next possible audit. A global ceiling (`ZERO_AUDIT_LAUNCHES_PER_DAY`, 30 by default) also caps the audits launched through the dashboard, all accounts together. Administrators have no personal quota and can pick up to 500 pages, but the global ceiling still applies to them. Deleting an account does not reset these counts: for 24 hours the platform keeps a fingerprint of the address with the date of each audit, so registering again with the same address finds the same quota. The command line has no quota.
-
-### Launch an audit from the dashboard
-
-Sign in, click **Nouvel audit** on the projects page, enter the site address (with `https://`) and choose the maximum number of pages: 50, 100 (default), 250 or 500, within your account's limit. The page then follows the audit and refreshes itself until it ends.
-
-- **Relaunch**: the projects page relaunches a site with 100 pages, in your own project. The overview relaunches with the page limit of the audit you are viewing, if it is one of the four choices, otherwise with 100.
-- **Internal addresses are refused.** The server rejects addresses that resolve to a private, loopback or link-local network, so the dashboard cannot be used to reach your internal services. Developers can lift this guard on a trusted machine with `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true`.
-- **Queue.** Audits are processed one after another by a worker. After you launch one, the page shows "En file d'attente" with your position (1 means you are next); it refreshes itself and switches to the progress display when your audit starts. The queue is shared by all accounts and holds 20 waiting audits by default: beyond that the launch is refused with "La file d'attente est pleine", and you can try again later.
-- **One audit per account.** While one of your audits is waiting or running, you cannot launch another (administrators included): the message points to the audit in progress.
-- **Automatic resumption.** If the server or the worker restarts during your audit (for example a deployment), the audit starts again from zero and the page shows "Reprise en cours (tentative 2/2)". At most 2 attempts are made: if it is interrupted a second time, it ends as failed and you can launch it again.
-- **Weekly audit.** The command line, and so a cron job or systemd timer, has no quota and no account limit: it joins the same queue, so it never runs at the same time as a dashboard audit when a single worker is running. Without `--wait` it only queues the audit and returns immediately; add `--wait` for a command that ends with the audit, or `--direct` to crawl outside the queue.
-- **Third-party content.** You can audit any public site. The pages' metadata and links are stored, and they may contain third-party content, including personal data. The crawler honours robots.txt and identifies itself, but audit only sites you are entitled to crawl.
-
-## Store audits in Postgres
-
-SQLite needs no setup. To share audits between machines, or to run in production, use Postgres:
+Applies the storage migrations, then exits. Other commands migrate automatically on first use; `migrate` lets a deployment do it explicitly.
 
 ```sh
-POSTGRES_PASSWORD=change-me docker compose up -d postgres
-export DATABASE_URL=postgresql://zero_audit:change-me@127.0.0.1:5432/zero_audit
-pnpm zero-audit migrate --store postgres
-pnpm zero-audit https://example.com --store postgres
-pnpm zero-audit serve --store postgres
+zero-audit migrate --store postgres
 ```
 
-You can set `ZERO_AUDIT_STORE=postgres` instead of passing `--store` every time. The schema is migrated automatically on first use. `migrate` only exists so a deployment can apply migrations explicitly.
-
-## Run with Docker
-
-The repository builds two images:
-
-- `api`: the CLI, the API, the worker and the migrations;
-- `web`: the dashboard.
-
-The `docker-compose.yml` starts the whole stack (Postgres, migrations, API, worker and dashboard), publishing ports on `127.0.0.1` only:
+### worker
 
 ```sh
-POSTGRES_PASSWORD=change-me docker compose up --build
-# dashboard: http://127.0.0.1:4321    API: http://127.0.0.1:3000
-docker compose run --rm migrate audit https://example.com   # run an audit in the stack
+zero-audit worker [--store <type>] [--db <path>]
 ```
 
-The `migrate` service is built from the `api` image and its command is replaced, so it can run any CLI command against the stack's Postgres. Published images are available as `ghcr.io/zero-strategie/zero-audit-api` and `ghcr.io/zero-strategie/zero-audit-web`.
-
-## Self-host it
-
-The dashboard has its own accounts (see [Accounts](#accounts)); the API does not and trusts the dashboard. The API and the dashboard must only be published on `127.0.0.1`, behind a reverse proxy that adds TLS, and never expose the API publicly. Mail sending must be configured (`ZERO_AUDIT_MAILER=brevo`, never `console` in production), see `.env.example`. In Docker, publish them as `127.0.0.1:3000:3000`, never as `3000:3000`.
-
-With [Caddy](https://caddyserver.com), for example (the `basic_auth` block is no longer needed once accounts are open to the public; it is removed from the infrastructure repository after this change ships):
-
-```caddyfile
-audit.example.com {
-	# Health checks stay public, so deployment scripts can probe them.
-	handle /health {
-		reverse_proxy 127.0.0.1:4321
-	}
-	handle {
-		basic_auth {
-			admin <bcrypt hash from `caddy hash-password`>
-		}
-		reverse_proxy 127.0.0.1:4321
-	}
-}
-```
-
-The dashboard can start audits, so the machine now makes outgoing requests to any public site you type in. Know that the weekly timer below can run while an audit started from the dashboard is in progress.
-
-Only expose the dashboard. It calls the API from the server side, so the API never needs to be reachable from outside.
-
-To audit the site on a schedule, run `zero-audit <url>` from cron or a systemd timer, for example `docker compose run --rm migrate audit https://example.com`. The dashboard then shows the trend.
-
-Both servers answer `GET /health`:
-
-- `200 {"status":"ok"}` when healthy;
-- `503 {"status":"unavailable"}` otherwise.
-
-For the API, healthy means the database answers. For the dashboard, it means the API answers.
+A dedicated process that takes the queued audits and crawls them. `ZERO_AUDIT_WORKER_CONCURRENCY` sets how many run in parallel. On `SIGTERM` or `SIGINT` the audit in progress goes back to the queue and the worker exits with 0. An audit interrupted twice ends as failed.
 
 ```sh
-curl http://127.0.0.1:3000/health   # API
-curl http://127.0.0.1:4321/health   # dashboard (reflects the API health)
+ZERO_AUDIT_WORKER_CONCURRENCY=2 zero-audit worker
 ```
 
-**Licence obligation.** If you run a *modified* version for other users, the AGPL-3.0 requires you to offer them your source code. Set `ZERO_AUDIT_SOURCE_URL` on the dashboard to your repository; the footer of every page links to it. An unmodified deployment can keep the default, which points to the upstream repository.
+By default the worker refuses targets that are, or resolve to, internal addresses (loopback, private networks, link-local). Set `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS=true` to lift that guard, on a development machine only.
 
-Each audit writes JSON lines to stdout (`audit.started`, `audit.finished` with the health score, `audit.failed`), handy for `docker logs` and log collectors.
+### worker-health
 
-## Command reference
-
-```text
-zero-audit [audit] <url> [options]   run an audit (the word "audit" is optional)
-zero-audit compare <A> <B>           compare two finished audits of the same site
-zero-audit serve                     start the HTTP API
-zero-audit migrate                   apply storage migrations and exit
-zero-audit worker                    process the queued audits (dedicated process)
-zero-audit worker-health             exit 0 if this host's worker is alive, else 1
+```sh
+zero-audit worker-health [--store <type>] [--db <path>]
 ```
 
-`zero-audit <url>` queues the audit and prints its id and position. `--wait` waits for the end and prints the summary; `--direct` crawls in the process without the queue.
+Exits 0 if the worker of this host reported itself less than 60 seconds ago, otherwise 1. Useful as a health probe.
+
+```sh
+zero-audit worker-health && echo "worker alive"
+```
+
+### Options
 
 An option takes precedence over its environment variable, which takes precedence over the default.
 
@@ -291,33 +235,52 @@ An option takes precedence over its environment variable, which takes precedence
 | `--delay <ms>` | `ZERO_AUDIT_DELAY_MS` | 1000 | delay between two requests |
 | `--db <path>` | `ZERO_AUDIT_DB_PATH` | `./.zero-audit/audit.db` | SQLite database file |
 | `--store <sqlite\|postgres>` | `ZERO_AUDIT_STORE` | `sqlite` | storage backend |
-| | `DATABASE_URL` | | Postgres URL, required with `--store postgres` |
-| `--json <file>` | | | export the full snapshot as JSON (with `--wait` or `--direct`) |
+| `--json <file>` | | | export the full snapshot as JSON |
 | `--wait` | | | wait for the queued audit to end |
 | `--direct` | | | crawl in the process, outside the queue |
-| | `ZERO_AUDIT_WORKER` | `embedded` | `serve` runs the worker itself, or `external` for a dedicated process |
-| | `ZERO_AUDIT_WORKER_CONCURRENCY` | 1 | audits run in parallel by `worker` |
-| | `ZERO_AUDIT_QUEUE_MAX` | 20 | ceiling of waiting audits (API only) |
-| `--port <n>` | `PORT` | 3000 | API port (`serve`) |
-| | `HOST` | `127.0.0.1` | listening address (`serve`, dashboard). Use `0.0.0.0` only inside a container. |
-| | `ZERO_AUDIT_API_URL` | `http://127.0.0.1:3000` | API address used by the dashboard |
-| | `ZERO_AUDIT_SOURCE_URL` | upstream repository | source-code link in the dashboard footer |
 | `--help` | | | print the usage |
+
+## Store audits in Postgres
+
+SQLite needs no setup. To share audits between machines, use Postgres:
+
+```sh
+export DATABASE_URL=postgresql://zero_audit:change-me@127.0.0.1:5432/zero_audit
+zero-audit migrate --store postgres
+zero-audit https://example.com --store postgres --wait
+```
+
+You can set `ZERO_AUDIT_STORE=postgres` instead of passing `--store` every time. The repository ships a compose file with a single Postgres service for local development; it reads `POSTGRES_PASSWORD`.
+
+## Environment variables
+
+`.env.example` lists every variable.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `ZERO_AUDIT_STORE` | `sqlite` | storage backend, `sqlite` or `postgres`; `--store` wins |
+| `ZERO_AUDIT_DB_PATH` | `./.zero-audit/audit.db` | SQLite database file; the folder is created on first run |
+| `DATABASE_URL` | | Postgres connection URL, required with the `postgres` store |
+| `POSTGRES_PASSWORD` | `change-me` | password of the local development Postgres; use the same one in `DATABASE_URL` |
+| `ZERO_AUDIT_DELAY_MS` | `1000` | delay in milliseconds between two requests (`audit`, `worker`) |
+| `ZERO_AUDIT_ALLOW_PRIVATE_TARGETS` | unset | exact value `true` lets `worker` crawl internal addresses; development only |
+| `ZERO_AUDIT_WORKER_CONCURRENCY` | `1` | audits `worker` runs in parallel (positive integer) |
+| `TEST_DATABASE_URL` | unset | Postgres tests run only when set; point it at a throwaway database, never at `DATABASE_URL` |
+
+## Exit codes
 
 | Exit code | Meaning |
 |---:|---|
-| 0 | success |
-| 1 | the audit failed (the snapshot is marked `failed`); unknown or unfinished snapshot in `compare` |
+| 0 | success; also a `worker` stopped cleanly by a signal |
+| 1 | the audit failed (the snapshot is marked `failed`); unknown or unfinished snapshot in `compare`; `worker-health` found no live worker |
 | 2 | invalid usage; nothing was requested or stored |
-| 130 / 143 | interrupted by Ctrl+C or `SIGTERM` (`--direct`: the audit in progress is marked `failed`; `worker`: the audit goes back to the queue, and fails at attempt 2 of 2) |
-
-`.env.example` lists every variable.
+| 130 | interrupted by Ctrl+C (`SIGINT`) with `--direct`: the audit in progress is marked `failed` |
+| 143 | stopped by `SIGTERM` with `--direct`: the audit in progress is marked `failed` |
 
 ## Limitations
 
 - **No JavaScript rendering.** Pages are analysed as served by the server. Content injected by client-side JavaScript is not seen.
-- **Simple accounts.** E-mail and password with e-mail verification; no single sign-on and no two-factor authentication yet.
-- **Queue.** Audits wait in a queue (one per account, 20 waiting at most through the API) and a worker crawls them one after the other.
+- **Queue.** Audits wait in a queue and a worker crawls them; use `--direct` to skip it.
 - **No performance metrics** such as Core Web Vitals or Lighthouse yet. Response times are measured but not scored.
 - **One site per project.** Subdomains are not crawled. Only `www.` and the apex domain are probed, for check 1000.
 

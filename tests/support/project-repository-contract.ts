@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRepository } from '../../src/application/ports/project-repository.js';
-import type { UserRepository } from '../../src/application/ports/user-repository.js';
+import type { LegacyAccounts } from './legacy-accounts.js';
 
 const createdAt = new Date('2026-01-01T10:00:00.123Z');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export interface ProjectStorage {
   readonly projects: ProjectRepository;
-  readonly users: UserRepository;
+  readonly accounts: LegacyAccounts;
 }
 
 export const describeProjectRepositoryContract = (
@@ -56,10 +56,10 @@ export const describeProjectRepositoryContract = (
       const rootUrl = 'https://x.test/';
 
       const setup = async () => {
-        const { projects, users } = await factory();
-        const u = await users.create({ email: 'u@example.fr', passwordHash: 'h', createdAt });
-        const v = await users.create({ email: 'v@example.fr', passwordHash: 'h', createdAt });
-        return { projects, u: u.id, v: v.id };
+        const { projects, accounts } = await factory();
+        const u = await accounts.insertUser('u@example.fr');
+        const v = await accounts.insertUser('v@example.fr');
+        return { projects, u, v };
       };
 
       it('creates one project per owner for the same root URL, and one without owner', async () => {

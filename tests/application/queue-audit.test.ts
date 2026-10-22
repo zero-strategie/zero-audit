@@ -4,7 +4,7 @@ import { QueueAudit } from '../../src/application/queue-audit.js';
 import type { Sleeper } from '../../src/application/ports/sleeper.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
-import { MutableClock } from '../support/auth-doubles.js';
+import { MutableClock } from '../support/mutable-clock.js';
 
 const URL_TO_AUDIT = 'https://exemple.com/';
 

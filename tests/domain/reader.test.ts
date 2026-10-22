@@ -32,3 +32,12 @@ describe('canRead', () => {
     expect(canRead(reader, projectOwnedBy('u'))).toBe(false);
   });
 });
+
+describe('canRead for an account reader', () => {
+  it.each([true, false])('gives the same answer whatever isAdmin is (%s)', (isAdmin) => {
+    const reader = account('B', isAdmin);
+    expect(canRead(reader, projectOwnedBy('A'))).toBe(false);
+    expect(canRead(reader, projectOwnedBy('B'))).toBe(true);
+    expect(canRead(reader, projectOwnedBy(null))).toBe(true);
+  });
+});

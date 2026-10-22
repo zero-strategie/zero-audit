@@ -1,6 +1,5 @@
 export const USAGE = `Usage : zero-audit [audit] <url> [options]
         zero-audit compare <A> <B> [--db <chemin>]
-        zero-audit serve [--port <n>] [--db <chemin>] [--store <type>]
         zero-audit migrate [--store <type>] [--db <chemin>]
         zero-audit worker [--store <type>] [--db <chemin>]
         zero-audit worker-health [--store <type>] [--db <chemin>]
@@ -15,7 +14,6 @@ Commandes
                     l'audit en cours en file et sort en 0
   worker-health     sort en 0 si le worker de cet hôte s'est signalé il y a moins de 60 s,
                     sinon en 1
-  serve             démarre l'API HTTP en lecture seule (HOST, défaut 127.0.0.1)
 
 Arguments
   url               URL de départ de l'audit (http ou https)
@@ -31,16 +29,11 @@ Options
   --wait            attend la fin de l'audit traité par un worker puis affiche le résumé
                     (avertit si aucun worker n'est actif ; incompatible avec --direct)
   --direct          crawle dans le processus, sans passer par la file ni le worker
-  --port <n>        port de l'API pour serve (défaut : PORT, sinon 3000)
   --json <fichier>  écrit le snapshot complet au format JSON (avec --wait ou --direct)
   --help            affiche cette aide
 
 Variables d'environnement du worker
-  ZERO_AUDIT_WORKER              embedded (défaut) : serve traite lui-même la file ;
-                                 external : un processus « worker » dédié s'en charge
   ZERO_AUDIT_WORKER_CONCURRENCY  audits traités en parallèle par « worker » (entier >= 1,
                                  défaut 1)
-  ZERO_AUDIT_QUEUE_MAX           plafond de la file pour l'API (défaut 20) ; la CLI n'y est
-                                 pas soumise
-  ZERO_AUDIT_ALLOW_PRIVATE_TARGETS  « true » désactive la garde anti-SSRF du worker et de serve
+  ZERO_AUDIT_ALLOW_PRIVATE_TARGETS  « true » désactive la garde anti-SSRF du worker
 `;

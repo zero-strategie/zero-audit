@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli, type CliIo } from '../../src/cli/run-cli.js';
-import { createStorage, type StorageConfig } from '../../src/cli/storage-factory.js';
+import { createStorage, type StorageConfig } from '../../src/composition/storage.js';
 import { startFixtureServer, type FixtureServer } from '../support/fixture-server.js';
 import { TEST_DATABASE_URL } from '../support/postgres-test-database.js';
 

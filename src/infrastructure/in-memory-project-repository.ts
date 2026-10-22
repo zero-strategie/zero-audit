@@ -27,13 +27,6 @@ export class InMemoryProjectRepository implements ProjectRepository {
     );
   }
 
-  /** For `InMemoryAccountEraser` only; returns the ids of the erased projects. */
-  eraseOwnedBy(userId: string): readonly string[] {
-    const owned = [...this.projects.values()].filter(({ ownerId }) => ownerId === userId);
-    for (const { id } of owned) this.projects.delete(id);
-    return owned.map(({ id }) => id);
-  }
-
   getById(id: string): Promise<Project | null> {
     return Promise.resolve(this.projects.get(id) ?? null);
   }

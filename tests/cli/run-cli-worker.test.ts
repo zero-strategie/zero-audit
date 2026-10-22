@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInterruptController } from '../../src/cli/interrupt-controller.js';
 import { runCli, type CliHooks, type CliIo } from '../../src/cli/run-cli.js';
-import { createStorage, type Storage } from '../../src/cli/storage-factory.js';
+import { createStorage, type Storage } from '../../src/composition/storage.js';
 import { startFixtureServer } from '../support/fixture-server.js';
 
 const PAGE = { status: 200, headers: { 'content-type': 'text/html' }, body: '<html></html>' };

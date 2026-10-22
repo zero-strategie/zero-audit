@@ -2,6 +2,8 @@
 
 zero-audit is released under the [GNU AGPL-3.0](LICENSE) and is also offered under a commercial licence by Zero Stratégie (dual licensing). To keep both possible, every contribution must be made under this agreement.
 
+In practice, Zero Stratégie also uses the code in its hosted service under a licence other than the AGPL. The CLA is what allows your contribution to be part of that service. The public repository stays under AGPL-3.0-only.
+
 By submitting a contribution (code, documentation or any other material) to this repository, you agree that:
 
 1. **You keep your copyright.** You remain the owner of your contribution.

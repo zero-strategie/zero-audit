@@ -9,7 +9,6 @@ import type { CheckResult } from '../domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../domain/crawl.js';
 import { AuditAttemptLost, SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
-import type { UserRepository } from '../application/ports/user-repository.js';
 import { hashToken } from './hash-token.js';
 
 interface Stored {
@@ -33,6 +32,11 @@ const bySlashProbeOrder = (a: SlashVariantProbe, b: SlashVariantProbe): number =
 const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
   compare(a.kind, b.kind) || compare(a.url, b.url);
 
+/**
+ * The launch journal (`api_launches`) records every launch attributed to an account, keyed by a
+ * hash of the e-mail address, so the admission counters survive an account erasure. See the
+ * "Legacy tables" section of docs/developer-guide.md.
+ */
 export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueue, StorageHealth {
   private readonly stored = new Map<string, Stored>();
   private readonly presences = new Map<string, Date>();
@@ -40,10 +44,10 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
   private readonly launchJournal: { id: string; emailHash: string; launchedAt: Date }[] = [];
 
   /**
-   * With `users`, launches are journaled by e-mail address like the SQL adapters, so they survive
+   * With `emailOf`, launches are journaled by e-mail address like the SQL adapters, so they survive
    * an account erasure; without, by account id, which is enough for tests that never erase.
    */
-  constructor(private readonly users?: Pick<UserRepository, 'findById'>) {}
+  constructor(private readonly emailOf?: (userId: string) => Promise<string | null>) {}
 
   ping(): Promise<void> {
     return Promise.resolve();
@@ -300,24 +304,9 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
     );
   }
 
-  /** For `InMemoryAccountEraser` only: the port itself stays append-only. */
-  eraseOfProjects(projectIds: readonly string[]): void {
-    for (const [id, { snapshot }] of [...this.stored]) {
-      if (projectIds.includes(snapshot.projectId)) this.stored.delete(id);
-    }
-  }
-
-  /** For `InMemoryAccountEraser` only: returns how many entries were dropped. */
-  purgeLaunchesBefore(date: Date): number {
-    const kept = this.launchJournal.filter(({ launchedAt }) => launchedAt >= date);
-    const dropped = this.launchJournal.length - kept.length;
-    this.launchJournal.splice(0, this.launchJournal.length, ...kept);
-    return dropped;
-  }
-
   private async launchKeyOf(userId: string): Promise<string> {
-    const user = await this.users?.findById(userId);
-    return hashToken(user?.email ?? userId);
+    const email = await this.emailOf?.(userId);
+    return hashToken(email ?? userId);
   }
 
   private launchedSince(since: Date): readonly { emailHash: string; launchedAt: Date }[] {
