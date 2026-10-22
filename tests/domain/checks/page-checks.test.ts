@@ -576,6 +576,7 @@ describe('registry metadata', () => {
       108: 'warning',
       123: 'warning',
       202: 'notice',
+      216: 'notice',
     });
   });
 
@@ -708,5 +709,50 @@ describe('nofollow link checks (123 internal, 202 external)', () => {
     const crawl = crawlOf(pages, links);
     expect(runCheck(pageChecks, 123, crawl).examined).toBe(1);
     expect(runCheck(pageChecks, 202, crawl).examined).toBe(1);
+  });
+});
+
+describe('check 216 (links without anchor text)', () => {
+  it('emits one occurrence with sorted targets for null and blank anchors', () => {
+    const result = runCheck(
+      pageChecks,
+      216,
+      crawlOf(
+        [makePage(u('a'))],
+        [
+          makeLink(u('a'), u('z'), { anchor: null }),
+          makeLink(u('a'), 'https://autre.example/', { type: 'external', anchor: '   ' }),
+          makeLink(u('a'), u('ok'), { anchor: 'Texte' }),
+        ],
+      ),
+    );
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ targets: ['https://autre.example/', u('z')] });
+  });
+
+  it('does not flag a page whose links all have text', () => {
+    const result = runCheck(
+      pageChecks,
+      216,
+      crawlOf([makePage(u('a'))], [makeLink(u('a'), u('b'), { anchor: 'Accueil' })]),
+    );
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('ignores resource links without anchor and examines only HTML 2xx pages with an <a> link', () => {
+    const pages = [
+      makePage(u('a')),
+      makePage(u('res')),
+      makePage(u('none')),
+      makePage(u('error'), { status: 404 }),
+    ];
+    const links = [
+      makeLink(u('a'), u('x'), { anchor: 'x' }),
+      makeLink(u('res'), u('img.png'), { type: 'resource' }),
+      makeLink(u('error'), u('x')),
+    ];
+    const result = runCheck(pageChecks, 216, crawlOf(pages, links));
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
   });
 });

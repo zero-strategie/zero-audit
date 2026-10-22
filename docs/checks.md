@@ -48,6 +48,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 212 | notice | crawlability | page | A page is more than 3 clicks away from the home page. `info.clicks` gives the number of clicks. | Link to it from pages closer to the home page. |
 | 213 | notice | linking | page | A page receives internal links from exactly one other page. | Link to it from more pages (navigation, related content). |
 | 214 | notice | crawlability | page | A page answers with a permanent redirect (301 or 308). `info` gives the `status` and the `target`. | Update internal links to point directly to the target. |
+| 216 | notice | linking | page | A page has `<a>` links with no anchor text (empty or whitespace only). One occurrence per page; `info.targets` lists the target URLs, sorted. | Give each link a descriptive text. |
 | 1000 | warning | crawlability | page | The same page is reachable at two URLs, with and without a trailing slash, or on `www.` and the apex domain. Both answer HTML 2xx and do not share a canonical URL. | Redirect one form to the other, or declare a common `<link rel="canonical">`. |
 
 ## Notes on some definitions
@@ -68,6 +69,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 108 applies to HTML 2xx pages. It counts every `<a>` link, internal and external, duplicates included; resources (images, scripts, stylesheets) are not counted. The threshold is strictly more than 3000.
   - Checks 136 and 201 apply to every crawled page and measure the length of the stored URL, in characters (`url.length`). The thresholds are strictly more than 100 (136) and strictly more than 200 (201); 136 stops at 200, so a URL is never reported by both.
   - Checks 123 and 202 apply to HTML 2xx pages that have at least one internal (123) or external (202) `<a>` link; resources are ignored. They emit one occurrence per source page, with the sorted, de-duplicated targets in `info.targets`.
+  - Check 216 applies to HTML 2xx pages that have at least one internal or external `<a>` link; resources are ignored. The anchor is the link text collected by the parser (`.text()`), so an image-only link such as a clickable logo has an empty anchor and is reported: this is a known false positive, because `alt` and `aria-label` are not read.
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**
   - URLs are never merged: `/about` and `/about/` are distinct pages when both are linked.

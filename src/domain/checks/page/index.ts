@@ -26,6 +26,7 @@ import { check202 } from './check-202-external-nofollow.js';
 import { check209 } from './check-209-x-robots-noindex.js';
 import { check212 } from './check-212-deep-page.js';
 import { check214 } from './check-214-permanent-redirect.js';
+import { check216 } from './check-216-empty-anchor.js';
 
 export const pageChecks: readonly PageCheck[] = [
   check1,
@@ -55,4 +56,5 @@ export const pageChecks: readonly PageCheck[] = [
   check209,
   check212,
   check214,
+  check216,
 ];
