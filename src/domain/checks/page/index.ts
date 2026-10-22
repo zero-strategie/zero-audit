@@ -42,6 +42,7 @@ import { check129 } from './check-129-uncompressed.js';
 import { check136 } from './check-136-url-too-long.js';
 import { check201 } from './check-201-url-over-200.js';
 import { check202 } from './check-202-external-nofollow.js';
+import { check204 } from './check-204-hreflang-language-mismatch.js';
 import { check209 } from './check-209-x-robots-noindex.js';
 import { check212 } from './check-212-deep-page.js';
 import { check214 } from './check-214-permanent-redirect.js';
@@ -94,6 +95,7 @@ export const pageChecks: readonly PageCheck[] = [
   check136,
   check201,
   check202,
+  check204,
   check209,
   check212,
   check214,

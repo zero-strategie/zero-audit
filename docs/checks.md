@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 60 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 61 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has no check yet and is not computable (no score) until its checks land.
@@ -62,6 +62,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 201 | notice | crawlability | page | A URL is more than 200 characters long. `info.length` gives the length. | Shorten the URL: drop unnecessary words, folders and parameters. |
 | 202 | notice | linking | page | A page has external links with `rel="nofollow"`. One occurrence per page, with `info.targets` sorted, read like check 123. | Check that the attribute is intended for these third-party links. |
 | 203 | notice | crawlability | site | There is no `robots.txt`. | Publish a robots.txt, even a permissive one. |
+| 204 | notice | international | page | An HTML page answering 2xx has a hreflang whose primary language (`de` in `de-AT`, case ignored) differs from the `lang` of the crawled target page, an HTML 2xx page that declares one. `x-default` is ignored. `info.targets` lists `lang`, `url` and `targetLang`. | Align the hreflang with the language the target page declares, or fix the target's `lang` attribute. |
 | 205 | notice | https | site | The home page is served over HTTPS without a `Strict-Transport-Security` header. | Enable HSTS on the web server. |
 | 209 | notice | crawlability | page | A page is excluded from the index by an `X-Robots-Tag` HTTP header (`noindex` or `none`). `info.value` gives the header value. | Check that the exclusion is intended; otherwise remove the directive from the server configuration. |
 | 212 | notice | crawlability | page | A page is more than 3 clicks away from the home page. `info.clicks` gives the number of clicks. | Link to it from pages closer to the home page. |

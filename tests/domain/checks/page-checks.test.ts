@@ -580,6 +580,7 @@ describe('registry metadata', () => {
       201: 'notice',
       109: 'warning',
       111: 'error',
+      204: 'notice',
       209: 'notice',
       212: 'notice',
       214: 'notice',
@@ -1579,5 +1580,59 @@ describe('check 25 (hreflang to an error or redirected page)', () => {
     ]);
     expect(flaggedUrls(result)).toEqual([]);
     expect(result.examined).toBe(2);
+  });
+});
+
+describe('check 204 (hreflang language differs from the target language)', () => {
+  const withHreflang = (name: string, entries: [string, string][]): Page =>
+    makePage(u(name), {
+      htmlFacts: { lang: 'en', hreflang: entries.map(([lang, url]) => ({ lang, url })) },
+    });
+  const speaking = (name: string, lang: string | undefined, overrides: Partial<Page> = {}): Page =>
+    makePage(u(name), {
+      htmlFacts: lang === undefined ? { hreflang: [] } : { lang, hreflang: [] },
+      ...overrides,
+    });
+
+  it('flags hreflang=de pointing to a crawled page declared in French', () => {
+    const result = run(204, [withHreflang('p', [['de', u('fr')]]), speaking('fr', 'fr')]);
+    expect(flaggedUrls(result)).toEqual([u('p')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      targets: [{ lang: 'de', url: u('fr'), targetLang: 'fr' }],
+    });
+    expect(result.examined).toBe(1);
+  });
+
+  it('compares the primary language only, case ignored', () => {
+    const result = run(204, [
+      withHreflang('p', [
+        ['fr', u('a')],
+        ['FR-ca', u('b')],
+        ['fr-FR', u('c')],
+      ]),
+      speaking('a', 'fr-FR'),
+      speaking('b', 'FR'),
+      speaking('c', 'fr_CA'),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('ignores x-default, uncrawled targets and targets whose language cannot be read', () => {
+    const result = run(204, [
+      withHreflang('p', [
+        ['x-default', u('fr')],
+        ['de', u('never-crawled')],
+        ['de', u('no-lang')],
+        ['de', u('blank')],
+        ['de', u('gone')],
+        ['de', u('plain')],
+      ]),
+      speaking('fr', 'fr'),
+      speaking('no-lang', undefined),
+      speaking('blank', ''),
+      speaking('gone', 'fr', { status: 404 }),
+      makePage(u('plain'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
   });
 });
