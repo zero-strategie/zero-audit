@@ -1,4 +1,5 @@
 import type { SiteFile, SiteFileKind } from '../domain/crawl.js';
+import { validateLlmsTxt } from '../domain/llms-format.js';
 import { validateRobotsTxt } from '../domain/robots-grammar.js';
 import { isInternal, resolveUrl } from '../domain/url.js';
 import {
@@ -101,7 +102,7 @@ export class DiscoverSite {
     }
 
     const llms = await this.dependencies.http.get(`${origin}${LLMS_PATH}`);
-    siteFiles.push(toSiteFile('llms', `${origin}${LLMS_PATH}`, llms));
+    siteFiles.push(this.toLlmsFile(`${origin}${LLMS_PATH}`, llms));
 
     return { robotsPolicy: policy, robotsFound, sitemapFound, sitemapUrls: [...urls], siteFiles };
   }
@@ -119,6 +120,12 @@ export class DiscoverSite {
     }
     siteFiles.push({ ...robotsFile, facts: validateRobotsTxt(response.body) });
     return { policy: robotsFactory.fromRobotsTxt(robotsUrl, response.body), found: true };
+  }
+
+  private toLlmsFile(url: string, response: HttpResponse | NetworkFailure): SiteFile {
+    const file = toSiteFile('llms', url, response);
+    if (isNetworkFailure(response) || !this.isSuccess(response.status)) return file;
+    return { ...file, facts: validateLlmsTxt(response.body) };
   }
 
   private async readSitemap(url: string): Promise<SitemapReading> {

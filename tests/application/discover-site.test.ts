@@ -90,6 +90,43 @@ describe('DiscoverSite robots.txt facts', () => {
   });
 });
 
+describe('DiscoverSite llms.txt facts', () => {
+  const llmsOf = (result: Awaited<ReturnType<typeof discover>>['result']) =>
+    result.siteFiles.find((file) => file.kind === 'llms');
+
+  it('records the format problems of a found llms.txt', async () => {
+    const { result } = await discover({
+      'https://exemple.com/llms.txt': { status: 200, body: 'Bonjour\n# Titre' },
+    });
+
+    expect(llmsOf(result)?.facts).toEqual({
+      problems: [{ code: 'missing-h1', line: 1 }],
+      problemCount: 1,
+    });
+  });
+
+  it('records no problem for a conforming llms.txt', async () => {
+    const { result } = await discover({
+      'https://exemple.com/llms.txt': {
+        status: 200,
+        body: '# Titre\n\n## Docs\n- [A](https://exemple.com/a)',
+      },
+    });
+
+    expect(llmsOf(result)?.facts).toEqual({ problems: [], problemCount: 0 });
+  });
+
+  it.each<[string, Reply]>([
+    ['a 404', { status: 404 }],
+    ['a 500', { status: 500, body: 'garbage' }],
+    ['a network error', 'network-error'],
+  ])('leaves facts null for %s', async (_label, reply) => {
+    const { result } = await discover({ 'https://exemple.com/llms.txt': reply });
+
+    expect(llmsOf(result)?.facts).toBeNull();
+  });
+});
+
 describe('DiscoverSite robots.txt', () => {
   it('applies the rules of a found robots.txt', async () => {
     const { result } = await discover({
