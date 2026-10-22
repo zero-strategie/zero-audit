@@ -51,6 +51,7 @@ import { check215 } from './check-215-linked-resource.js';
 import { check216 } from './check-216-empty-anchor.js';
 import { check217 } from './check-217-generic-anchor.js';
 import { check220 } from './check-220-too-much-content.js';
+import { check222 } from './check-222-no-semantic-elements.js';
 
 export const pageChecks: readonly PageCheck[] = [
   check1,
@@ -105,4 +106,5 @@ export const pageChecks: readonly PageCheck[] = [
   check216,
   check217,
   check220,
+  check222,
 ];

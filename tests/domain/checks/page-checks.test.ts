@@ -573,6 +573,7 @@ describe('registry metadata', () => {
       121: 'warning',
       21: 'error',
       220: 'notice',
+      222: 'notice',
       114: 'warning',
       122: 'warning',
       129: 'warning',
@@ -1668,6 +1669,30 @@ describe('check 45 (invalid structured data)', () => {
     const result = run(45, [
       withJsonLd('gone', broken, { status: 404 }),
       withJsonLd('img', broken, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 222 (no semantic HTML elements)', () => {
+  const withSemantics = (name: string, semanticElements: string[], overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { semanticElements }, ...overrides });
+
+  it('flags a page with no semantic element, but not with a single footer', () => {
+    const result = run(222, [
+      withSemantics('div-soup', []),
+      withSemantics('footer-only', ['footer']),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('div-soup')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(222, [
+      withSemantics('gone', [], { status: 404 }),
+      withSemantics('img', [], { isHtml: false }),
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);

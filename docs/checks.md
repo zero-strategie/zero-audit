@@ -1,9 +1,9 @@
 # Checks reference
 
-zero-audit runs 62 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 63 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
-- **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme only has check 45 so far.
+- **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has checks 45 and 222 so far.
 - **Scope**: a *page* check examines each page it applies to, and its `examined` count is the number of those pages. A *site* check examines the site as a whole, so its `examined` is 1.
 
 The ids follow the numbering used by Semrush's Site Audit, so that results can be compared. zero-audit is an independent project, not affiliated with or endorsed by Semrush, and the check wording is original. Ids **1000–1999** are reserved for our own checks. The CLI and the dashboard show the labels in French.
@@ -73,6 +73,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 216 | notice | linking | page | A page has `<a>` links with no anchor text (empty or whitespace only). One occurrence per page; `info.targets` lists the target URLs, sorted. | Give each link a descriptive text. |
 | 217 | notice | linking | page | A page has `<a>` links whose anchor is generic (e.g. "click here", "read more", "en savoir plus"). One occurrence per page; `info.targets` lists the target URLs, sorted. | Use anchor text that describes the target page. |
 | 220 | notice | on-page | page | An HTML page answering 2xx has more than 10,000 words of visible text. `info.words` gives the count. | Split the content over several pages, or add sections and a table of contents. |
+| 222 | notice | markup | page | An HTML page answering 2xx has none of `<main>`, `<article>`, `<section>`, `<nav>`, `<header>` or `<footer>`; a single one is enough to pass. | Use semantic elements to structure the page. |
 | 1000 | warning | crawlability | page | The same page is reachable at two URLs, with and without a trailing slash, or on `www.` and the apex domain. Both answer HTML 2xx and do not share a canonical URL. | Redirect one form to the other, or declare a common `<link rel="canonical">`. |
 
 ## Notes on some definitions

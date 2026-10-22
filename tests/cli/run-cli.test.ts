@@ -145,7 +145,7 @@ describe('runCli', () => {
     expect(exported.siteFiles.map(({ kind }) => kind)).toEqual(['llms', 'robots', 'sitemap']);
     expect(run.out).toContain('llms.txt :');
     expect(exported.links.length).toBeGreaterThan(0);
-    expect(exported.checkResults).toHaveLength(62);
+    expect(exported.checkResults).toHaveLength(63);
     expect(exported.checkResults.some((result) => result.count === 0)).toBe(true);
 
     const stored = await snapshots(exported.snapshot.id);
@@ -173,7 +173,7 @@ describe('runCli', () => {
     };
     expect(Number.isInteger(exported.scores.health.score)).toBe(true);
     expect(exported.scores.health.variation).toBe(0);
-    expect(exported.checkResults).toHaveLength(62);
+    expect(exported.checkResults).toHaveLength(63);
     for (const result of exported.checkResults) {
       expect(result).toMatchObject({ delta: 0, newCount: 0, fixedCount: 0 });
     }
