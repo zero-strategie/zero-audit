@@ -903,6 +903,71 @@ describe('check 215 (linked resources)', () => {
     expect(flaggedUrls(result)).toEqual([]);
   });
 
+  describe('feeds', () => {
+    const xmlPage = (name: string, overrides: Partial<Page> = {}): Page =>
+      resourcePage(name, { contentType: 'application/xml', ...overrides });
+
+    it.each(['rss.xml', 'feed.xml', 'atom.xml', 'index.xml'])(
+      'does not flag a link to the conventional feed name %s served as xml',
+      (name) => {
+        const result = runCheck(
+          pageChecks,
+          215,
+          crawlLinking(u(name), 'internal', xmlPage(u(name))),
+        );
+        expect(flaggedUrls(result)).toEqual([]);
+      },
+    );
+
+    it('does not flag a target declared by a link rel=alternate feed', () => {
+      const declaring = makePage(u('a'), { htmlFacts: { declaredFeeds: [u('data/flux.xml')] } });
+      const result = runCheck(
+        pageChecks,
+        215,
+        crawlOf([declaring], [makeLink(u('a'), u('data/flux.xml'))]),
+      );
+      expect(flaggedUrls(result)).toEqual([]);
+    });
+
+    it('does not flag a crawled target served as rss or atom', () => {
+      for (const contentType of ['application/rss+xml', 'application/atom+xml; charset=utf-8']) {
+        const result = runCheck(
+          pageChecks,
+          215,
+          crawlLinking(
+            u('data/flux.xml'),
+            'internal',
+            xmlPage(u('data/flux.xml'), { contentType }),
+          ),
+        );
+        expect(flaggedUrls(result)).toEqual([]);
+      }
+    });
+
+    it('does not flag a path ending in .rss or .atom', () => {
+      for (const name of ['news.rss', 'news.ATOM']) {
+        expect(flaggedUrls(runCheck(pageChecks, 215, crawlLinking(u(name), 'internal')))).toEqual(
+          [],
+        );
+      }
+    });
+
+    it('still flags an undeclared generic xml file', () => {
+      const result = runCheck(
+        pageChecks,
+        215,
+        crawlLinking(u('data/export.xml'), 'internal', xmlPage(u('data/export.xml'))),
+      );
+      expect(flaggedUrls(result)).toEqual([u('a')]);
+    });
+
+    it('keeps flagging the other listed extensions', () => {
+      expect(flaggedUrls(runCheck(pageChecks, 215, crawlLinking(u('x.json'), 'internal')))).toEqual(
+        [u('a')],
+      );
+    });
+  });
+
   it('emits one occurrence per page with sorted targets and ignores resource links', () => {
     const result = runCheck(
       pageChecks,

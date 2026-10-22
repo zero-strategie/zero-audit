@@ -1,6 +1,7 @@
 import type { IssueOccurrence, PageCheck } from '../../check.js';
 import type { CrawlResult, Link, Page } from '../../crawl.js';
 import { indexedTargetsBySource, targetsBySource, type LinkFilter } from '../link-helpers.js';
+import { declaredFeedUrls } from './feed-targets.js';
 import { isLinkedResource } from './linked-resources.js';
 import { isHtml2xx } from './page-predicates.js';
 
@@ -19,9 +20,10 @@ export const check215: PageCheck = {
     isHtml2xx(page) && indexedTargetsBySource(crawl, isAnchorLink).has(page.url),
   run: ({ crawl }) => {
     const pagesByUrl = pagesByUrlOf(crawl);
+    const declaredFeeds = declaredFeedUrls(crawl.pages);
     const targets = targetsBySource(
       crawl.links,
-      (link) => isAnchorLink(link) && isLinkedResource(link, pagesByUrl),
+      (link) => isAnchorLink(link) && isLinkedResource(link, pagesByUrl, declaredFeeds),
     );
     const occurrences: IssueOccurrence[] = [];
     for (const page of crawl.pages) {
