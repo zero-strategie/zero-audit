@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 21 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 23 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page` or `other`. Each theme gets its own score.
@@ -18,6 +18,8 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 4 | notice | crawlability | page | An internal page is blocked from crawling by `robots.txt`. There is one occurrence per blocked URL. | Check that the block is intended; otherwise relax the matching `Disallow` rule. |
 | 6 | error | on-page | page | Several pages share the same title. There is one occurrence per page involved. | Give each page its own title. |
 | 8 | error | linking | page | An internal link points to a page that failed (4xx, 5xx or network error). The occurrence is on the linking page. | Update or remove the link. |
+| 9 | error | crawlability | page | A page did not answer within the crawler's time limit (`timeout`). | Look at the server's performance and load. |
+| 11 | error | crawlability | page | A page could not be reached: connection, DNS, blocked or other network failure. `info.kind` gives the failure. | Check the host, DNS and firewall, then the URL itself. |
 | 15 | error | on-page | page | Several pages share the same meta description. | Write a specific description for each page. |
 | 101 | warning | on-page | page | The title is shorter than 30 characters. | Make the title more descriptive. |
 | 102 | warning | on-page | page | The title is longer than 60 characters. | Shorten it so it is not truncated in search results. |
@@ -41,6 +43,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Checks 1 and 2 apply to every page that got an HTTP response.
   - Check 4 always applies: its `examined` is the number of pages explored, and the occurrences come from the URLs the crawler skipped because of `robots.txt`.
   - Check 8 applies to every page that has internal links.
+  - Checks 9 and 11 always apply: their `examined` is the number of pages explored. A timeout goes to 9, every other network failure to 11. Check 8 also reports internal links to these pages, so the same failure can appear in both (on the linking page for 8, on the failed page for 9 and 11).
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**
   - URLs are never merged: `/about` and `/about/` are distinct pages when both are linked.

@@ -79,6 +79,40 @@ describe('check 4 (blocked by robots.txt)', () => {
   });
 });
 
+describe('checks 9 and 11 (unreachable pages)', () => {
+  const failed = (name: string, error: string): Page =>
+    makePage(name, { status: null, isHtml: false, error });
+
+  it('flags a timeout in check 9 only', () => {
+    const pages = [failed(u('slow'), 'timeout'), makePage(u('ok'))];
+    expect(flaggedUrls(run(9, pages))).toEqual([u('slow')]);
+    expect(run(11, pages).count).toBe(0);
+  });
+
+  it.each(['connection', 'dns', 'blocked', 'other'])(
+    'flags %s in check 11 with its kind, and not in check 9',
+    (kind) => {
+      const pages = [failed(u('down'), kind)];
+      const result = run(11, pages);
+      expect(flaggedUrls(result)).toEqual([u('down')]);
+      expect(result.occurrences[0]?.info).toEqual({ kind });
+      expect(run(9, pages).count).toBe(0);
+    },
+  );
+
+  it('ignores pages that got an HTTP response, including 404', () => {
+    const pages = [makePage(u('a')), makePage(u('b'), { status: 404 })];
+    expect(run(9, pages).count).toBe(0);
+    expect(run(11, pages).count).toBe(0);
+  });
+
+  it('examines every explored page', () => {
+    const pages = [failed(u('a'), 'timeout'), makePage(u('b')), makePage(u('c'))];
+    expect(run(9, pages).examined).toBe(3);
+    expect(run(11, pages).examined).toBe(3);
+  });
+});
+
 describe('check 3 (title missing)', () => {
   it('flags null and empty titles on HTML 2xx pages only', () => {
     const result = run(3, [
@@ -237,6 +271,8 @@ describe('registry metadata', () => {
       2: 'error',
       3: 'error',
       4: 'notice',
+      9: 'error',
+      11: 'error',
       101: 'warning',
       102: 'warning',
       103: 'warning',
