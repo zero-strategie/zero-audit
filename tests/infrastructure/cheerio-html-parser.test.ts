@@ -181,6 +181,19 @@ describe('CheerioHtmlParser header facts', () => {
     expect(parse('<head></head>').canonicalCount).toBe(0);
   });
 
+  it('lists the absolute canonical URLs in document order, capped', () => {
+    const links = Array.from(
+      { length: 25 },
+      (_, i) => `<link rel="canonical" href="/c${String(i)}">`,
+    ).join('');
+    const parsed = parse(`<head>${links}</head>`);
+
+    expect(parsed.canonicalCount).toBe(25);
+    expect(parsed.canonicalUrls).toHaveLength(20);
+    expect(parsed.canonicalUrls.slice(0, 2)).toEqual(['https://h/c0', 'https://h/c1']);
+    expect(parse('<head></head>').canonicalUrls).toEqual([]);
+  });
+
   it('reads the meta refresh delay and absolute target, null target without url', () => {
     const refresh = (content: string, base = '') =>
       parse(`<head>${base}<meta http-equiv="Refresh" content="${content}"></head>`).metaRefresh;

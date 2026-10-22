@@ -50,6 +50,7 @@ describe('BfsCrawler html facts', () => {
     const facts = byPath('/')?.htmlFacts;
     expect(Object.keys(facts ?? {}).sort()).toEqual([
       'canonicalCount',
+      'canonicalUrls',
       'charset',
       'declaredFeeds',
       'hasDoctype',

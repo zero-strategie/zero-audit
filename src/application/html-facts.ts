@@ -8,6 +8,7 @@ export const toHtmlFacts = (parsed: ParsedHtml): HtmlFacts => ({
   hasDoctype: parsed.hasDoctype,
   lang: parsed.lang,
   canonicalCount: parsed.canonicalCount,
+  canonicalUrls: [...parsed.canonicalUrls],
   metaRefresh: parsed.metaRefresh && { ...parsed.metaRefresh },
   imagesWithoutAlt: { ...parsed.imagesWithoutAlt },
   hasFrames: parsed.hasFrames,

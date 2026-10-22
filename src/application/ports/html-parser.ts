@@ -61,6 +61,8 @@ export interface ParsedHtml {
   lang: string | null;
   /** Number of `<link rel="canonical">` elements, duplicates included. */
   canonicalCount: number;
+  /** Absolute URLs of those elements, in document order, at most `MAX_FACT_EXAMPLES`. */
+  canonicalUrls: string[];
   /** First `<meta http-equiv="refresh">` with a valid delay, else null. */
   metaRefresh: MetaRefresh | null;
   /** `<img>` elements with no `alt` attribute (`alt=""` is valid), listed by raw `src`. */

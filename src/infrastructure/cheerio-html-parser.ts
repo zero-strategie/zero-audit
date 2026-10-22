@@ -118,6 +118,7 @@ export class CheerioHtmlParser implements HtmlParser {
       canonical: this.extractCanonical($, pageUrl),
       metaRefresh: this.extractMetaRefresh($, baseUrl),
       canonicalCount: $(CANONICAL_SELECTOR).length,
+      canonicalUrls: this.extractCanonicalUrls($, pageUrl),
       h1: $('h1')
         .toArray()
         .map((element) => normalizeSpaces($(element).text())),
@@ -212,6 +213,16 @@ export class CheerioHtmlParser implements HtmlParser {
   private extractCanonical($: CheerioAPI, pageUrl: string): string | null {
     const href = $(CANONICAL_SELECTOR).first().attr('href');
     return href === undefined ? null : resolveUrl(href, pageUrl);
+  }
+
+  private extractCanonicalUrls($: CheerioAPI, pageUrl: string): string[] {
+    return $(CANONICAL_SELECTOR)
+      .toArray()
+      .flatMap((element) => {
+        const resolved = resolveUrl($(element).attr('href') ?? '', pageUrl);
+        return resolved === null ? [] : [resolved];
+      })
+      .slice(0, MAX_FACT_EXAMPLES);
   }
 
   private extractCharset($: CheerioAPI): string | null {
