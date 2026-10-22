@@ -184,7 +184,7 @@ The core migrations still create tables and columns that belong to accounts, bec
 | `projects.owner_id` | owner of a project; `NULL` for the showcase, read through `Reader` |
 | `snapshots.launched_by` | account that launched an audit; `NULL` for the command line |
 
-The core itself only writes `api_launches` (through `AuditQueue.enqueue`, when a launch has an owner) and reads `owner_id` for visibility. Do not document these tables inside the `.sql` files: a test forbids touching them.
+The core itself only writes `api_launches` (through `AuditQueue.enqueue`, when a launch has an owner) and reads `owner_id` for visibility. Do not document these tables inside the `.sql` files: migrations are never edited, so a comment there would change a shipped file.
 
 ## Add a check
 
