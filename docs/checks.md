@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 54 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 55 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `international` and `markup` themes have no check yet and are not computable (no score) until their checks land.
@@ -30,6 +30,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 38 | error | crawlability | page | A page declares a canonical URL that points to a crawled page answering 4xx, 5xx or failing at network level. `info` gives the `canonical` and the `status` (`null` for a network failure). | Point the canonical to a page that answers 200, or remove it. |
 | 39 | error | crawlability | page | An HTML page answering 2xx declares two or more `<link rel="canonical">`, even identical ones. `info.urls` lists their URLs in document order (capped at 20). | Keep a single canonical per page. |
 | 40 | error | crawlability | page | An HTML page answering 2xx redirects with `<meta http-equiv="refresh">` to a target URL. `info.delaySeconds` and `info.target` give the delay and the destination. The target is not queued for crawling. | Use a server-side redirect (301) instead. |
+| 44 | error | linking | page | An HTML page answering 2xx has `<a>` links whose href is broken: it cannot be parsed as a URL, its scheme is outside the closed list (http, https, mailto, tel, sms, ftp, javascript, data), or it is a malformed `http` (`http:/x`, `https//x`). `#`, empty and `javascript:void(0)` are ignored. One occurrence per page; `info.total` is the real count and `info.examples` the raw hrefs (capped at 20). | Fix or remove these links. |
 | 46 | error | on-page | page | An HTML page answering 2xx has a viewport meta tag whose content sets no `width` (an empty content counts). `min-width` is not a width. | Set `width=device-width` in the viewport content. |
 | 101 | warning | on-page | page | The title is shorter than 30 characters. | Make the title more descriptive. |
 | 102 | warning | on-page | page | The title is longer than 60 characters. | Shorten it so it is not truncated in search results. |
@@ -96,6 +97,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 116 applies to HTML 2xx pages whose HTML facts were recorded, like check 115. It looks for a doctype at the start of the raw document only.
   - Check 110 applies to HTML 2xx pages whose HTML facts were recorded and reports only a missing `alt` attribute: an empty `alt=""` is legitimate for decorative images and is never reported.
   - Check 121 applies to the same pages and looks for `<frameset>` and `<frame>` (commented-out ones are ignored); `<iframe>` does not count.
+  - Check 44 applies to HTML 2xx pages whose HTML facts were recorded; only `<a href>` values are examined (rule A3), and the other link checks are unchanged.
   - Checks 39 and 40 apply to HTML 2xx pages whose HTML facts were recorded. Check 40 ignores a refresh with no `url=` (a plain reload).
   - Check 21 applies to HTML 2xx pages whose HTML facts were recorded; the size is the UTF-8 byte length of the document the crawler read (threshold `MAX_HTML_BYTES`, 2 MiB), strictly exceeded. Check 220 compares the visible word count to `TOO_MUCH_CONTENT_WORDS` (10,000 words), strictly exceeded.
   - Check 111 applies to HTML 2xx pages and compares the response time strictly to 3000 ms. It is the time seen by the crawler, from sending the request to reading the whole body, not a browser loading time: network distance and the crawler's own load can inflate it.

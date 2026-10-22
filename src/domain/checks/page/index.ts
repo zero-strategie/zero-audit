@@ -13,6 +13,7 @@ import { check33 } from './check-033-redirect-chain.js';
 import { check38 } from './check-038-canonical-to-error.js';
 import { check39 } from './check-039-multiple-canonicals.js';
 import { check40 } from './check-040-meta-refresh.js';
+import { check44 } from './check-044-malformed-links.js';
 import { check46 } from './check-046-viewport-without-width.js';
 import { check101 } from './check-101-title-too-short.js';
 import { check102 } from './check-102-title-too-long.js';
@@ -59,6 +60,7 @@ export const pageChecks: readonly PageCheck[] = [
   check38,
   check39,
   check40,
+  check44,
   check46,
   check101,
   check102,

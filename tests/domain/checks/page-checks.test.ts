@@ -561,6 +561,7 @@ describe('registry metadata', () => {
       38: 'error',
       39: 'error',
       40: 'error',
+      44: 'error',
       113: 'warning',
       115: 'warning',
       116: 'warning',
@@ -1322,6 +1323,39 @@ describe('check 40 (meta refresh)', () => {
     const result = run(40, [
       withRefresh('gone', refresh, { status: 404 }),
       withRefresh('img', refresh, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 44 (malformed links)', () => {
+  const withMalformed = (
+    name: string,
+    total: number,
+    examples: string[],
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { malformedLinks: { total, examples } }, ...overrides });
+
+  it('flags a page with 3 malformed hrefs, with the total and the raw hrefs', () => {
+    const hrefs = ['http:/x', 'htp://y', 'https//z'];
+    const result = run(44, [withMalformed('bad', 3, hrefs), withMalformed('ok', 0, [])]);
+    expect(flaggedUrls(result)).toEqual([u('bad')]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 3, examples: hrefs });
+    expect(result.examined).toBe(2);
+  });
+
+  it('keeps the real total when the examples are capped', () => {
+    const examples = Array.from({ length: 20 }, (_, i) => `http:/${String(i)}`);
+    const result = run(44, [withMalformed('many', 35, examples)]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 35, examples });
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(44, [
+      withMalformed('gone', 3, ['http:/x'], { status: 404 }),
+      withMalformed('img', 3, ['http:/x'], { isHtml: false }),
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);
