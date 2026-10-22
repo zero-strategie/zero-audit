@@ -11,6 +11,10 @@ describe('isValidHreflang', () => {
     'EN-gb',
     'ZH-hant',
     'sr-Latn-RS',
+    'tl',
+    'tl-PH',
+    'TL-ph',
+    'tw',
   ])('accepts %s', (value) => {
     expect(isValidHreflang(value)).toBe(true);
   });
@@ -27,6 +31,8 @@ describe('isValidHreflang', () => {
     'en-GB-Latn',
     'x-defaults',
     ' fr',
+    'in',
+    'mo',
     'en-ZZ',
     'iw',
     'fr-FX',
