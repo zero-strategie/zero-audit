@@ -3,7 +3,7 @@
 zero-audit runs 71 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
-- **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has checks 45 and 222 so far.
+- **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has checks 45 and 222.
 - **Scope**: a *page* check examines each page it applies to, and its `examined` count is the number of those pages. A *site* check examines the site as a whole, so its `examined` is 1.
 
 The ids follow the numbering used by Semrush's Site Audit, so that results can be compared. zero-audit is an independent project, not affiliated with or endorsed by Semrush, and the check wording is original. Ids **1000–1999** are reserved for our own checks. The CLI and the dashboard show the labels in French.

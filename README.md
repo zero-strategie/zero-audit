@@ -17,15 +17,15 @@ Only audit sites you own or are allowed to crawl.
 
 | Theme | Checks | Examples |
 |---|---:|---|
-| Crawlability | 19 | 4xx and 5xx pages, unreachable pages and timeouts, redirect chains and loops, temporary redirects, pages blocked by robots.txt or `X-Robots-Tag: noindex`, pages more than 3 clicks deep, duplicate content, canonicals pointing to broken pages, long or parameter-heavy URLs, missing robots.txt or sitemap, duplicate URL variants |
-| On-page | 11 | missing, duplicate, too short or too long titles, missing or duplicate meta descriptions, missing or multiple `<h1>`, thin content, low text-to-HTML ratio |
-| Linking | 8 | broken internal links, pages with a single incoming link, too many links on a page, nofollow links, empty or generic anchor text ("click here"), files linked as pages |
-| HTTPS | 3 | pages served over http, http links on an https site, missing HSTS |
-| International | 0 | hreflang annotations and language declarations (checks to come) |
-| Markup | 2 | invalid JSON-LD structured data, pages with no semantic HTML5 element (more checks to come) |
-| Other | 3 | slow responses, uncompressed pages, missing `llms.txt` |
+| Crawlability | 26 | 4xx and 5xx pages, unreachable pages and timeouts, redirect chains and loops, temporary redirects, pages blocked by robots.txt or `X-Robots-Tag: noindex`, pages more than 3 clicks deep, duplicate content, canonicals pointing to broken pages, long or parameter-heavy URLs, missing robots.txt or sitemap, duplicate URL variants |
+| On-page | 18 | missing, duplicate, too short or too long titles, missing or duplicate meta descriptions, missing or multiple `<h1>`, thin content, low text-to-HTML ratio |
+| Linking | 10 | broken internal links, pages with a single incoming link, too many links on a page, nofollow links, empty or generic anchor text ("click here"), files linked as pages |
+| HTTPS | 5 | pages served over http, http links on an https site, missing HSTS, mixed content (http resources on an https page) |
+| International | 5 | invalid hreflang codes, missing self-reference, hreflang pointing to redirected or broken pages, missing `lang`, language mismatches |
+| Markup | 2 | invalid JSON-LD structured data, pages with no semantic HTML5 element |
+| Other | 5 | slow responses, uncompressed pages, missing or malformed `llms.txt`, pages over 2 MiB or with too much content |
 
-The [checks reference](docs/checks.md) lists every check with its threshold and how to fix it. Since 1.1.0 an audit runs 44 checks instead of 20: comparing an audit made with 1.0 to one made with 1.1 shows the new checks' findings as new issues, even if the site did not change.
+The [checks reference](docs/checks.md) lists every check with its threshold and how to fix it. Since 1.1.0 an audit runs 71 checks instead of 20: comparing an audit made with 1.0 to one made with 1.1 shows the new checks' findings as new issues, even if the site did not change.
 
 ## Installation
 
