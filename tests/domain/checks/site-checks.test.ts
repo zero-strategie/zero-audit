@@ -241,6 +241,79 @@ describe('check 17 (invalid sitemap)', () => {
   });
 });
 
+describe('check 43 (oversized sitemap)', () => {
+  const MAX_URLS = 50_000;
+  const MAX_BYTES = 52_428_800;
+  const facts = (overrides: Record<string, unknown> = {}): SiteFile['facts'] => ({
+    truncated: false,
+    urlCount: 10,
+    contentLength: null,
+    contentEncoding: null,
+    ...overrides,
+  });
+  const run43 = (overrides: Record<string, unknown> | null): CheckResult =>
+    runCheck(
+      siteChecks,
+      43,
+      crawlOf(
+        [],
+        [],
+        { robotsFound: true, sitemapFound: true },
+        null,
+        [],
+        [],
+        [
+          {
+            kind: 'sitemap',
+            url: u('sitemap.xml'),
+            status: 200,
+            error: null,
+            facts: overrides === null ? null : facts(overrides),
+          },
+        ],
+      ),
+    );
+
+  it('flags a sitemap listing one URL more than the limit, not one at the limit', () => {
+    const over = run43({ urlCount: MAX_URLS + 1 });
+
+    expect(over.occurrences).toEqual([
+      {
+        checkId: 43,
+        pageUrl: null,
+        info: { sitemap: u('sitemap.xml'), urlCount: MAX_URLS + 1, truncated: false },
+      },
+    ]);
+    expect(run43({ urlCount: MAX_URLS }).count).toBe(0);
+  });
+
+  it('flags a declared content-length above 50 MiB when the body is not encoded', () => {
+    const result = run43({ contentLength: MAX_BYTES + 1 });
+
+    expect(result.occurrences.map((o) => o.info)).toEqual([
+      expect.objectContaining({ bytes: MAX_BYTES + 1 }),
+    ]);
+    expect(run43({ contentLength: MAX_BYTES }).count).toBe(0);
+  });
+
+  it('ignores a content-length that describes a compressed body', () => {
+    expect(run43({ contentLength: MAX_BYTES + 1, contentEncoding: 'gzip' }).count).toBe(0);
+  });
+
+  it('flags a truncated sitemap and says at least 5 MiB were received', () => {
+    const result = run43({ truncated: true });
+
+    expect(result.occurrences.map((o) => o.info)).toEqual([
+      expect.objectContaining({ truncated: true, note: 'au moins 5 Mio reçus' }),
+    ]);
+  });
+
+  it('does not flag a small sitemap or facts that are null', () => {
+    expect(run43({}).count).toBe(0);
+    expect(run43(null).count).toBe(0);
+  });
+});
+
 describe('check 203 (robots.txt missing)', () => {
   it('flags the site when no robots.txt was found', () => {
     const missing = runCheck(
@@ -474,6 +547,7 @@ describe('registry metadata', () => {
         15: 'error',
         16: 'error',
         17: 'error',
+        43: 'error',
         124: 'warning',
         125: 'warning',
         137: 'notice',

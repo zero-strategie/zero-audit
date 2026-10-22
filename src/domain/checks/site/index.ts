@@ -6,6 +6,7 @@ import { check15 } from './check-015-duplicate-meta-description.js';
 import { check1000 } from './check-1000-url-variants.js';
 import { check16 } from './check-016-robots-invalid.js';
 import { check17 } from './check-017-sitemap-invalid.js';
+import { check43 } from './check-043-sitemap-too-large.js';
 import { check124 } from './check-124-sitemap-undeclared.js';
 import { check125 } from './check-125-sitemap-missing.js';
 import { check137 } from './check-137-llms-missing.js';
@@ -20,6 +21,7 @@ export const siteChecks: readonly Check[] = [
   check15,
   check16,
   check17,
+  check43,
   check124,
   check125,
   check137,

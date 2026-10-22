@@ -13,3 +13,5 @@ export const MAX_FACT_EXAMPLES = 20;
 export const MAX_INVALID_LINE_TEXT_LENGTH = 200;
 export const TOO_MUCH_CONTENT_WORDS = 10_000;
 export const MAX_HTML_BYTES = 2_097_152;
+export const SITEMAP_MAX_URLS = 50_000;
+export const SITEMAP_MAX_BYTES = 52_428_800;
