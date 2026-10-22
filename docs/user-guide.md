@@ -1,6 +1,6 @@
 # User guide
 
-zero-audit is a technical SEO audit tool. It crawls a website the way a search engine would, runs [52 checks](checks.md) on what it finds, gives the site a health score, and tracks how it changes from one audit to the next.
+zero-audit is a technical SEO audit tool. It crawls a website the way a search engine would, runs [54 checks](checks.md) on what it finds, gives the site a health score, and tracks how it changes from one audit to the next.
 
 You use it through its **command line**, `zero-audit`. Every audit is stored as an immutable **snapshot**, in SQLite (the default) or in Postgres.
 

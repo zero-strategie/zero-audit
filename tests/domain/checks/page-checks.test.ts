@@ -559,6 +559,8 @@ describe('registry metadata', () => {
       31: 'warning',
       33: 'error',
       38: 'error',
+      39: 'error',
+      40: 'error',
       113: 'warning',
       115: 'warning',
       116: 'warning',
@@ -1251,6 +1253,75 @@ describe('check 21 (large HTML page)', () => {
     const result = run(21, [
       withBytes('gone', 3_000_000, { status: 404 }),
       withBytes('img', 3_000_000, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 39 (multiple canonicals)', () => {
+  const withCanonicals = (name: string, urls: string[], overrides: Partial<Page> = {}) =>
+    makePage(u(name), {
+      htmlFacts: { canonicalCount: urls.length, canonicalUrls: urls },
+      ...overrides,
+    });
+
+  it('flags two canonicals, even identical, with their URLs', () => {
+    const result = run(39, [
+      withCanonicals('same', [u('a'), u('a')]),
+      withCanonicals('diff', [u('a'), u('b')]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('same'), u('diff')]);
+    expect(result.occurrences[1]?.info).toEqual({ urls: [u('a'), u('b')] });
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not flag one canonical or none', () => {
+    const result = run(39, [withCanonicals('one', [u('a')]), withCanonicals('none', [])]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(39, [
+      withCanonicals('gone', [u('a'), u('b')], { status: 404 }),
+      withCanonicals('img', [u('a'), u('b')], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 40 (meta refresh)', () => {
+  const withRefresh = (
+    name: string,
+    metaRefresh: { delaySeconds: number; target: string | null } | null,
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { metaRefresh }, ...overrides });
+
+  it('flags a refresh with a target, with its delay and target', () => {
+    const result = run(40, [
+      withRefresh('jump', { delaySeconds: 5, target: u('next') }),
+      withRefresh('none', null),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('jump')]);
+    expect(result.occurrences[0]?.info).toEqual({ delaySeconds: 5, target: u('next') });
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not flag a plain reload without a target', () => {
+    const result = run(40, [withRefresh('reload', { delaySeconds: 30, target: null })]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const refresh = { delaySeconds: 0, target: u('x') };
+    const result = run(40, [
+      withRefresh('gone', refresh, { status: 404 }),
+      withRefresh('img', refresh, { isHtml: false }),
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);

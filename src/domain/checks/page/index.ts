@@ -11,6 +11,8 @@ import { check26 } from './check-026-http-page.js';
 import { check31 } from './check-031-http-link-on-https.js';
 import { check33 } from './check-033-redirect-chain.js';
 import { check38 } from './check-038-canonical-to-error.js';
+import { check39 } from './check-039-multiple-canonicals.js';
+import { check40 } from './check-040-meta-refresh.js';
 import { check46 } from './check-046-viewport-without-width.js';
 import { check101 } from './check-101-title-too-short.js';
 import { check102 } from './check-102-title-too-long.js';
@@ -55,6 +57,8 @@ export const pageChecks: readonly PageCheck[] = [
   check31,
   check33,
   check38,
+  check39,
+  check40,
   check46,
   check101,
   check102,
