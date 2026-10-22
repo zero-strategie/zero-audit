@@ -1,8 +1,15 @@
-import { MAX_FACT_EXAMPLES } from './thresholds.js';
+import { MAX_FACT_EXAMPLES, MAX_INVALID_LINE_TEXT_LENGTH } from './thresholds.js';
+
+export type InvalidRobotsLine = {
+  /** 1-based line number. */
+  readonly number: number;
+  /** Line without its comment, truncated to `MAX_INVALID_LINE_TEXT_LENGTH`. */
+  readonly text: string;
+};
 
 export type RobotsGrammarFacts = {
-  /** 1-based numbers of the invalid lines, capped at `MAX_FACT_EXAMPLES`. */
-  readonly invalidLines: readonly number[];
+  /** Invalid lines, capped at `MAX_FACT_EXAMPLES`. */
+  readonly invalidLines: readonly InvalidRobotsLine[];
   readonly invalidCount: number;
   readonly sitemapDeclarations: number;
 };
@@ -46,12 +53,12 @@ export const validateRobotsTxt = (body: string): RobotsGrammarFacts => {
   const lines = significantLines(content);
   const looksLikeHtml = HTML_START.test(content);
 
-  const invalid: number[] = [];
+  const invalid: InvalidRobotsLine[] = [];
   let insideGroup = false;
   let sitemapDeclarations = 0;
   for (const line of lines) {
     if (looksLikeHtml || isInvalidLine(line.text, insideGroup)) {
-      invalid.push(line.number);
+      invalid.push({ number: line.number, text: line.text.slice(0, MAX_INVALID_LINE_TEXT_LENGTH) });
       continue;
     }
     const key = keyOf(line.text);

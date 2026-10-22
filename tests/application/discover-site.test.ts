@@ -64,7 +64,11 @@ describe('DiscoverSite robots.txt facts', () => {
     });
 
     const robots = result.siteFiles.find((file) => file.kind === 'robots');
-    expect(robots?.facts).toEqual({ invalidLines: [2], invalidCount: 1, sitemapDeclarations: 1 });
+    expect(robots?.facts).toEqual({
+      invalidLines: [{ number: 2, text: 'bogus line' }],
+      invalidCount: 1,
+      sitemapDeclarations: 1,
+    });
   });
 
   it.each<[string, Reply]>([
