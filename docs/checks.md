@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 69 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 70 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has checks 45 and 222 so far.
@@ -71,6 +71,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 203 | notice | crawlability | site | There is no `robots.txt`. | Publish a robots.txt, even a permissive one. |
 | 204 | notice | international | page | An HTML page answering 2xx has a hreflang whose primary language (`de` in `de-AT`, case ignored) differs from the `lang` of the crawled target page, an HTML 2xx page that declares one. `x-default` is ignored. `info.targets` lists `lang`, `url` and `targetLang`. | Align the hreflang with the language the target page declares, or fix the target's `lang` attribute. |
 | 205 | notice | https | site | The home page is served over HTTPS without a `Strict-Transport-Security` header. | Enable HSTS on the web server. |
+| 207 | notice | linking | page | An HTML page answering 2xx is listed in the sitemap but no other crawled page links to it with an `<a>` link. A link to a redirecting URL counts for the final destination; a link from the page to itself does not count. | Link to the page from related pages or from a menu. |
 | 209 | notice | crawlability | page | A page is excluded from the index by an `X-Robots-Tag` HTTP header (`noindex` or `none`). `info.value` gives the header value. | Check that the exclusion is intended; otherwise remove the directive from the server configuration. |
 | 212 | notice | crawlability | page | A page is more than 3 clicks away from the home page. `info.clicks` gives the number of clicks. | Link to it from pages closer to the home page. |
 | 213 | notice | linking | page | A page receives internal links from exactly one other page. | Link to it from more pages (navigation, related content). |
@@ -92,6 +93,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 8 applies to every page that has internal links.
   - Checks 109 and 214 apply to every page that got an HTTP response. A page redirects when its status is 302, 303 or 307 (109) or 301 or 308 (214); a 304 is not a redirect. The page is reported where it redirects, not where it is linked.
   - Check 33 applies to every page that answers with a redirect. Each crawled URL whose own chain has at least 2 hops, or ends in a loop (including a page redirecting to itself), is reported: in X→A→B→C, X and A are reported and B is not. A chain is cut at 10 hops and marked `truncated`.
+  - Check 207 only judges crawled pages: with `--limit`, a page can be reported only because the pages linking to it were not crawled, and nothing is judged when no sitemap was read.
   - Check 209 applies to every page that got an HTTP response. The header value is split on commas; an agent prefix (`googlebot: noindex`) is dropped and case is ignored. `noindex` and `none` are reported; `nofollow` alone is not.
   - Check 38 applies to HTML 2xx pages that declare a canonical. The canonical is compared with the crawled URLs after removing its `#fragment`; a canonical to a page that was not crawled, to a redirect or to itself is not reported.
   - Check 212 applies to HTML 2xx pages. Depth is counted in clicks, by a breadth-first walk over the internal `<a>` links from the final root (the start URL after its redirects, which are not clicks); a redirecting link lands on its destination at the cost of one click. The crawl's own `depth` is not used. Pages that only the sitemap reveals, with no link leading to them, are not reported: their click depth is unknown.

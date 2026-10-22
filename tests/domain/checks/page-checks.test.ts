@@ -585,6 +585,7 @@ describe('registry metadata', () => {
       111: 'error',
       204: 'notice',
       209: 'notice',
+      207: 'notice',
       212: 'notice',
       214: 'notice',
       101: 'warning',
@@ -1755,6 +1756,66 @@ describe('check 128 (http sitemap URL on an https site)', () => {
       makePage(httpUrl('a'), { inSitemap: true }),
     ]);
     const result = runCheck(pageChecks, 128, { ...crawl, rootUrl: httpUrl('root') });
+    expect(result.count).toBe(0);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 207 (sitemap page that no other page links to)', () => {
+  const listed = (name: string, overrides: Partial<Page> = {}): Page =>
+    makePage(u(name), { inSitemap: true, ...overrides });
+
+  it('flags a sitemap page with no incoming internal link', () => {
+    const result = run(207, [listed('orphan'), listed('home')]);
+    expect(flaggedUrls(result)).toEqual([u('orphan'), u('home')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('flags a page that only links to itself', () => {
+    const result = runCheck(
+      pageChecks,
+      207,
+      crawlOf([listed('self')], [makeLink(u('self'), u('self'))]),
+    );
+    expect(flaggedUrls(result)).toEqual([u('self')]);
+  });
+
+  it('does not flag a sitemap page linked from another page', () => {
+    const result = runCheck(
+      pageChecks,
+      207,
+      crawlOf([listed('a'), listed('b')], [makeLink(u('a'), u('b')), makeLink(u('b'), u('a'))]),
+    );
+    expect(result.count).toBe(0);
+  });
+
+  it('counts a link that reaches the page through a redirect', () => {
+    const pages = [
+      listed('a'),
+      listed('new'),
+      makePage(u('old'), { status: 301, isHtml: false, redirectTarget: u('new') }),
+    ];
+    const links = [makeLink(u('a'), u('old')), makeLink(u('new'), u('a'))];
+    const result = runCheck(pageChecks, 207, crawlOf(pages, links));
+    expect(result.count).toBe(0);
+  });
+
+  it('ignores external and resource links as incoming links', () => {
+    const links = [
+      makeLink(u('a'), u('b'), { type: 'resource' }),
+      makeLink(u('a'), u('b'), { type: 'external' }),
+    ];
+    const result = runCheck(pageChecks, 207, crawlOf([listed('a'), listed('b')], links));
+    expect(flaggedUrls(result)).toEqual([u('a'), u('b')]);
+  });
+
+  it('only examines HTML 2xx pages listed in the sitemap', () => {
+    const result = run(207, [
+      makePage(u('not-listed'), { inSitemap: false }),
+      makePage(u('unknown'), { inSitemap: null }),
+      listed('gone', { status: 404 }),
+      listed('pdf', { isHtml: false }),
+    ]);
     expect(result.count).toBe(0);
     expect(result.examined).toBe(0);
   });
