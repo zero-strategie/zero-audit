@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRepository } from '../../src/application/ports/project-repository.js';
-import type { UserRepository } from '../../src/application/ports/user-repository.js';
 import type { AuditQueue } from '../../src/application/ports/audit-queue.js';
 import type { SnapshotRepository } from '../../src/application/ports/snapshot-repository.js';
 import type { CheckResult } from '../../src/domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../../src/domain/crawl.js';
 import { check1000 } from '../../src/domain/checks/site/check-1000-url-variants.js';
 import { crawlOf } from './check-fixtures.js';
+import type { LegacyAccounts } from './legacy-accounts.js';
 import { AuditAttemptLost, SnapshotImmutable, SnapshotNotFound } from '../../src/domain/errors.js';
 
 const startedAt = new Date('2026-01-01T10:00:00.000Z');
@@ -65,7 +65,7 @@ const slashProbe = (overrides: Partial<SlashVariantProbe> = {}): SlashVariantPro
 export interface RepositoryPair {
   readonly snapshots: SnapshotRepository & AuditQueue;
   readonly projects: ProjectRepository;
-  readonly users: UserRepository;
+  readonly accounts: LegacyAccounts;
 }
 
 export const describeSnapshotRepositoryContract = (
@@ -352,22 +352,14 @@ export const describeSnapshotRepositoryContract = (
     const since = new Date(NOW.getTime() - DAY_MS);
 
     const setup = async () => {
-      const { snapshots, projects, users } = await factory();
+      const { snapshots, projects, accounts } = await factory();
       const project = await projects.findOrCreateByRootUrl({
         rootUrl: 'https://example.test/',
         ownerId: null,
         createdAt: startedAt,
       });
-      const u = await users.create({
-        email: 'u@example.fr',
-        passwordHash: 'h',
-        createdAt: startedAt,
-      });
-      const v = await users.create({
-        email: 'v@example.fr',
-        passwordHash: 'h',
-        createdAt: startedAt,
-      });
+      const u = { id: await accounts.insertUser('u@example.fr') };
+      const v = { id: await accounts.insertUser('v@example.fr') };
       const launch = (launchedBy: string | null, hoursAgo: number) =>
         snapshots.create({
           projectId: project.id,
@@ -538,11 +530,7 @@ export const describeSnapshotRepositoryContract = (
         ownerId: null,
         createdAt: startedAt,
       });
-      const account = await pair.users.create({
-        email: 'queue@example.test',
-        passwordHash: 'h',
-        createdAt: startedAt,
-      });
+      const account = { id: await pair.accounts.insertUser('queue@example.test') };
       const enqueue = async (seconds: number, launchedBy: string | null = null): Promise<string> =>
         (
           await pair.snapshots.enqueue(

@@ -9,9 +9,17 @@ import type { SnapshotRepository } from '../application/ports/snapshot-repositor
 import { MigrateStorage } from '../application/migrate-storage.js';
 import { migrate } from '../infrastructure/postgres/migrate.js';
 import { createPool } from '../infrastructure/postgres/pool.js';
+import { PostgresAccountEraser } from '../infrastructure/postgres/postgres-account-eraser.js';
+import { PostgresEmailTokenRepository } from '../infrastructure/postgres/postgres-email-token-repository.js';
+import { PostgresSessionRepository } from '../infrastructure/postgres/postgres-session-repository.js';
+import { PostgresUserRepository } from '../infrastructure/postgres/postgres-user-repository.js';
 import { PostgresSnapshotRepository } from '../infrastructure/postgres/postgres-snapshot-repository.js';
 import { PostgresStorageMigrator } from '../infrastructure/postgres/postgres-storage-migrator.js';
 import { SqliteStorageMigrator } from '../infrastructure/sqlite/sqlite-storage-migrator.js';
+import { SqliteAccountEraser } from '../infrastructure/sqlite/sqlite-account-eraser.js';
+import { SqliteEmailTokenRepository } from '../infrastructure/sqlite/sqlite-email-token-repository.js';
+import { SqliteSessionRepository } from '../infrastructure/sqlite/sqlite-session-repository.js';
+import { SqliteUserRepository } from '../infrastructure/sqlite/sqlite-user-repository.js';
 import { SqliteSnapshotRepository } from '../infrastructure/sqlite/sqlite-snapshot-repository.js';
 import type { StoreSelection } from './config.js';
 
@@ -62,10 +70,10 @@ const openSqlite = (dbPath: string): Storage => {
     snapshots: repository,
     queue: repository,
     health: repository,
-    users: repository.users,
-    sessions: repository.sessions,
-    emailTokens: repository.emailTokens,
-    eraser: repository.eraser,
+    users: new SqliteUserRepository(repository.db),
+    sessions: new SqliteSessionRepository(repository.db),
+    emailTokens: new SqliteEmailTokenRepository(repository.db),
+    eraser: new SqliteAccountEraser(repository.db),
     close: once(() => {
       repository.close();
       return Promise.resolve();
@@ -95,10 +103,10 @@ const openPostgres = async (databaseUrl: string): Promise<Storage> => {
     snapshots: repository,
     queue: repository,
     health: repository,
-    users: repository.users,
-    sessions: repository.sessions,
-    emailTokens: repository.emailTokens,
-    eraser: repository.eraser,
+    users: new PostgresUserRepository(pool),
+    sessions: new PostgresSessionRepository(pool),
+    emailTokens: new PostgresEmailTokenRepository(pool),
+    eraser: new PostgresAccountEraser(pool),
     close: once(() => pool.end()),
   };
 };

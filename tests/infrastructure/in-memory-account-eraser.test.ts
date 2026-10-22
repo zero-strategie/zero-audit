@@ -11,7 +11,9 @@ describeAccountEraserContract(() => {
   const stores = {
     users,
     projects: new InMemoryProjectRepository(),
-    snapshots: new InMemorySnapshotRepository(users),
+    snapshots: new InMemorySnapshotRepository(
+      async (id) => (await users.findById(id))?.email ?? null,
+    ),
     sessions: new InMemorySessionRepository(),
     emailTokens: new InMemoryEmailTokenRepository(),
   };

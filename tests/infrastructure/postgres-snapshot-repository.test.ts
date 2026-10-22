@@ -9,6 +9,11 @@ import { AuditInProgress, SnapshotImmutable } from '../../src/domain/errors.js';
 import { createPool } from '../../src/infrastructure/postgres/pool.js';
 import { migrate } from '../../src/infrastructure/postgres/migrate.js';
 import { PostgresSnapshotRepository } from '../../src/infrastructure/postgres/postgres-snapshot-repository.js';
+import { PostgresAccountEraser } from '../../src/infrastructure/postgres/postgres-account-eraser.js';
+import { PostgresEmailTokenRepository } from '../../src/infrastructure/postgres/postgres-email-token-repository.js';
+import { PostgresSessionRepository } from '../../src/infrastructure/postgres/postgres-session-repository.js';
+import { PostgresUserRepository } from '../../src/infrastructure/postgres/postgres-user-repository.js';
+import { postgresLegacyAccounts } from '../support/legacy-accounts.js';
 import { describeProjectRepositoryContract } from '../support/project-repository-contract.js';
 import {
   createTestDatabase,
@@ -55,11 +60,23 @@ const canonical = (value: unknown): string =>
 describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
   let database: TestDatabase;
   let repository: PostgresSnapshotRepository;
+  let accounts: {
+    users: PostgresUserRepository;
+    sessions: PostgresSessionRepository;
+    emailTokens: PostgresEmailTokenRepository;
+    eraser: PostgresAccountEraser;
+  };
 
   beforeAll(async () => {
     database = await createTestDatabase(TEST_DATABASE_URL ?? '');
     await migrate(database.pool);
     repository = new PostgresSnapshotRepository(database.pool);
+    accounts = {
+      users: new PostgresUserRepository(database.pool),
+      sessions: new PostgresSessionRepository(database.pool),
+      emailTokens: new PostgresEmailTokenRepository(database.pool),
+      eraser: new PostgresAccountEraser(database.pool),
+    };
   });
 
   beforeEach(async () => {
@@ -73,7 +90,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
   describeSnapshotRepositoryContract(() => ({
     snapshots: repository,
     projects: repository.projects,
-    users: repository.users,
+    accounts: postgresLegacyAccounts(database.pool),
   }));
   describe('concurrent queue access from two connections', () => {
     const requestedAt = new Date('2026-01-01T10:00:00.000Z');
@@ -92,12 +109,8 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         ownerId: null,
         createdAt: requestedAt,
       });
-      const account = await repository.users.create({
-        email: 'race@example.test',
-        passwordHash: 'h',
-        createdAt: requestedAt,
-      });
-      return { projectId: project.id, accountId: account.id };
+      const accountId = await postgresLegacyAccounts(database.pool).insertUser('race@example.test');
+      return { projectId: project.id, accountId };
     };
 
     it('admits exactly one of two simultaneous launches for an account limited to one active audit', async () => {
@@ -137,38 +150,59 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
   });
   describeProjectRepositoryContract(() => ({
     projects: repository.projects,
-    users: repository.users,
+    users: accounts.users,
   }));
-  describeUserRepositoryContract(() => repository.users);
+  describeUserRepositoryContract(() => accounts.users);
   describeSessionRepositoryContract(() => ({
-    sessions: repository.sessions,
-    users: repository.users,
+    sessions: accounts.sessions,
+    users: accounts.users,
   }));
   describeEmailTokenRepositoryContract(() => ({
-    emailTokens: repository.emailTokens,
-    users: repository.users,
+    emailTokens: accounts.emailTokens,
+    users: accounts.users,
   }));
 
   const storage = (): AccountStorage => ({
-    users: repository.users,
+    users: accounts.users,
     projects: repository.projects,
     snapshots: repository,
-    sessions: repository.sessions,
-    emailTokens: repository.emailTokens,
-    eraser: repository.eraser,
+    sessions: accounts.sessions,
+    emailTokens: accounts.emailTokens,
+    eraser: accounts.eraser,
   });
   describeAccountEraserContract(storage);
+
+  describe('launch journal', () => {
+    it('journals a launch under the SHA-256 of the e-mail of a user inserted with plain SQL', async () => {
+      const userId = await postgresLegacyAccounts(database.pool).insertUser('journal@example.test');
+      const project = await repository.projects.findOrCreateByRootUrl({
+        rootUrl: 'https://example.test/',
+        ownerId: null,
+        createdAt: startedAt,
+      });
+
+      await repository.enqueue(
+        { projectId: project.id, launchedBy: userId, pagesLimit: 10, requestedAt: startedAt },
+        () => Promise.resolve(),
+      );
+
+      const { rows } = await database.pool.query('SELECT email_hash FROM api_launches');
+      expect(rows).toEqual([
+        { email_hash: createHash('sha256').update('journal@example.test').digest('hex') },
+      ]);
+    });
+  });
 
   describe('secrets at rest', () => {
     const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 
     it('stores the SHA-256 of a session identifier, never the identifier', async () => {
-      const user = await repository.users.create({
+      const user = await accounts.users.create({
         email: 'u@example.fr',
         passwordHash: 'h',
         createdAt: startedAt,
       });
-      await repository.sessions.create({
+      await accounts.sessions.create({
         id: 'raw-session-id',
         userId: user.id,
         createdAt: startedAt,
@@ -182,12 +216,12 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     });
 
     it('stores the SHA-256 of an e-mail token, never the token', async () => {
-      const user = await repository.users.create({
+      const user = await accounts.users.create({
         email: 'u@example.fr',
         passwordHash: 'h',
         createdAt: startedAt,
       });
-      await repository.emailTokens.create({
+      await accounts.emailTokens.create({
         token: 'raw-email-token',
         userId: user.id,
         email: user.email,
@@ -517,7 +551,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       const baseline = await rowCounts();
       const u = await seedAccount(storage(), { email: 'u@example.fr' });
 
-      await repository.eraser.eraseAccount(u.userId);
+      await accounts.eraser.eraseAccount(u.userId);
 
       expect(await rowCounts()).toEqual(baseline);
     });
@@ -534,7 +568,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         'CREATE TRIGGER fail_user_erasure BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION fail_user_erasure()',
       );
       try {
-        await expect(repository.eraser.eraseAccount(u.userId)).rejects.toThrow('boom');
+        await expect(accounts.eraser.eraseAccount(u.userId)).rejects.toThrow('boom');
         expect(await rowCounts()).toEqual(before);
       } finally {
         await database.pool.query('DROP TRIGGER fail_user_erasure ON users');

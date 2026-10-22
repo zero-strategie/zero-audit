@@ -9,7 +9,6 @@ import type { CheckResult } from '../domain/check.js';
 import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../domain/crawl.js';
 import { AuditAttemptLost, SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
-import type { UserRepository } from '../application/ports/user-repository.js';
 import { hashToken } from './hash-token.js';
 
 interface Stored {
@@ -40,10 +39,10 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
   private readonly launchJournal: { id: string; emailHash: string; launchedAt: Date }[] = [];
 
   /**
-   * With `users`, launches are journaled by e-mail address like the SQL adapters, so they survive
+   * With `emailOf`, launches are journaled by e-mail address like the SQL adapters, so they survive
    * an account erasure; without, by account id, which is enough for tests that never erase.
    */
-  constructor(private readonly users?: Pick<UserRepository, 'findById'>) {}
+  constructor(private readonly emailOf?: (userId: string) => Promise<string | null>) {}
 
   ping(): Promise<void> {
     return Promise.resolve();
@@ -316,8 +315,8 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
   }
 
   private async launchKeyOf(userId: string): Promise<string> {
-    const user = await this.users?.findById(userId);
-    return hashToken(user?.email ?? userId);
+    const email = await this.emailOf?.(userId);
+    return hashToken(email ?? userId);
   }
 
   private launchedSince(since: Date): readonly { emailHash: string; launchedAt: Date }[] {

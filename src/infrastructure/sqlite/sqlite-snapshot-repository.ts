@@ -20,10 +20,6 @@ import { toTheme } from '../../domain/legacy-theme.js';
 import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { hashToken } from '../hash-token.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
-import { SqliteAccountEraser } from './sqlite-account-eraser.js';
-import { SqliteEmailTokenRepository } from './sqlite-email-token-repository.js';
-import { SqliteSessionRepository } from './sqlite-session-repository.js';
-import { SqliteUserRepository } from './sqlite-user-repository.js';
 import { migrate } from './migrate.js';
 import { openDatabase } from './open-database.js';
 
@@ -178,18 +174,11 @@ const toSlashProbe = (row: SlashProbeRow): SlashVariantProbe => ({
 
 export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue {
   readonly projects: SqliteProjectRepository;
-  readonly users: SqliteUserRepository;
-  readonly sessions: SqliteSessionRepository;
-  readonly emailTokens: SqliteEmailTokenRepository;
-  readonly eraser: SqliteAccountEraser;
   private enqueuing: Promise<unknown> = Promise.resolve();
 
-  private constructor(private readonly db: SqliteDatabase) {
+  /** `db` is exposed so that a hosted product can attach its own account repositories to the same connection. */
+  private constructor(readonly db: SqliteDatabase) {
     this.projects = new SqliteProjectRepository(db);
-    this.users = new SqliteUserRepository(db);
-    this.sessions = new SqliteSessionRepository(db);
-    this.emailTokens = new SqliteEmailTokenRepository(db);
-    this.eraser = new SqliteAccountEraser(db);
   }
 
   static open(path: string): SqliteSnapshotRepository {
