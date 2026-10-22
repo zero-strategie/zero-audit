@@ -560,6 +560,7 @@ describe('registry metadata', () => {
       33: 'error',
       38: 'error',
       113: 'warning',
+      115: 'warning',
       122: 'warning',
       129: 'warning',
       136: 'warning',
@@ -1094,5 +1095,42 @@ describe('checks 20 and 46 (viewport)', () => {
       expect(flaggedUrls(result)).toEqual([]);
       expect(result.examined).toBe(0);
     }
+  });
+});
+
+describe('check 115 (encoding not declared)', () => {
+  const withCharset = (
+    name: string,
+    charset: string | null,
+    contentType: string | null,
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { charset }, contentType, ...overrides });
+
+  it('flags a page with neither a meta charset nor a header charset', () => {
+    const result = run(115, [withCharset('a', null, 'text/html')]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('flags a page without Content-Type header and without meta charset', () => {
+    expect(flaggedUrls(run(115, [withCharset('a', null, null)]))).toEqual([u('a')]);
+  });
+
+  it.each([
+    ['text/html; charset=utf-8', null],
+    ['text/html; Charset = "ISO-8859-1"', null],
+    ['text/html', 'utf-8'],
+  ])('does not flag the Content-Type "%s" with meta charset %s', (contentType, charset) => {
+    expect(flaggedUrls(run(115, [withCharset('a', charset, contentType)]))).toEqual([]);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(115, [
+      withCharset('gone', null, 'text/html', { status: 404 }),
+      withCharset('img', null, 'image/png', { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null, contentType: 'text/html' }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
   });
 });

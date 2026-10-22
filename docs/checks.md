@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 46 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 47 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `international` and `markup` themes have no check yet and are not computable (no score) until their checks land.
@@ -39,6 +39,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 111 | error | other | page | An HTML page answering 2xx took more than 3000 ms to respond. `info.responseTimeMs` gives the time. | Investigate server time: caching, database queries, hosting. |
 | 112 | warning | on-page | page | The text-to-HTML ratio is below 10 %. The ratio is the UTF-8 byte size of the visible body text divided by the byte size of the HTML. | Reduce markup bloat or add real content. |
 | 113 | warning | crawlability | page | A URL has more than 2 query parameters. `info.count` gives the number of parameters. | Simplify the URL: keep only the parameters that change the content. |
+| 115 | warning | on-page | page | An HTML page answering 2xx declares no encoding: no `charset` in the `Content-Type` header and no `<meta charset>` (or `http-equiv="Content-Type"` charset) in the document. | Declare `<meta charset="utf-8">` in the head, or send a charset in the `Content-Type` header. |
 | 117 | warning | on-page | page | The page has fewer than 200 words of visible text. | Expand thin content, or merge or noindex the page. |
 | 122 | warning | crawlability | page | The path of a URL contains an underscore. | Use hyphens to separate words in URLs. |
 | 123 | warning | linking | page | A page has internal links with `rel="nofollow"`. There is one occurrence per page; `info.targets` lists the target URLs, sorted. The `rel` value is read as a list of tokens, case ignored (`noopener NoFollow` counts, `nofollowed` does not). | Check that the attribute is intended; otherwise remove it so link equity flows to your own pages. |
@@ -84,6 +85,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 31 only applies when the final home page (after redirects) is `https:`; on an http site it examines nothing. It applies to HTML 2xx pages with at least one internal `<a>` link and reports internal links whose URL starts with `http:`, even when that URL redirects to https. External links are ignored.
   - Check 129 applies to HTML 2xx pages and reads the `content-encoding` response header. The crawler keeps the default `Accept-Encoding` of undici (gzip, deflate, and more), so a server that compresses only for browsers, or a CDN that negotiates differently, may be reported although real visitors get compressed pages.
   - Checks 20 and 46 apply to HTML 2xx pages whose HTML facts were recorded; pages from snapshots made before the facts existed are not examined. Check 20 reports a missing viewport tag, check 46 a tag without `width=` (read case-insensitively), so a page is never reported by both. Only the first viewport tag is read.
+  - Check 115 applies to HTML 2xx pages whose HTML facts were recorded. A charset in the `Content-Type` header or in the document is enough. The crawler's decoder strips a leading byte order mark, so a page whose only declaration is a BOM is reported although browsers honour it.
   - Check 111 applies to HTML 2xx pages and compares the response time strictly to 3000 ms. It is the time seen by the crawler, from sending the request to reading the whole body, not a browser loading time: network distance and the crawler's own load can inflate it.
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**
