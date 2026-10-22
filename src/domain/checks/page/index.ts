@@ -13,6 +13,7 @@ import { check103 } from './check-103-h1-missing.js';
 import { check104 } from './check-104-h1-multiple.js';
 import { check105 } from './check-105-h1-equals-title.js';
 import { check106 } from './check-106-meta-description-missing.js';
+import { check108 } from './check-108-too-many-links.js';
 import { check109 } from './check-109-temporary-redirect.js';
 import { check112 } from './check-112-low-text-ratio.js';
 import { check113 } from './check-113-too-many-parameters.js';
@@ -39,6 +40,7 @@ export const pageChecks: readonly PageCheck[] = [
   check104,
   check105,
   check106,
+  check108,
   check109,
   check112,
   check113,

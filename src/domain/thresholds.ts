@@ -7,3 +7,4 @@ export const MAX_CLICK_DEPTH = 3;
 export const MAX_QUERY_PARAMETERS = 2;
 export const URL_LENGTH_WARNING = 100;
 export const URL_LENGTH_NOTICE = 200;
+export const MAX_LINKS_PER_PAGE = 3000;

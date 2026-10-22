@@ -573,6 +573,7 @@ describe('registry metadata', () => {
       117: 'warning',
       104: 'notice',
       105: 'warning',
+      108: 'warning',
     });
   });
 
@@ -607,5 +608,43 @@ describe('check 201 (URL over 200 characters)', () => {
     expect(flaggedUrls(result)).toEqual([urlOfLength(201)]);
     expect(result.occurrences[0]?.info).toEqual({ length: 201 });
     expect(result.examined).toBe(3);
+  });
+});
+
+describe('check 108 (too many links)', () => {
+  const linksFrom = (source: string, count: number, type: Link['type'] = 'internal'): Link[] =>
+    Array.from({ length: count }, (_, i) => makeLink(source, u(`t${String(i)}`), { type }));
+
+  const runWithLinks = (pages: Page[], links: Link[]): CheckResult =>
+    runCheck(pageChecks, 108, crawlOf(pages, links));
+
+  it('flags 3001 links, internal and external, duplicates included, but not 3000', () => {
+    const result = runWithLinks(
+      [makePage(u('over')), makePage(u('limit'))],
+      [
+        ...linksFrom(u('over'), 2000),
+        ...linksFrom(u('over'), 1000, 'external'),
+        makeLink(u('over'), u('t0')),
+        ...linksFrom(u('limit'), 3000),
+      ],
+    );
+    expect(flaggedUrls(result)).toEqual([u('over')]);
+    expect(result.occurrences[0]?.info).toEqual({ count: 3001 });
+  });
+
+  it('does not count resource links', () => {
+    const result = runWithLinks(
+      [makePage(u('a'))],
+      [...linksFrom(u('a'), 2990), ...linksFrom(u('a'), 50, 'resource')],
+    );
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('examines HTML 2xx pages only', () => {
+    const result = runWithLinks(
+      [makePage(u('a')), makePage(u('b'), { status: 404 }), makePage(u('c'), { isHtml: false })],
+      [],
+    );
+    expect(result.examined).toBe(1);
   });
 });

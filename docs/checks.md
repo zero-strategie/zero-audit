@@ -30,6 +30,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 104 | notice | on-page | page | An HTML page has several `<h1>`. | Keep a single main heading. |
 | 105 | warning | on-page | page | The `<h1>` is identical to the `<title>`, compared after normalising case and whitespace. | Make the heading complement the title instead of repeating it. |
 | 106 | warning | on-page | page | An HTML page has no meta description. | Add a meta description. |
+| 108 | warning | linking | page | A page has more than 3000 links. `info.count` gives the number of links. | Reduce the number of links: split the page or trim menus and lists. |
 | 109 | warning | crawlability | page | A page answers with a temporary redirect (302, 303 or 307). `info` gives the `status` and the `target`. | Replace it with a permanent redirect (301 or 308) if the move is final, and update the links. |
 | 112 | warning | on-page | page | The text-to-HTML ratio is below 10 %. The ratio is the UTF-8 byte size of the visible body text divided by the byte size of the HTML. | Reduce markup bloat or add real content. |
 | 113 | warning | crawlability | page | A URL has more than 2 query parameters. `info.count` gives the number of parameters. | Simplify the URL: keep only the parameters that change the content. |
@@ -62,6 +63,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 212 applies to HTML 2xx pages. Depth is counted in clicks, by a breadth-first walk over the internal `<a>` links from the final root (the start URL after its redirects, which are not clicks); a redirecting link lands on its destination at the cost of one click. The crawl's own `depth` is not used. Pages that only the sitemap reveals, with no link leading to them, are not reported: their click depth is unknown.
   - Checks 9 and 11 always apply: their `examined` is the number of pages explored. A timeout goes to 9, every other network failure to 11. Check 8 also reports internal links to these pages, so the same failure can appear in both (on the linking page for 8, on the failed page for 9 and 11).
   - Checks 113 and 122 apply to every crawled page. Check 113 counts the entries of the query string, so a repeated key counts each time (`?a=1&a=2&b=3` has 3); the threshold is strictly more than 2. Check 122 looks at the path only, never at the query string.
+  - Check 108 applies to HTML 2xx pages. It counts every `<a>` link, internal and external, duplicates included; resources (images, scripts, stylesheets) are not counted. The threshold is strictly more than 3000.
   - Checks 136 and 201 apply to every crawled page and measure the length of the stored URL, in characters (`url.length`). The thresholds are strictly more than 100 (136) and strictly more than 200 (201); 136 stops at 200, so a URL is never reported by both.
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**
