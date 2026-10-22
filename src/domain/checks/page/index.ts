@@ -7,6 +7,7 @@ import { check9 } from './check-009-timeout.js';
 import { check11 } from './check-011-unreachable.js';
 import { check20 } from './check-020-viewport-missing.js';
 import { check21 } from './check-021-large-html.js';
+import { check23 } from './check-023-hreflang-invalid.js';
 import { check26 } from './check-026-http-page.js';
 import { check30 } from './check-030-mixed-content.js';
 import { check31 } from './check-031-http-link-on-https.js';
@@ -56,6 +57,7 @@ export const pageChecks: readonly PageCheck[] = [
   check11,
   check20,
   check21,
+  check23,
   check26,
   check30,
   check31,

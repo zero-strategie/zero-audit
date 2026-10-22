@@ -555,6 +555,7 @@ describe('registry metadata', () => {
       4: 'notice',
       9: 'error',
       11: 'error',
+      23: 'error',
       26: 'error',
       30: 'error',
       31: 'warning',
@@ -1422,6 +1423,42 @@ describe('check 114 (language not declared)', () => {
     const result = run(114, [
       withLanguage('gone', null, [], { status: 404 }),
       withLanguage('img', null, [], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 23 (invalid hreflang values)', () => {
+  const withHreflang = (name: string, values: string[], overrides: Partial<Page> = {}) =>
+    makePage(u(name), {
+      htmlFacts: { lang: 'en', hreflang: values.map((lang) => ({ lang, url: u('alt') })) },
+      ...overrides,
+    });
+
+  it('accepts valid codes whatever their case', () => {
+    const result = run(23, [
+      withHreflang('ok', ['en-GB', 'fr', 'zh-Hant-TW', 'X-Default', 'EN-gb']),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('flags a page with invalid codes and lists them', () => {
+    const result = run(23, [
+      withHreflang('bad', ['en-UK', 'fr', 'english', 'fr_FR']),
+      withHreflang('good', ['fr']),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('bad')]);
+    expect(result.occurrences[0]?.info).toEqual({ invalid: ['en-UK', 'english', 'fr_FR'] });
+    expect(result.examined).toBe(2);
+  });
+
+  it('only examines HTML 2xx pages with hreflang facts', () => {
+    const result = run(23, [
+      withHreflang('gone', ['xx'], { status: 404 }),
+      withHreflang('none', []),
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);
