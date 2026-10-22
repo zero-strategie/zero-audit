@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 28 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 29 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page` or `other`. Each theme gets its own score.
@@ -17,6 +17,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 3 | error | on-page | page | An HTML page has no `<title>`. | Add a unique, descriptive title. |
 | 4 | notice | crawlability | page | An internal page is blocked from crawling by `robots.txt`. There is one occurrence per blocked URL. | Check that the block is intended; otherwise relax the matching `Disallow` rule. |
 | 6 | error | on-page | page | Several pages share the same title. There is one occurrence per page involved. | Give each page its own title. |
+| 7 | error | crawlability | page | Several pages have exactly the same HTML (same SHA-256 content hash) and do not all declare the same canonical. `info.duplicates` lists the other pages of the group. | Merge the pages, redirect them, or declare one canonical page. |
 | 8 | error | linking | page | An internal link points to a page that failed (4xx, 5xx or network error). The occurrence is on the linking page. | Update or remove the link. |
 | 9 | error | crawlability | page | A page did not answer within the crawler's time limit (`timeout`). | Look at the server's performance and load. |
 | 11 | error | crawlability | page | A page could not be reached: connection, DNS, blocked or other network failure. `info.kind` gives the failure. | Check the host, DNS and firewall, then the URL itself. |
@@ -47,6 +48,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Most page checks apply to HTML pages answering 2xx.
   - Checks 1 and 2 apply to every page that got an HTTP response.
   - Check 4 always applies: its `examined` is the number of pages explored, and the occurrences come from the URLs the crawler skipped because of `robots.txt`.
+  - Check 7 applies to HTML 2xx pages; error pages are never counted in a group. It detects exact duplicates only (identical raw HTML): near-duplicates are not found. A group whose pages all declare the same canonical (after removing the `#fragment`) is not reported. It can overlap with check 1000 (the same page under two URL forms), check 6 (same title) and check 15 (same meta description), which report the same pages from another angle.
   - Check 8 applies to every page that has internal links.
   - Checks 109 and 214 apply to every page that got an HTTP response. A page redirects when its status is 302, 303 or 307 (109) or 301 or 308 (214); a 304 is not a redirect. The page is reported where it redirects, not where it is linked.
   - Check 33 applies to every page that answers with a redirect. Each crawled URL whose own chain has at least 2 hops, or ends in a loop (including a page redirecting to itself), is reported: in X→A→B→C, X and A are reported and B is not. A chain is cut at 10 hops and marked `truncated`.

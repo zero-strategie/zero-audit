@@ -1,6 +1,6 @@
 # zero-audit
 
-`@zero-strategie/zero-audit-core` is the open-source engine of zero-audit, a technical SEO audit tool. It crawls a website, runs [28 checks](docs/checks.md), scores the site's health and keeps every audit as an immutable snapshot so that you can see what changed between two audits.
+`@zero-strategie/zero-audit-core` is the open-source engine of zero-audit, a technical SEO audit tool. It crawls a website, runs [29 checks](docs/checks.md), scores the site's health and keeps every audit as an immutable snapshot so that you can see what changed between two audits.
 
 It ships as a library and as a command-line tool. A hosted product built on this engine is available at [https://audit.zero-strategie.dev](https://audit.zero-strategie.dev).
 
