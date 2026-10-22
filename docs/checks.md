@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 58 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 59 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has no check yet and is not computable (no score) until its checks land.
@@ -25,6 +25,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 20 | error | on-page | page | An HTML page answering 2xx has no `<meta name="viewport">`. | Add `<meta name="viewport" content="width=device-width, initial-scale=1">` to the head. |
 | 21 | error | other | page | An HTML page answering 2xx weighs more than 2 MiB (2,097,152 bytes, UTF-8 size of the received document). `info.bytes` gives the size. | Trim the markup: remove inline data, split the page, paginate long lists. |
 | 23 | error | international | page | An HTML page answering 2xx has a `<link rel="alternate" hreflang>` whose value is neither `x-default` nor a valid `language[-script][-region]` code (case ignored). `info.invalid` lists the invalid values. | Use a real language code, optionally with a region: `en-GB`, not `en-UK`; `fr-FR`, not `fr_FR`. |
+| 24 | error | international | page | An HTML page answering 2xx has hreflang alternates that contradict each other: the same language (case ignored) points to two different URLs (`info.conflicts`, fragments ignored), or no alternate points to the page itself or to its canonical (`missing-self-reference`). `info.reasons` lists `conflict` and/or `missing-self-reference`. | Give each language a single URL and include the page itself in its hreflang set. |
 | 26 | error | https | page | An HTML page answering 2xx is served over `http:` rather than `https:`. | Serve the page over HTTPS and redirect the http URL to it. |
 | 30 | error | https | page | An HTML page answering 2xx served over `https:` loads resources over `http:` (mixed content): `img`/`source` (`src`, `srcset`), `script`, `link rel=stylesheet`, `iframe`, `video` (`src`, `poster`), `audio`, `embed`, `object`. `info.total` is the real count and `info.urls` the resolved URLs (capped at 20). | Load these resources over `https:`. |
 | 31 | warning | https | page | A page on an https site has `<a>` links to internal URLs written with `http:`, including those that redirect to https. One occurrence per page; `info.targets` lists the target URLs, sorted. | Rewrite these links with `https:`. |
@@ -104,6 +105,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 44 applies to HTML 2xx pages whose HTML facts were recorded; only `<a href>` values are examined (rule A3), and the other link checks are unchanged.
   - Checks 39 and 40 apply to HTML 2xx pages whose HTML facts were recorded. Check 40 ignores a refresh with no `url=` (a plain reload).
   - Check 23 applies to HTML 2xx pages that have at least one hreflang alternate (HTML only, not the `Link` header or sitemap). Codes are validated with the ICU data of Node: a known language, an optional known script and an optional two-letter region, with no variant or extension; deprecated codes such as `iw` are rejected. The language is not restricted to ISO 639-1. The current ISO 639-1 codes that ICU rewrites (`tl`, `tw`) are accepted; surrounding whitespace is not trimmed, so `" fr"` is reported.
+  - Check 24 applies to the same pages as check 23 (HTML 2xx with at least one hreflang alternate) and reads the same HTML-only alternates. A self-reference is an alternate equal, after normalisation, to the page URL or to its declared canonical. Reciprocity with other pages is not checked.
   - Check 114 applies to HTML 2xx pages whose HTML facts were recorded; either a non-empty `lang` or at least one hreflang alternate is enough.
   - Check 21 applies to HTML 2xx pages whose HTML facts were recorded; the size is the UTF-8 byte length of the document the crawler read (threshold `MAX_HTML_BYTES`, 2 MiB), strictly exceeded. Check 220 compares the visible word count to `TOO_MUCH_CONTENT_WORDS` (10,000 words), strictly exceeded.
   - Check 111 applies to HTML 2xx pages and compares the response time strictly to 3000 ms. It is the time seen by the crawler, from sending the request to reading the whole body, not a browser loading time: network distance and the crawler's own load can inflate it.

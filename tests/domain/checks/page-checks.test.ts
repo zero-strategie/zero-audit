@@ -556,6 +556,7 @@ describe('registry metadata', () => {
       9: 'error',
       11: 'error',
       23: 'error',
+      24: 'error',
       26: 'error',
       30: 'error',
       31: 'warning',
@@ -1460,6 +1461,69 @@ describe('check 23 (invalid hreflang values)', () => {
       withHreflang('gone', ['xx'], { status: 404 }),
       withHreflang('none', []),
       makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 24 (hreflang conflicts)', () => {
+  const alternates = (name: string, entries: [string, string][], overrides: Partial<Page> = {}) =>
+    makePage(u(name), {
+      htmlFacts: { lang: 'en', hreflang: entries.map(([lang, url]) => ({ lang, url })) },
+      ...overrides,
+    });
+
+  it('flags one language pointing to two different URLs, case ignored', () => {
+    const result = run(24, [
+      alternates('p', [
+        ['en', u('p')],
+        ['EN', u('other')],
+        ['fr', u('fr')],
+      ]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('p')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      reasons: ['conflict'],
+      conflicts: [{ lang: 'en', urls: [u('p'), u('other')] }],
+    });
+  });
+
+  it('does not flag the same URL repeated, even with a fragment', () => {
+    const result = run(24, [
+      alternates('p', [
+        ['en', u('p')],
+        ['en', `${u('p')}#top`],
+      ]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('flags alternates that never point to the page or its canonical', () => {
+    const result = run(24, [alternates('p', [['fr', u('fr')]])]);
+    expect(result.occurrences[0]?.info).toEqual({ reasons: ['missing-self-reference'] });
+  });
+
+  it('accepts a self-reference through the canonical', () => {
+    const result = run(24, [alternates('p', [['fr', u('c')]], { canonical: u('c') })]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('does not flag a coherent set with a self-reference', () => {
+    const result = run(24, [
+      alternates('p', [
+        ['en', u('p')],
+        ['fr', u('fr')],
+      ]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('only examines HTML 2xx pages with hreflang facts', () => {
+    const result = run(24, [
+      alternates('gone', [['fr', u('fr')]], { status: 404 }),
+      alternates('none', []),
     ]);
     expect(flaggedUrls(result)).toEqual([]);
     expect(result.examined).toBe(0);
