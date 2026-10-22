@@ -274,4 +274,12 @@ describe('CheerioHtmlParser header facts', () => {
   it('measures the received html in utf-8 bytes', () => {
     expect(parse('<p>é</p>').htmlBytes).toBe(9);
   });
+
+  it('lists hreflang alternates with absolute urls', () => {
+    const parsed = parse(
+      '<head><link rel="alternate" hreflang="en-GB" href="/en"><link rel="alternate" href="/x"></head>',
+    );
+
+    expect(parsed.hreflang).toEqual([{ lang: 'en-GB', url: 'https://h/en' }]);
+  });
 });

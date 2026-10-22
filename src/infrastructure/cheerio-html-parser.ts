@@ -3,6 +3,7 @@ import { load, type CheerioAPI } from 'cheerio';
 import type {
   CappedExamples,
   HtmlParser,
+  Hreflang,
   JsonLdFacts,
   JsonLdInvalidReason,
   MetaRefresh,
@@ -19,6 +20,7 @@ const NON_VISIBLE_SELECTOR = 'script, style, noscript, template';
 const CHARSET_IN_CONTENT_TYPE = /charset\s*=\s*([^\s;]+)/i;
 
 const CANONICAL_SELECTOR = 'link[rel~="canonical" i][href]';
+const HREFLANG_SELECTOR = 'link[rel~="alternate" i][hreflang][href]';
 const META_REFRESH = /^\s*(\d+)\s*(?:[;,]\s*(?:url\s*=\s*)?(.*))?$/i;
 const SEMANTIC_ELEMENTS: readonly SemanticElement[] = [
   'main',
@@ -102,6 +104,7 @@ export class CheerioHtmlParser implements HtmlParser {
       jsonLd: this.extractJsonLd($),
       semanticElements: SEMANTIC_ELEMENTS.filter((tag) => $(tag).length > 0),
       htmlBytes: Buffer.byteLength(html, 'utf8'),
+      hreflang: this.extractHreflang($, baseUrl),
       hasFrames: FRAME_TAG.test(html.replace(HTML_COMMENT, '')),
       lang: orNull($('html').first().attr('lang')?.trim() ?? ''),
     };
@@ -137,6 +140,15 @@ export class CheerioHtmlParser implements HtmlParser {
       const targetUrl = resolveUrl(href ?? '', baseUrl);
       return targetUrl === null ? [] : [{ targetUrl, ...rest }];
     });
+  }
+
+  private extractHreflang($: CheerioAPI, baseUrl: string): Hreflang[] {
+    return $(HREFLANG_SELECTOR)
+      .toArray()
+      .flatMap((element) => {
+        const url = resolveUrl($(element).attr('href') ?? '', baseUrl);
+        return url === null ? [] : [{ lang: $(element).attr('hreflang') ?? '', url }];
+      });
   }
 
   private extractCanonical($: CheerioAPI, pageUrl: string): string | null {

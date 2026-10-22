@@ -33,6 +33,13 @@ export interface JsonLdFacts {
   invalidReasons: JsonLdInvalidReason[];
 }
 
+export interface Hreflang {
+  /** Raw `hreflang` value, not validated. */
+  lang: string;
+  /** Absolute URL, resolved against `<base href>` when present. */
+  url: string;
+}
+
 export interface ParsedHtml {
   links: RawLink[];
   title: string | null;
@@ -65,6 +72,8 @@ export interface ParsedHtml {
   semanticElements: SemanticElement[];
   /** UTF-8 bytes of the decoded html. */
   htmlBytes: number;
+  /** `<link rel="alternate" hreflang>` elements in document order; unresolvable hrefs are skipped. */
+  hreflang: Hreflang[];
 }
 
 export interface HtmlParser {
