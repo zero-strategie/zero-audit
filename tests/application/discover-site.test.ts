@@ -267,6 +267,7 @@ const oneUrlFacts = (body: string) => ({
   contentLength: null,
   contentEncoding: null,
   urlCount: 1,
+  maxUrlCount: 1,
   issues: { total: 0, examples: [] },
 });
 
@@ -368,6 +369,7 @@ describe('DiscoverSite sitemap facts', () => {
       contentLength: 4096,
       contentEncoding: 'gzip',
       urlCount: 2,
+      maxUrlCount: 2,
       issues: {
         total: 2,
         examples: [
@@ -393,6 +395,21 @@ describe('DiscoverSite sitemap facts', () => {
     });
 
     expect(facts).toMatchObject({ malformedXml: false, truncated: true });
+  });
+
+  it('reports the largest per-file url count, children of an index included', async () => {
+    const manyUrls = (count: number) =>
+      urlset(...Array.from({ length: count }, (_, i) => `https://exemple.com/p${String(i)}`));
+    const { facts } = await sitemapFacts({
+      [SITEMAP]: {
+        status: 200,
+        body: index('https://exemple.com/s1.xml', 'https://exemple.com/s2.xml'),
+      },
+      'https://exemple.com/s1.xml': { status: 200, body: manyUrls(30) },
+      'https://exemple.com/s2.xml': { status: 200, body: manyUrls(20) },
+    });
+
+    expect(facts).toMatchObject({ urlCount: 50, maxUrlCount: 30 });
   });
 
   it('keeps facts null when the sitemap is not served', async () => {

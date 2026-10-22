@@ -45,7 +45,11 @@ export const observeSitemap = (
   })),
 });
 
-/** The facts of an index are its own plus those of its children (counts and issues cumulated). */
+/**
+ * The facts of an index are its own plus those of its children (counts and issues cumulated).
+ * `maxUrlCount` is the largest count of a single file: the protocol limit applies per file, and
+ * an index only counts the sitemaps it lists.
+ */
 export const toSitemapFacts = (
   own: SitemapObservation,
   children: readonly SitemapObservation[],
@@ -59,6 +63,7 @@ export const toSitemapFacts = (
     sizeBytes: own.sizeBytes,
     contentLength: own.contentLength,
     contentEncoding: own.contentEncoding,
+    maxUrlCount: Math.max(...all.map((observation) => observation.urlCount)),
     urlCount: isIndex ? children.reduce((sum, child) => sum + child.urlCount, 0) : own.urlCount,
     issues: { total: issues.length, examples: issues.slice(0, MAX_FACT_EXAMPLES) },
   };

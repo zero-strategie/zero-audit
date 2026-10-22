@@ -247,6 +247,7 @@ describe('check 43 (oversized sitemap)', () => {
   const facts = (overrides: Record<string, unknown> = {}): SiteFile['facts'] => ({
     truncated: false,
     urlCount: 10,
+    maxUrlCount: 10,
     contentLength: null,
     contentEncoding: null,
     ...overrides,
@@ -275,16 +276,25 @@ describe('check 43 (oversized sitemap)', () => {
     );
 
   it('flags a sitemap listing one URL more than the limit, not one at the limit', () => {
-    const over = run43({ urlCount: MAX_URLS + 1 });
+    const over = run43({ urlCount: MAX_URLS + 1, maxUrlCount: MAX_URLS + 1 });
 
     expect(over.occurrences).toEqual([
       {
         checkId: 43,
         pageUrl: null,
-        info: { sitemap: u('sitemap.xml'), urlCount: MAX_URLS + 1, truncated: false },
+        info: {
+          sitemap: u('sitemap.xml'),
+          urlCount: MAX_URLS + 1,
+          maxUrlCount: MAX_URLS + 1,
+          truncated: false,
+        },
       },
     ]);
-    expect(run43({ urlCount: MAX_URLS }).count).toBe(0);
+    expect(run43({ maxUrlCount: MAX_URLS }).count).toBe(0);
+  });
+
+  it('does not flag an index whose files are each within the limit, however many URLs it totals', () => {
+    expect(run43({ urlCount: 2 * MAX_URLS, maxUrlCount: MAX_URLS }).count).toBe(0);
   });
 
   it('flags a declared content-length above 50 MiB when the body is not encoded', () => {

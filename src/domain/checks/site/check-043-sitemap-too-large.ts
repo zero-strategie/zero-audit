@@ -16,7 +16,8 @@ const toOccurrence = (file: SiteFile): IssueOccurrence | null => {
   const truncated = facts['truncated'] === true;
   const urlCount = asNumber(facts['urlCount']) ?? 0;
   const bytes = declaredBytes(facts);
-  const tooManyUrls = urlCount > SITEMAP_MAX_URLS;
+  const maxUrlCount = asNumber(facts['maxUrlCount']) ?? 0;
+  const tooManyUrls = maxUrlCount > SITEMAP_MAX_URLS;
   const tooHeavy = bytes !== null && bytes > SITEMAP_MAX_BYTES;
   if (!truncated && !tooManyUrls && !tooHeavy) return null;
   return {
@@ -25,6 +26,7 @@ const toOccurrence = (file: SiteFile): IssueOccurrence | null => {
     info: {
       sitemap: file.url,
       urlCount,
+      maxUrlCount,
       ...(tooHeavy ? { bytes } : {}),
       truncated,
       ...(truncated ? { note: TRUNCATION_NOTE } : {}),
