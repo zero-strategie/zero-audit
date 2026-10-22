@@ -82,7 +82,7 @@ await storage.close();
 
 ## About
 
-zero-audit is built by [Zero Stratégie](https://zero-strategie.dev). Its feature set is inspired by commercial site-audit tools such as Semrush's Site Audit, and the numeric identifiers of its checks follow the numbering used by Semrush's Site Audit, so that results can be compared. It is an independent project, not affiliated with or endorsed by Semrush. The check wording is original.
+zero-audit is built by [Zero Stratégie](https://zero-strategie.dev). Its feature set is inspired by commercial site-audit tools such as Semrush's Site Audit, and the numeric identifiers of its checks follow the numbering used by Semrush's Site Audit, so that results can be compared. It is an independent project, not affiliated with or endorsed by Semrush. Zero Stratégie has no link with Ahrefs or Screaming Frog either. The check wording is original.
 
 ## Licence
 

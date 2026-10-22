@@ -38,6 +38,10 @@ describe('README of the open-source engine', () => {
     expect(readme).toContain('not affiliated with or endorsed by Semrush');
   });
 
+  it('states that Zero Stratégie has no link with Ahrefs or Screaming Frog', () => {
+    expect(readme).toContain('Zero Stratégie has no link with Ahrefs or Screaming Frog');
+  });
+
   it('states that the CLI messages are in French', () => {
     expect(readme).toMatch(/messages.*French/is);
   });
