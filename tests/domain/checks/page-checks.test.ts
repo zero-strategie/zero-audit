@@ -555,6 +555,7 @@ describe('registry metadata', () => {
       4: 'notice',
       9: 'error',
       11: 'error',
+      18: 'error',
       23: 'error',
       24: 'error',
       25: 'error',
@@ -571,6 +572,7 @@ describe('registry metadata', () => {
       116: 'warning',
       110: 'warning',
       121: 'warning',
+      128: 'warning',
       21: 'error',
       220: 'notice',
       222: 'notice',
@@ -1696,6 +1698,64 @@ describe('check 222 (no semantic HTML elements)', () => {
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 18 (sitemap URL in error or redirected)', () => {
+  const inSitemap = (name: string, overrides: Partial<Page> = {}): Page =>
+    makePage(name, { inSitemap: true, ...overrides });
+
+  it('flags sitemap pages in 4xx, 5xx, redirected or failing, with their status', () => {
+    const result = run(18, [
+      inSitemap(u('nf'), { status: 404 }),
+      inSitemap(u('down'), { status: 500 }),
+      inSitemap(u('moved'), { status: 301, redirectTarget: u('target') }),
+      inSitemap(u('net'), { status: null, isHtml: false, error: 'ECONNRESET' }),
+      inSitemap(u('ok')),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('nf'), u('down'), u('moved'), u('net')]);
+    expect(result.occurrences.map((occurrence) => occurrence.info)).toEqual([
+      { status: 404, error: null },
+      { status: 500, error: null },
+      { status: 301, error: null },
+      { status: null, error: 'ECONNRESET' },
+    ]);
+    expect(result.examined).toBe(5);
+  });
+
+  it('does not examine pages absent from the sitemap or when no sitemap was read', () => {
+    const result = run(18, [
+      makePage(u('a'), { status: 404, inSitemap: false }),
+      makePage(u('b'), { status: 404, inSitemap: null }),
+    ]);
+    expect(result.count).toBe(0);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 128 (http sitemap URL on an https site)', () => {
+  const httpUrl = (name: string): string => `http://exemple.com/${name}`;
+  const httpsRoot = 'https://exemple.com/';
+
+  it('flags sitemap pages listed over http when the site is https', () => {
+    const result = run(128, [
+      makePage(httpsRoot, { inSitemap: true }),
+      makePage(httpUrl('a'), { inSitemap: true, status: 301 }),
+      makePage(httpUrl('b'), { inSitemap: false }),
+      makePage(httpUrl('c'), { inSitemap: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([httpUrl('a')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('flags nothing on an http site', () => {
+    const crawl = crawlOf([
+      makePage(httpUrl('root'), { inSitemap: true }),
+      makePage(httpUrl('a'), { inSitemap: true }),
+    ]);
+    const result = runCheck(pageChecks, 128, { ...crawl, rootUrl: httpUrl('root') });
+    expect(result.count).toBe(0);
     expect(result.examined).toBe(0);
   });
 });

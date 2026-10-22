@@ -5,6 +5,7 @@ import { check3 } from './check-003-title-missing.js';
 import { check4 } from './check-004-blocked-by-robots.js';
 import { check9 } from './check-009-timeout.js';
 import { check11 } from './check-011-unreachable.js';
+import { check18 } from './check-018-sitemap-url-in-error.js';
 import { check20 } from './check-020-viewport-missing.js';
 import { check21 } from './check-021-large-html.js';
 import { check23 } from './check-023-hreflang-invalid.js';
@@ -39,6 +40,7 @@ import { check117 } from './check-117-low-word-count.js';
 import { check121 } from './check-121-frames.js';
 import { check122 } from './check-122-underscore-in-url.js';
 import { check123 } from './check-123-internal-nofollow.js';
+import { check128 } from './check-128-sitemap-http-url.js';
 import { check129 } from './check-129-uncompressed.js';
 import { check136 } from './check-136-url-too-long.js';
 import { check201 } from './check-201-url-over-200.js';
@@ -60,6 +62,7 @@ export const pageChecks: readonly PageCheck[] = [
   check4,
   check9,
   check11,
+  check18,
   check20,
   check21,
   check23,
@@ -94,6 +97,7 @@ export const pageChecks: readonly PageCheck[] = [
   check121,
   check122,
   check123,
+  check128,
   check129,
   check136,
   check201,
