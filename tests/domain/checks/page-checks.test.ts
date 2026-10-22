@@ -574,6 +574,8 @@ describe('registry metadata', () => {
       104: 'notice',
       105: 'warning',
       108: 'warning',
+      123: 'warning',
+      202: 'notice',
     });
   });
 
@@ -646,5 +648,65 @@ describe('check 108 (too many links)', () => {
       [],
     );
     expect(result.examined).toBe(1);
+  });
+});
+
+describe('nofollow link checks (123 internal, 202 external)', () => {
+  const nofollow = (source: string, target: string, overrides: Partial<Link> = {}): Link =>
+    makeLink(source, target, { rel: 'nofollow', ...overrides });
+
+  it('emits one occurrence per source page with sorted targets for 123', () => {
+    const result = runCheck(
+      pageChecks,
+      123,
+      crawlOf(
+        [makePage(u('a')), makePage(u('b'))],
+        [nofollow(u('a'), u('z')), nofollow(u('a'), u('m')), makeLink(u('b'), u('m'))],
+      ),
+    );
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ targets: [u('m'), u('z')] });
+  });
+
+  it('recognises the nofollow token whatever the case, but not nofollowed', () => {
+    const result = runCheck(
+      pageChecks,
+      123,
+      crawlOf(
+        [makePage(u('a')), makePage(u('b'))],
+        [
+          nofollow(u('a'), u('x'), { rel: 'noopener NoFollow' }),
+          nofollow(u('b'), u('x'), { rel: 'nofollowed' }),
+        ],
+      ),
+    );
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('reports an external nofollow link in 202 and not in 123', () => {
+    const crawl = crawlOf(
+      [makePage(u('a'))],
+      [nofollow('https://exemple.com/a', 'https://autre.example/', { type: 'external' })],
+    );
+    expect(flaggedUrls(runCheck(pageChecks, 202, crawl))).toEqual([u('a')]);
+    expect(flaggedUrls(runCheck(pageChecks, 123, crawl))).toEqual([]);
+  });
+
+  it('examines HTML 2xx pages that have at least one link of the matching type', () => {
+    const pages = [
+      makePage(u('internal')),
+      makePage(u('external')),
+      makePage(u('none')),
+      makePage(u('error'), { status: 404 }),
+    ];
+    const links = [
+      makeLink(u('internal'), u('x')),
+      makeLink(u('external'), 'https://autre.example/', { type: 'external' }),
+      makeLink(u('error'), u('x')),
+      makeLink(u('none'), u('img.png'), { type: 'resource' }),
+    ];
+    const crawl = crawlOf(pages, links);
+    expect(runCheck(pageChecks, 123, crawl).examined).toBe(1);
+    expect(runCheck(pageChecks, 202, crawl).examined).toBe(1);
   });
 });

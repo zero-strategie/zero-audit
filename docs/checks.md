@@ -36,10 +36,12 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 113 | warning | crawlability | page | A URL has more than 2 query parameters. `info.count` gives the number of parameters. | Simplify the URL: keep only the parameters that change the content. |
 | 117 | warning | on-page | page | The page has fewer than 200 words of visible text. | Expand thin content, or merge or noindex the page. |
 | 122 | warning | crawlability | page | The path of a URL contains an underscore. | Use hyphens to separate words in URLs. |
+| 123 | warning | linking | page | A page has internal links with `rel="nofollow"`. There is one occurrence per page; `info.targets` lists the target URLs, sorted. The `rel` value is read as a list of tokens, case ignored (`noopener NoFollow` counts, `nofollowed` does not). | Check that the attribute is intended; otherwise remove it so link equity flows to your own pages. |
 | 125 | warning | crawlability | site | No sitemap was found. | Publish a sitemap and declare it in robots.txt. |
 | 136 | warning | crawlability | page | A URL is 101 to 200 characters long. `info.length` gives the length. A URL of more than 200 characters is reported by 201 only. | Shorten the URL: drop unnecessary words, folders and parameters. |
 | 137 | notice | other | site | There is no `llms.txt`: the file does not answer with a 2xx. | Publish an `llms.txt` that describes the site for AI agents. |
 | 201 | notice | crawlability | page | A URL is more than 200 characters long. `info.length` gives the length. | Shorten the URL: drop unnecessary words, folders and parameters. |
+| 202 | notice | linking | page | A page has external links with `rel="nofollow"`. One occurrence per page, with `info.targets` sorted, read like check 123. | Check that the attribute is intended for these third-party links. |
 | 203 | notice | crawlability | site | There is no `robots.txt`. | Publish a robots.txt, even a permissive one. |
 | 205 | notice | https | site | The home page is served over HTTPS without a `Strict-Transport-Security` header. | Enable HSTS on the web server. |
 | 209 | notice | crawlability | page | A page is excluded from the index by an `X-Robots-Tag` HTTP header (`noindex` or `none`). `info.value` gives the header value. | Check that the exclusion is intended; otherwise remove the directive from the server configuration. |
@@ -65,6 +67,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Checks 113 and 122 apply to every crawled page. Check 113 counts the entries of the query string, so a repeated key counts each time (`?a=1&a=2&b=3` has 3); the threshold is strictly more than 2. Check 122 looks at the path only, never at the query string.
   - Check 108 applies to HTML 2xx pages. It counts every `<a>` link, internal and external, duplicates included; resources (images, scripts, stylesheets) are not counted. The threshold is strictly more than 3000.
   - Checks 136 and 201 apply to every crawled page and measure the length of the stored URL, in characters (`url.length`). The thresholds are strictly more than 100 (136) and strictly more than 200 (201); 136 stops at 200, so a URL is never reported by both.
+  - Checks 123 and 202 apply to HTML 2xx pages that have at least one internal (123) or external (202) `<a>` link; resources are ignored. They emit one occurrence per source page, with the sorted, de-duplicated targets in `info.targets`.
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**
   - URLs are never merged: `/about` and `/about/` are distinct pages when both are linked.
