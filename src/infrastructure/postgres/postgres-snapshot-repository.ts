@@ -636,7 +636,7 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
     return results.rows.map((row) => ({
       checkId: row.check_id,
       severity: row.severity,
-      theme: toTheme(row.theme),
+      theme: toTheme(row.theme, row.check_id),
       count: row.count,
       examined: row.examined,
       occurrences: occurrences.rows
