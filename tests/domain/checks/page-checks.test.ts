@@ -555,6 +555,7 @@ describe('registry metadata', () => {
       4: 'notice',
       9: 'error',
       11: 'error',
+      26: 'error',
       33: 'error',
       38: 'error',
       113: 'warning',
@@ -895,5 +896,20 @@ describe('check 215 (linked resources)', () => {
     expect(flaggedUrls(result)).toEqual([u('a')]);
     expect(result.occurrences[0]?.info).toEqual({ targets: [u('m.zip'), u('z.pdf')] });
     expect(result.examined).toBe(1);
+  });
+});
+
+describe('check 26 (page served over http)', () => {
+  const httpUrl = (name: string): string => `http://exemple.com/${name}`;
+
+  it('flags HTML 2xx pages served over http and examines HTML 2xx pages', () => {
+    const result = run(26, [
+      makePage(httpUrl('a')),
+      makePage(u('secure')),
+      makePage(httpUrl('moved'), { status: 301 }),
+      makePage(httpUrl('file'), { isHtml: false, contentType: 'application/pdf' }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([httpUrl('a')]);
+    expect(result.examined).toBe(2);
   });
 });
