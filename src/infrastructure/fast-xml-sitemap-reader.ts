@@ -1,6 +1,6 @@
 import { XMLParser } from 'fast-xml-parser';
 import { SyntaxValidator } from 'fast-xml-validator';
-import type { ParsedSitemap, SitemapReader } from '../application/ports/sitemap-reader.js';
+import type { SitemapReader, SitemapReadResult } from '../application/ports/sitemap-reader.js';
 
 type Entry = { loc?: unknown };
 type Container = Record<string, Entry | Entry[] | '' | undefined>;
@@ -25,18 +25,20 @@ const extractLocs = (container: Container | '', entryName: string): string[] => 
 export class FastXmlSitemapReader implements SitemapReader {
   private readonly parser = new XMLParser({ removeNSPrefix: true });
 
-  parse(xml: string): ParsedSitemap | null {
-    if (!isValidXml(xml)) return null;
+  parse(xml: string): SitemapReadResult {
+    if (!isValidXml(xml)) return { sitemap: null, malformedXml: true };
     const document = this.parser.parse(xml) as {
       urlset?: Container | '';
       sitemapindex?: Container | '';
     };
     if (document.urlset !== undefined) {
-      return { kind: 'urlset', locs: extractLocs(document.urlset, 'url') };
+      const locs = extractLocs(document.urlset, 'url');
+      return { sitemap: { kind: 'urlset', locs }, malformedXml: false };
     }
     if (document.sitemapindex !== undefined) {
-      return { kind: 'index', locs: extractLocs(document.sitemapindex, 'sitemap') };
+      const locs = extractLocs(document.sitemapindex, 'sitemap');
+      return { sitemap: { kind: 'index', locs }, malformedXml: false };
     }
-    return null;
+    return { sitemap: null, malformedXml: false };
   }
 }

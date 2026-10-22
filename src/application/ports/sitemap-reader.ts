@@ -3,7 +3,12 @@ export interface ParsedSitemap {
   locs: readonly string[];
 }
 
+export interface SitemapReadResult {
+  /** Null when the content is not an accepted sitemap document. */
+  sitemap: ParsedSitemap | null;
+  malformedXml: boolean;
+}
+
 export interface SitemapReader {
-  /** Returns null when the content is not a valid sitemap document. */
-  parse(xml: string): ParsedSitemap | null;
+  parse(xml: string): SitemapReadResult;
 }

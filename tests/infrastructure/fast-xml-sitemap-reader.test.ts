@@ -8,7 +8,7 @@ describe('FastXmlSitemapReader', () => {
   it('reads the loc entries of a urlset', () => {
     const xml = `<?xml version="1.0"?><urlset ${NS}><url><loc>https://a.test/1</loc></url><url><loc> https://a.test/2 </loc><lastmod>2026-01-01</lastmod></url></urlset>`;
 
-    expect(reader.parse(xml)).toEqual({
+    expect(reader.parse(xml).sitemap).toMatchObject({
       kind: 'urlset',
       locs: ['https://a.test/1', 'https://a.test/2'],
     });
@@ -17,26 +17,36 @@ describe('FastXmlSitemapReader', () => {
   it('reads a urlset holding a single url', () => {
     const xml = `<urlset ${NS}><url><loc>https://a.test/1</loc></url></urlset>`;
 
-    expect(reader.parse(xml)).toEqual({ kind: 'urlset', locs: ['https://a.test/1'] });
+    expect(reader.parse(xml).sitemap).toMatchObject({ kind: 'urlset', locs: ['https://a.test/1'] });
   });
 
   it('reads the sitemaps referenced by a sitemap index', () => {
     const xml = `<sitemapindex ${NS}><sitemap><loc>https://a.test/s1.xml</loc></sitemap><sitemap><loc>https://a.test/s2.xml</loc></sitemap></sitemapindex>`;
 
-    expect(reader.parse(xml)).toEqual({
+    expect(reader.parse(xml).sitemap).toMatchObject({
       kind: 'index',
       locs: ['https://a.test/s1.xml', 'https://a.test/s2.xml'],
     });
   });
 
   it('returns an empty list for an empty urlset', () => {
-    expect(reader.parse(`<urlset ${NS}></urlset>`)).toEqual({ kind: 'urlset', locs: [] });
+    expect(reader.parse(`<urlset ${NS}></urlset>`).sitemap).toMatchObject({
+      kind: 'urlset',
+      locs: [],
+    });
   });
 
-  it.each(['', 'not xml at all', '<html><body>hi</body></html>', '<urlset><url></urlset>'])(
-    'returns null for invalid content %j',
+  it.each(['', 'not xml at all', '<urlset><url></urlset>'])(
+    'flags malformed XML %j and reads no sitemap',
     (xml) => {
-      expect(reader.parse(xml)).toBeNull();
+      expect(reader.parse(xml)).toEqual({ sitemap: null, malformedXml: true });
     },
   );
+
+  it('reads no sitemap from well-formed XML that is not a sitemap', () => {
+    expect(reader.parse('<html><body>hi</body></html>')).toEqual({
+      sitemap: null,
+      malformedXml: false,
+    });
+  });
 });

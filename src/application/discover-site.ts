@@ -93,7 +93,7 @@ export class DiscoverSite {
     const response = await this.dependencies.http.get(url);
     siteFiles?.push(toSiteFile('sitemap', url, response));
     if (isNetworkFailure(response) || !this.isSuccess(response.status)) return null;
-    return this.dependencies.sitemapReader.parse(response.body);
+    return this.dependencies.sitemapReader.parse(response.body).sitemap;
   }
 
   private async readChildren(index: ParsedSitemap, internalHost: string): Promise<ParsedSitemap[]> {
