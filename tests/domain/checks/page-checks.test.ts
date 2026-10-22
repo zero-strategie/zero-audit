@@ -303,6 +303,63 @@ describe('check 209 (X-Robots-Tag noindex)', () => {
   });
 });
 
+describe('check 38 (canonical pointing to an error page)', () => {
+  const withCanonical = (name: string, canonical: string | null): Page =>
+    makePage(u(name), { canonical });
+
+  it('flags a canonical to a 404 page with the canonical and its status', () => {
+    const result = run(38, [
+      withCanonical('a', u('gone')),
+      makePage(u('gone'), { status: 404, isHtml: false }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ canonical: u('gone'), status: 404 });
+    expect(result.examined).toBe(1);
+  });
+
+  it('flags a canonical to a 5xx page or to a network failure', () => {
+    const result = run(38, [
+      withCanonical('a', u('down')),
+      withCanonical('b', u('net')),
+      makePage(u('down'), { status: 503, isHtml: false }),
+      makePage(u('net'), { status: null, error: 'timeout', isHtml: false }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('a'), u('b')]);
+    expect(result.occurrences[1]?.info).toEqual({ canonical: u('net'), status: null });
+  });
+
+  it('matches the canonical after removing its fragment', () => {
+    const result = run(38, [
+      withCanonical('a', `${u('gone')}#top`),
+      makePage(u('gone'), { status: 404, isHtml: false }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('ignores canonicals to a 200 page, to itself, to a redirect or to an uncrawled URL', () => {
+    const result = run(38, [
+      withCanonical('ok', u('fine')),
+      withCanonical('self', u('self')),
+      withCanonical('moved', u('redirect')),
+      withCanonical('unknown', u('never-crawled')),
+      withCanonical('none', null),
+      makePage(u('fine')),
+      makePage(u('redirect'), { status: 301, isHtml: false }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(4);
+  });
+
+  it('does not examine error pages even if they declare a canonical', () => {
+    const result = run(38, [
+      makePage(u('a'), { status: 404, isHtml: false, canonical: u('gone') }),
+      makePage(u('gone'), { status: 404, isHtml: false }),
+    ]);
+    expect(result.examined).toBe(0);
+    expect(result.count).toBe(0);
+  });
+});
+
 describe('check 3 (title missing)', () => {
   it('flags null and empty titles on HTML 2xx pages only', () => {
     const result = run(3, [
@@ -464,6 +521,7 @@ describe('registry metadata', () => {
       9: 'error',
       11: 'error',
       33: 'error',
+      38: 'error',
       109: 'warning',
       209: 'notice',
       212: 'notice',

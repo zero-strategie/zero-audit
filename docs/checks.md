@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 29 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 30 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page` or `other`. Each theme gets its own score.
@@ -23,6 +23,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 11 | error | crawlability | page | A page could not be reached: connection, DNS, blocked or other network failure. `info.kind` gives the failure. | Check the host, DNS and firewall, then the URL itself. |
 | 15 | error | on-page | page | Several pages share the same meta description. | Write a specific description for each page. |
 | 33 | error | crawlability | page | A redirecting URL goes through at least 2 redirects before reaching its destination, or leads into a loop. `info` gives the `chain` (the URLs followed in order, without the starting URL) and `loop`, plus `truncated` when the 10-hop cap was reached. | Redirect straight to the final destination and update the links. |
+| 38 | error | crawlability | page | A page declares a canonical URL that points to a crawled page answering 4xx, 5xx or failing at network level. `info` gives the `canonical` and the `status` (`null` for a network failure). | Point the canonical to a page that answers 200, or remove it. |
 | 101 | warning | on-page | page | The title is shorter than 30 characters. | Make the title more descriptive. |
 | 102 | warning | on-page | page | The title is longer than 60 characters. | Shorten it so it is not truncated in search results. |
 | 103 | warning | on-page | page | An HTML page has no `<h1>`. | Add one main heading. |
@@ -53,6 +54,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Checks 109 and 214 apply to every page that got an HTTP response. A page redirects when its status is 302, 303 or 307 (109) or 301 or 308 (214); a 304 is not a redirect. The page is reported where it redirects, not where it is linked.
   - Check 33 applies to every page that answers with a redirect. Each crawled URL whose own chain has at least 2 hops, or ends in a loop (including a page redirecting to itself), is reported: in X→A→B→C, X and A are reported and B is not. A chain is cut at 10 hops and marked `truncated`.
   - Check 209 applies to every page that got an HTTP response. The header value is split on commas; an agent prefix (`googlebot: noindex`) is dropped and case is ignored. `noindex` and `none` are reported; `nofollow` alone is not.
+  - Check 38 applies to HTML 2xx pages that declare a canonical. The canonical is compared with the crawled URLs after removing its `#fragment`; a canonical to a page that was not crawled, to a redirect or to itself is not reported.
   - Check 212 applies to HTML 2xx pages. Depth is counted in clicks, by a breadth-first walk over the internal `<a>` links from the final root (the start URL after its redirects, which are not clicks); a redirecting link lands on its destination at the cost of one click. The crawl's own `depth` is not used. Pages that only the sitemap reveals, with no link leading to them, are not reported: their click depth is unknown.
   - Checks 9 and 11 always apply: their `examined` is the number of pages explored. A timeout goes to 9, every other network failure to 11. Check 8 also reports internal links to these pages, so the same failure can appear in both (on the linking page for 8, on the failed page for 9 and 11).
   - Only pages reached within the `--limit` are examined.

@@ -10,6 +10,7 @@ const EXPECTED_THEME_BY_CHECK_ID: Readonly<Record<number, string>> = {
   7: 'crawlability',
   11: 'crawlability',
   33: 'crawlability',
+  38: 'crawlability',
   109: 'crawlability',
   209: 'crawlability',
   212: 'crawlability',
