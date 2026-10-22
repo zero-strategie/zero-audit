@@ -1,8 +1,9 @@
 import type { Project } from './project.js';
 
 /**
- * Who is reading. An administrator has no extra read right: they see their own projects and the
- * showcase only, like any other account.
+ * Who is reading, as a neutral visibility filter. `userId` is a free-form owner identifier,
+ * compared with `Project.ownerId`; the library gives it no other meaning. `isAdmin` has no effect
+ * on visibility: an administrator sees their own projects and the showcase only.
  */
 export type Reader =
   | { readonly kind: 'anonymous' }
