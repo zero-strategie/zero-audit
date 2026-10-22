@@ -10,3 +10,5 @@ export const URL_LENGTH_NOTICE = 200;
 export const MAX_LINKS_PER_PAGE = 3000;
 export const SLOW_RESPONSE_MS = 3000;
 export const MAX_FACT_EXAMPLES = 20;
+export const TOO_MUCH_CONTENT_WORDS = 10_000;
+export const MAX_HTML_BYTES = 2_097_152;

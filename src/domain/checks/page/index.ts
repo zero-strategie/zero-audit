@@ -6,6 +6,7 @@ import { check4 } from './check-004-blocked-by-robots.js';
 import { check9 } from './check-009-timeout.js';
 import { check11 } from './check-011-unreachable.js';
 import { check20 } from './check-020-viewport-missing.js';
+import { check21 } from './check-021-large-html.js';
 import { check26 } from './check-026-http-page.js';
 import { check31 } from './check-031-http-link-on-https.js';
 import { check33 } from './check-033-redirect-chain.js';
@@ -39,6 +40,7 @@ import { check214 } from './check-214-permanent-redirect.js';
 import { check215 } from './check-215-linked-resource.js';
 import { check216 } from './check-216-empty-anchor.js';
 import { check217 } from './check-217-generic-anchor.js';
+import { check220 } from './check-220-too-much-content.js';
 
 export const pageChecks: readonly PageCheck[] = [
   check1,
@@ -48,6 +50,7 @@ export const pageChecks: readonly PageCheck[] = [
   check9,
   check11,
   check20,
+  check21,
   check26,
   check31,
   check33,
@@ -81,4 +84,5 @@ export const pageChecks: readonly PageCheck[] = [
   check215,
   check216,
   check217,
+  check220,
 ];

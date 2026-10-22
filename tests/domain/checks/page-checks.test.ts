@@ -564,6 +564,8 @@ describe('registry metadata', () => {
       116: 'warning',
       110: 'warning',
       121: 'warning',
+      21: 'error',
+      220: 'notice',
       122: 'warning',
       129: 'warning',
       136: 'warning',
@@ -1205,6 +1207,50 @@ describe('check 121 (frames)', () => {
     const result = run(121, [
       withFrames('gone', true, { status: 404 }),
       withFrames('img', true, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 220 (too much content)', () => {
+  it('flags 10001 words but not 10000, with the word count', () => {
+    const result = run(220, [
+      makePage(u('long'), { wordCount: 10_001 }),
+      makePage(u('limit'), { wordCount: 10_000 }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('long')]);
+    expect(result.occurrences[0]?.info).toEqual({ words: 10_001 });
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or unknown word counts', () => {
+    const result = run(220, [
+      makePage(u('gone'), { status: 404, wordCount: 20_000 }),
+      makePage(u('img'), { isHtml: false, wordCount: 20_000 }),
+      makePage(u('old'), { wordCount: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 21 (large HTML page)', () => {
+  const withBytes = (name: string, htmlBytes: number, overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { htmlBytes }, ...overrides });
+
+  it('flags 2097153 bytes but not 2097152, with the byte size', () => {
+    const result = run(21, [withBytes('big', 2_097_153), withBytes('limit', 2_097_152)]);
+    expect(flaggedUrls(result)).toEqual([u('big')]);
+    expect(result.occurrences[0]?.info).toEqual({ bytes: 2_097_153 });
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(21, [
+      withBytes('gone', 3_000_000, { status: 404 }),
+      withBytes('img', 3_000_000, { isHtml: false }),
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);
