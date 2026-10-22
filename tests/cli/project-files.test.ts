@@ -13,6 +13,15 @@ describe('local Postgres setup files', () => {
     expect(compose).toContain('POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?');
   });
 
+  it('declares only the postgres service, without any image build', () => {
+    const compose = read('docker-compose.yml');
+    const services = compose.split(/^services:$/m)[1]?.split(/^volumes:$/m)[0] ?? '';
+    expect([...services.matchAll(/^ {2}([\w-]+):$/gm)].map((match) => match[1])).toEqual([
+      'postgres',
+    ]);
+    expect(compose).not.toMatch(/^\s*build:/m);
+  });
+
   it('documents the storage settings in .env.example', () => {
     const example = read('.env.example');
     expect(example).toMatch(/^ZERO_AUDIT_STORE=sqlite$/m);
