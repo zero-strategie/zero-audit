@@ -9,8 +9,27 @@ const jobNames = (): string[] => {
 };
 
 describe('CI workflow', () => {
-  it('has a single job, verify', () => {
-    expect(jobNames()).toEqual(['verify']);
+  it('has two jobs, verify and package', () => {
+    expect(jobNames()).toEqual(['verify', 'package']);
+  });
+
+  it('runs the package job after verify, building, checking and smoke-testing the pack', () => {
+    const packageJob = workflow.split(/^ {2}package:$/m)[1] ?? '';
+    expect(packageJob).toMatch(/^ {4}needs: verify$/m);
+    expect(packageJob).toContain('run: pnpm build');
+    expect(packageJob).toContain('run: pnpm pack:check');
+    expect(packageJob).toContain('run: pnpm pack:smoke');
+  });
+
+  it('triggers on push, pull_request and workflow_call', () => {
+    const triggers = workflow.split(/^jobs:$/m)[0] ?? '';
+    expect(triggers).toMatch(/^ {2}push:$/m);
+    expect(triggers).toMatch(/^ {2}pull_request:$/m);
+    expect(triggers).toMatch(/^ {2}workflow_call:$/m);
+  });
+
+  it('limits the permissions to read-only contents', () => {
+    expect(workflow).toMatch(/^permissions:\n {2}contents: read$/m);
   });
 
   it.each(['docker/', 'ghcr.io', 'build-and-push', 'deploy', 'packages: write'])(
