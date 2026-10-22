@@ -556,6 +556,7 @@ describe('registry metadata', () => {
       9: 'error',
       11: 'error',
       26: 'error',
+      31: 'warning',
       33: 'error',
       38: 'error',
       113: 'warning',
@@ -911,5 +912,66 @@ describe('check 26 (page served over http)', () => {
     ]);
     expect(flaggedUrls(result)).toEqual([httpUrl('a')]);
     expect(result.examined).toBe(2);
+  });
+});
+
+describe('check 31 (http links on an https site)', () => {
+  const httpUrl = (name: string): string => `http://exemple.com/${name}`;
+  const httpsRoot = 'https://exemple.com/';
+
+  it('flags a page linking internal http URLs, with sorted targets', () => {
+    const result = runCheck(
+      pageChecks,
+      31,
+      crawlOf(
+        [makePage(httpsRoot), makePage(u('a'))],
+        [
+          makeLink(u('a'), httpUrl('z')),
+          makeLink(u('a'), httpUrl('m')),
+          makeLink(u('a'), u('ok')),
+          makeLink(httpsRoot, u('a')),
+        ],
+      ),
+    );
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ targets: [httpUrl('m'), httpUrl('z')] });
+    expect(result.examined).toBe(2);
+  });
+
+  it('still flags an http link whose target redirects to https', () => {
+    const result = runCheck(
+      pageChecks,
+      31,
+      crawlOf(
+        [
+          makePage(httpsRoot),
+          makePage(httpUrl('a'), { status: 301, redirectTarget: u('a') }),
+          makePage(u('a')),
+        ],
+        [makeLink(httpsRoot, httpUrl('a'))],
+      ),
+    );
+    expect(flaggedUrls(result)).toEqual([httpsRoot]);
+  });
+
+  it('flags nothing and examines nothing when the final root is http', () => {
+    const root = httpUrl('');
+    const crawl = { ...crawlOf([makePage(root)], [makeLink(root, httpUrl('a'))]), rootUrl: root };
+    const result = runCheck(pageChecks, 31, crawl);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+
+  it('does not flag an external http link', () => {
+    const result = runCheck(
+      pageChecks,
+      31,
+      crawlOf(
+        [makePage(httpsRoot)],
+        [makeLink(httpsRoot, 'http://autre.fr/a', { type: 'external' })],
+      ),
+    );
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
   });
 });
