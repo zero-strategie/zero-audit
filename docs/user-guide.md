@@ -1,6 +1,6 @@
 # User guide
 
-zero-audit is a technical SEO audit tool. It crawls a website the way a search engine would, runs [20 checks](checks.md) on what it finds, gives the site a health score, and tracks how it changes from one audit to the next.
+zero-audit is a technical SEO audit tool. It crawls a website the way a search engine would, runs [44 checks](checks.md) on what it finds, gives the site a health score, and tracks how it changes from one audit to the next.
 
 You use it through its **command line**, `zero-audit`. Every audit is stored as an immutable **snapshot**, in SQLite (the default) or in Postgres.
 
@@ -290,7 +290,7 @@ You can set `ZERO_AUDIT_STORE=postgres` instead of passing `--store` every time.
 Tools crawl different sets of URLs and define some checks differently. For example, they may count `robots.txt` as a page, or merge URL variants. The [checks reference](checks.md) documents our definitions.
 
 **Why is a theme "non calculable"?**
-None of its weighted checks examined anything. For example, the `https` theme only has a notice for now.
+None of its weighted checks examined anything. For example, on a site served over http, check 31 examines nothing.
 
 **Can I audit a site I don't own?**
 Technically yes, but only do it with permission, and keep the default delay.

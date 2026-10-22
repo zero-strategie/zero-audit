@@ -56,7 +56,7 @@ export interface CliHooks {
   onAuditStarted?(snapshotId: string, rootUrl: string): void;
   /** Lets the process entry point stop the `worker` command on SIGINT / SIGTERM. */
   onWorkerProcessStarted?(worker: { stop(): Promise<void> }): void;
-  /** Time source of `worker-health` and of the queued launch; defaults to the system clock. */
+  /** Time source of `worker-health`, of the queued launch and of the in-process crawl; defaults to the system clock. */
   clock?: Clock;
   /** Pause between two reads of the audit under `--wait`; defaults to the real timer. */
   sleeper?: Sleeper;
@@ -105,6 +105,7 @@ const crawlInProcess = async (
       new SystemClock(),
     ),
     blockPrivateAddresses: false,
+    clock: hooks.clock ?? new SystemClock(),
   });
   const details = await runAudit.execute({
     rootUrl: config.rootUrl,

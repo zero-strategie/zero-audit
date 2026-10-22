@@ -285,12 +285,62 @@ describe('check 205 (HSTS missing)', () => {
   });
 });
 
+describe('check 7 (identical content)', () => {
+  const hashed = (path: string, contentHash: string | null, overrides: Partial<Page> = {}) =>
+    makePage(u(path), { contentHash, ...overrides });
+
+  it('flags both pages sharing a content hash without canonical, each pointing to the other', () => {
+    const result = run(7, [hashed('a', 'h1'), hashed('b', 'h1'), hashed('c', 'h2')]);
+    expect(flaggedUrls(result)).toEqual([u('a'), u('b')]);
+    expect(result.occurrences.map((o) => o.info)).toEqual([
+      { duplicates: [u('b')] },
+      { duplicates: [u('a')] },
+    ]);
+    expect(result.examined).toBe(3);
+  });
+
+  it('ignores a group whose pages all declare the same canonical once normalised', () => {
+    const result = run(7, [
+      hashed('a', 'h1', { canonical: `${u('main')}#top` }),
+      hashed('b', 'h1', { canonical: u('main') }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('flags a group whose canonicals differ or are partly missing', () => {
+    const differing = run(7, [
+      hashed('a', 'h1', { canonical: u('x') }),
+      hashed('b', 'h1', { canonical: u('y') }),
+    ]);
+    const partial = run(7, [hashed('a', 'h1', { canonical: u('x') }), hashed('b', 'h1')]);
+    expect(flaggedUrls(differing)).toEqual([u('a'), u('b')]);
+    expect(flaggedUrls(partial)).toEqual([u('a'), u('b')]);
+  });
+
+  it('never treats different or missing hashes as identical', () => {
+    const result = run(7, [
+      hashed('a', null),
+      hashed('b', null),
+      hashed('c', 'h1'),
+      hashed('d', 'h2'),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('does not count an error page in a group', () => {
+    const result = run(7, [hashed('a', 'h1'), hashed('b', 'h1', { status: 404 })]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+});
+
 describe('registry metadata', () => {
   it('uses the id and severity of the catalogue', () => {
     expectCatalogueMetadata(
       siteChecks.filter((check) => check.id < CUSTOM_ID_MIN),
       {
         6: 'error',
+        7: 'error',
         8: 'error',
         15: 'error',
         125: 'warning',

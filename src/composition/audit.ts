@@ -2,6 +2,7 @@ import { BfsCrawler } from '../application/bfs-crawler.js';
 import os from 'node:os';
 import { ProcessAuditQueue } from '../application/process-audit-queue.js';
 import { RecoverStaleAudits } from '../application/recover-stale-audits.js';
+import type { Clock } from '../application/ports/clock.js';
 import type { Logger } from '../application/ports/logger.js';
 import type { AuditEvents } from '../application/ports/audit-events.js';
 import { RunAudit } from '../application/run-audit.js';
@@ -21,6 +22,8 @@ export interface RunAuditOptions {
   events: AuditEvents;
   /** Refuse non-public targets (SSRF guard); on unless explicitly lifted. */
   blockPrivateAddresses?: boolean;
+  /** Time source of the crawl and of the snapshot; defaults to the system clock. */
+  clock?: Clock;
 }
 
 /** Single composition of a real audit, used by the CLI and by library consumers. */
@@ -28,8 +31,8 @@ export const createRunAudit = ({
   storage,
   events,
   blockPrivateAddresses = true,
+  clock = new SystemClock(),
 }: RunAuditOptions): RunAudit => {
-  const clock = new SystemClock();
   const http = new UndiciHttpClient({
     clock,
     userAgent: buildUserAgent(),

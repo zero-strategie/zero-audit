@@ -128,10 +128,10 @@ describe('runCli', () => {
     expect(exported.pageGroups.variation.healthy).toBeNull();
     expect(run.out).toContain('Pages par groupe');
     expect(exported.scores.health.score).toEqual(expect.any(Number));
-    expect(exported.scores.themes.https).toEqual({ score: null, variation: null });
+    expect(exported.scores.themes.https).toEqual({ score: 0, variation: null });
     expect(run.out).toMatch(/Santé du site : \d+\n/);
     expect(run.out).not.toContain('/ 100');
-    expect(run.out).toContain('https : non calculable');
+    expect(run.out).toMatch(/https : 0\b/);
     expect(exported.snapshot).toMatchObject({
       status: 'finished',
       pagesCrawled: 5,
@@ -141,7 +141,7 @@ describe('runCli', () => {
     expect(exported.siteFiles.map(({ kind }) => kind)).toEqual(['llms', 'robots', 'sitemap']);
     expect(run.out).toContain('llms.txt :');
     expect(exported.links.length).toBeGreaterThan(0);
-    expect(exported.checkResults).toHaveLength(20);
+    expect(exported.checkResults).toHaveLength(44);
     expect(exported.checkResults.some((result) => result.count === 0)).toBe(true);
 
     const stored = await snapshots(exported.snapshot.id);
@@ -169,7 +169,7 @@ describe('runCli', () => {
     };
     expect(Number.isInteger(exported.scores.health.score)).toBe(true);
     expect(exported.scores.health.variation).toBe(0);
-    expect(exported.checkResults).toHaveLength(20);
+    expect(exported.checkResults).toHaveLength(44);
     for (const result of exported.checkResults) {
       expect(result).toMatchObject({ delta: 0, newCount: 0, fixedCount: 0 });
     }
