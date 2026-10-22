@@ -267,6 +267,42 @@ describe('check 212 (more than 3 clicks from the home page)', () => {
   });
 });
 
+describe('check 209 (X-Robots-Tag noindex)', () => {
+  const withHeader = (name: string, value: string): Page =>
+    makePage(u(name), { headers: { 'x-robots-tag': value } });
+
+  it('flags noindex among several directives, with the header value', () => {
+    const result = run(209, [withHeader('a', 'noindex, nofollow')]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ value: 'noindex, nofollow' });
+  });
+
+  it('ignores an agent prefix and the case', () => {
+    expect(flaggedUrls(run(209, [withHeader('a', 'googlebot: NOINDEX')]))).toEqual([u('a')]);
+  });
+
+  it('flags none', () => {
+    expect(flaggedUrls(run(209, [withHeader('a', 'none')]))).toEqual([u('a')]);
+  });
+
+  it('does not flag nofollow alone, another directive, or a missing header', () => {
+    const result = run(209, [
+      withHeader('nofollow', 'nofollow'),
+      withHeader('noarchive', 'noarchive, nosnippet'),
+      makePage(u('none-header')),
+    ]);
+    expect(result.count).toBe(0);
+  });
+
+  it('does not examine pages that got no HTTP response', () => {
+    const result = run(209, [
+      makePage(u('ok')),
+      makePage(u('net'), { status: null, isHtml: false, error: 'dns' }),
+    ]);
+    expect(result.examined).toBe(1);
+  });
+});
+
 describe('check 3 (title missing)', () => {
   it('flags null and empty titles on HTML 2xx pages only', () => {
     const result = run(3, [
@@ -429,6 +465,7 @@ describe('registry metadata', () => {
       11: 'error',
       33: 'error',
       109: 'warning',
+      209: 'notice',
       212: 'notice',
       214: 'notice',
       101: 'warning',
