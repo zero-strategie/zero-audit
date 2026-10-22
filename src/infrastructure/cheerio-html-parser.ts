@@ -24,6 +24,7 @@ export class CheerioHtmlParser implements HtmlParser {
       wordCount: this.countWords(visibleText),
       textRatio: this.measureTextRatio(visibleText, html),
       contentHash: createHash('sha256').update(html).digest('hex'),
+      viewport: $('meta[name="viewport" i]').first().attr('content') ?? null,
     };
   }
 

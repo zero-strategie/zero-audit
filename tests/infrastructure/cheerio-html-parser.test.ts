@@ -137,3 +137,15 @@ describe('CheerioHtmlParser canonical', () => {
     expect(canonicalOf('<head><link rel="stylesheet" href="/s.css"></head>')).toBeNull();
   });
 });
+
+describe('CheerioHtmlParser header facts', () => {
+  const parser = new CheerioHtmlParser();
+  const parse = (html: string) => parser.parse(html, PAGE_URL);
+
+  it('reads the viewport content, or null without the tag', () => {
+    expect(parse('<head><meta name="viewport" content="width=device-width"></head>').viewport).toBe(
+      'width=device-width',
+    );
+    expect(parse('<head></head>').viewport).toBeNull();
+  });
+});

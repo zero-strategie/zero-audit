@@ -19,6 +19,8 @@ export interface ParsedHtml {
   /** UTF-8 bytes of the visible body text over UTF-8 bytes of the received html, in [0, 1]. */
   textRatio: number;
   contentHash: string;
+  /** Raw `content` of `<meta name="viewport">`. */
+  viewport: string | null;
 }
 
 export interface HtmlParser {
