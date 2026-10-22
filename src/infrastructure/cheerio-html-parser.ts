@@ -6,6 +6,8 @@ import { resolveUrl } from '../domain/url.js';
 const TEXT_NODE_TYPE = 3;
 const NON_VISIBLE_SELECTOR = 'script, style, noscript, template';
 
+const CHARSET_IN_CONTENT_TYPE = /charset\s*=\s*([^\s;]+)/i;
+
 const normalizeSpaces = (text: string): string => text.replace(/\s+/g, ' ').trim();
 const orNull = (text: string): string | null => (text === '' ? null : text);
 
@@ -25,6 +27,7 @@ export class CheerioHtmlParser implements HtmlParser {
       textRatio: this.measureTextRatio(visibleText, html),
       contentHash: createHash('sha256').update(html).digest('hex'),
       viewport: $('meta[name="viewport" i]').first().attr('content') ?? null,
+      charset: this.extractCharset($),
     };
   }
 
@@ -63,6 +66,13 @@ export class CheerioHtmlParser implements HtmlParser {
   private extractCanonical($: CheerioAPI, pageUrl: string): string | null {
     const href = $('link[rel~="canonical" i][href]').first().attr('href');
     return href === undefined ? null : resolveUrl(href, pageUrl);
+  }
+
+  private extractCharset($: CheerioAPI): string | null {
+    const direct = $('meta[charset]').first().attr('charset')?.trim();
+    if (direct) return direct;
+    const contentType = $('meta[http-equiv="content-type" i]').first().attr('content') ?? '';
+    return CHARSET_IN_CONTENT_TYPE.exec(contentType)?.[1] ?? null;
   }
 
   private extractTitle($: CheerioAPI): string | null {

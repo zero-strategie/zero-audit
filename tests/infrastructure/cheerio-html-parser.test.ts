@@ -148,4 +148,13 @@ describe('CheerioHtmlParser header facts', () => {
     );
     expect(parse('<head></head>').viewport).toBeNull();
   });
+
+  it('reads the declared charset from meta charset or http-equiv, else null', () => {
+    expect(parse('<head><meta charset="utf-8"></head>').charset).toBe('utf-8');
+    expect(
+      parse('<head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"></head>')
+        .charset,
+    ).toBe('ISO-8859-1');
+    expect(parse('<head></head>').charset).toBeNull();
+  });
 });

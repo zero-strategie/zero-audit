@@ -21,6 +21,8 @@ export interface ParsedHtml {
   contentHash: string;
   /** Raw `content` of `<meta name="viewport">`. */
   viewport: string | null;
+  /** Charset declared in the document (`<meta charset>` or `http-equiv=Content-Type`), not the HTTP header. */
+  charset: string | null;
 }
 
 export interface HtmlParser {
