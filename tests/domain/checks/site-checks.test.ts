@@ -463,6 +463,37 @@ describe('check 16 (invalid robots.txt)', () => {
   });
 });
 
+describe('check 219 (malformed llms.txt)', () => {
+  const llmsFile = (facts: SiteFile['facts'], status: number | null = 200): SiteFile => ({
+    kind: 'llms',
+    url: u('llms.txt'),
+    status,
+    error: null,
+    facts,
+  });
+  const run219 = (files: SiteFile[]): CheckResult => runCheck(siteChecks, 219, robotsCrawl(files));
+
+  it('emits a single occurrence carrying the problems', () => {
+    const problems = [
+      { code: 'multiple-h1', line: 4 },
+      { code: 'invalid-list-entry', line: 7 },
+    ];
+
+    const result = run219([llmsFile({ problems, problemCount: 2 })]);
+
+    expect(result.occurrences).toEqual([{ checkId: 219, pageUrl: null, info: { problems } }]);
+  });
+
+  it.each([
+    ['a conforming file', [llmsFile({ problems: [], problemCount: 0 })]],
+    ['an absent file', [llmsFile(null, 404)]],
+    ['facts that are null', [llmsFile(null)]],
+    ['a snapshot without any llms row', []],
+  ])('does not flag %s', (_label, files) => {
+    expect(run219(files).count).toBe(0);
+  });
+});
+
 describe('check 205 (HSTS missing)', () => {
   const HSTS = { 'strict-transport-security': 'max-age=31536000' };
   const home = (url: string, overrides: Partial<Page> = {}): Page =>
@@ -561,6 +592,7 @@ describe('registry metadata', () => {
         124: 'warning',
         125: 'warning',
         137: 'notice',
+        219: 'notice',
         205: 'notice',
         203: 'notice',
         213: 'notice',

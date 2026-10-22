@@ -13,6 +13,7 @@ import { check137 } from './check-137-llms-missing.js';
 import { check203 } from './check-203-robots-missing.js';
 import { check205 } from './check-205-hsts-missing.js';
 import { check213 } from './check-213-single-incoming-link.js';
+import { check219 } from './check-219-llms-malformed.js';
 
 export const siteChecks: readonly Check[] = [
   check6,
@@ -28,5 +29,6 @@ export const siteChecks: readonly Check[] = [
   check203,
   check205,
   check213,
+  check219,
   check1000,
 ];
