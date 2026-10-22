@@ -26,4 +26,9 @@ describe('finalRootUrl', () => {
   it('returns the root itself when the crawl has no page', () => {
     expect(finalRootUrl(crawlOf([]))).toBe(ROOT);
   });
+
+  it('normalizes a start URL given without trailing slash', () => {
+    const crawl = { ...crawlOf([makePage(ROOT)]), rootUrl: 'https://exemple.com' };
+    expect(finalRootUrl(crawl)).toBe(ROOT);
+  });
 });

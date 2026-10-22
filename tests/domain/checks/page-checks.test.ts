@@ -235,13 +235,23 @@ describe('check 212 (more than 3 clicks from the home page)', () => {
 
   it('counts from the final root and not from the redirecting start URL', () => {
     const start = 'http://exemple.com/';
-    const path = [ROOT, u('a'), u('b'), u('c')];
+    const path = [ROOT, u('a'), u('b'), u('c'), u('d')];
     const pages = [
       makePage(start, { status: 301, isHtml: false, redirectTarget: ROOT }),
       makePage(ROOT),
-      ...chain('a', 'b', 'c'),
+      ...chain('a', 'b', 'c', 'd'),
     ];
-    expect(run212(pages, linksAlong(...path), start).count).toBe(0);
+    const result = run212(pages, linksAlong(...path), start);
+    expect(flaggedUrls(result)).toEqual([u('d')]);
+    expect(result.occurrences[0]?.info).toEqual({ clicks: 4 });
+  });
+
+  it('flags a page at 4 clicks when the start URL has no trailing slash', () => {
+    const path = [ROOT, u('a'), u('b'), u('c'), u('d')];
+    const pages = [makePage(ROOT), ...chain('a', 'b', 'c', 'd')];
+    expect(flaggedUrls(run212(pages, linksAlong(...path), 'https://exemple.com'))).toEqual([
+      u('d'),
+    ]);
   });
 
   it('flags only HTML 2xx pages', () => {
