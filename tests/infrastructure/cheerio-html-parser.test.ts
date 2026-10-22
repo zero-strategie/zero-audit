@@ -315,4 +315,29 @@ describe('CheerioHtmlParser header facts', () => {
 
     expect(parse(html).malformedLinks).toEqual({ total: 0, examples: [] });
   });
+
+  it('lists subresources loaded over http, but not anchors nor https ones', () => {
+    const html = `<head><link rel="stylesheet" href="http://h/a.css"><script src="http://h/a.js"></script></head>
+      <body><img src="http://h/i.png" srcset="http://h/i2.png 2x, https://h/i3.png 3x">
+      <iframe src="http://h/f"></iframe><video poster="http://h/p.png"></video>
+      <audio src="http://h/a.mp3"></audio><picture><source srcset="http://h/s.webp"></picture>
+      <embed src="http://h/e"><object data="http://h/o"></object>
+      <a href="http://h/page">x</a><img src="https://h/ok.png"></body>`;
+
+    expect(parse(html).insecureResources).toEqual({
+      total: 10,
+      examples: [
+        'http://h/a.css',
+        'http://h/a.js',
+        'http://h/i.png',
+        'http://h/i2.png',
+        'http://h/f',
+        'http://h/p.png',
+        'http://h/a.mp3',
+        'http://h/s.webp',
+        'http://h/e',
+        'http://h/o',
+      ],
+    });
+  });
 });

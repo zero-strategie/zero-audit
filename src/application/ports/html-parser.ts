@@ -76,6 +76,8 @@ export interface ParsedHtml {
   hreflang: Hreflang[];
   /** Raw `<a href>` values that are broken (see `isMalformedHref`); they never appear in `links`. */
   malformedLinks: CappedExamples;
+  /** Absolute `http://` URLs of subresources (not anchors), in document order, `srcset` candidates included. */
+  insecureResources: CappedExamples;
 }
 
 export interface HtmlParser {

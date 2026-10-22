@@ -21,6 +21,30 @@ const CHARSET_IN_CONTENT_TYPE = /charset\s*=\s*([^\s;]+)/i;
 
 const CANONICAL_SELECTOR = 'link[rel~="canonical" i][href]';
 const HREFLANG_SELECTOR = 'link[rel~="alternate" i][hreflang][href]';
+const RESOURCE_ATTRIBUTES: Readonly<Record<string, readonly string[]>> = {
+  img: ['src', 'srcset'],
+  script: ['src'],
+  link: ['href'],
+  iframe: ['src'],
+  source: ['src', 'srcset'],
+  video: ['poster'],
+  audio: ['src'],
+  embed: ['src'],
+  object: ['data'],
+};
+const RESOURCE_SELECTOR = [
+  'img',
+  'script',
+  'link[rel~="stylesheet" i]',
+  'iframe',
+  'source',
+  'video[poster]',
+  'audio',
+  'embed',
+  'object',
+].join(', ');
+const SRCSET_SEPARATOR = /,\s+|\s*,(?=\s*(?:https?:)?\/\/)/;
+const HTTP_SCHEME = /^http:\/\//i;
 const META_REFRESH = /^\s*(\d+)\s*(?:[;,]\s*(?:url\s*=\s*)?(.*))?$/i;
 const SEMANTIC_ELEMENTS: readonly SemanticElement[] = [
   'main',
@@ -106,6 +130,7 @@ export class CheerioHtmlParser implements HtmlParser {
       htmlBytes: Buffer.byteLength(html, 'utf8'),
       hreflang: this.extractHreflang($, baseUrl),
       malformedLinks: this.extractMalformedLinks($, baseUrl),
+      insecureResources: this.extractInsecureResources($, baseUrl),
       hasFrames: FRAME_TAG.test(html.replace(HTML_COMMENT, '')),
       lang: orNull($('html').first().attr('lang')?.trim() ?? ''),
     };
@@ -158,6 +183,24 @@ export class CheerioHtmlParser implements HtmlParser {
       .map((element) => $(element).attr('href') ?? '')
       .filter((href) => isMalformedHref(href, baseUrl));
     return { total: hrefs.length, examples: hrefs.slice(0, MAX_FACT_EXAMPLES) };
+  }
+
+  private extractInsecureResources($: CheerioAPI, baseUrl: string): CappedExamples {
+    const urls = $(RESOURCE_SELECTOR)
+      .toArray()
+      .flatMap((element) =>
+        (RESOURCE_ATTRIBUTES[element.tagName] ?? []).flatMap((attribute) =>
+          this.urlsOfAttribute(attribute, $(element).attr(attribute) ?? ''),
+        ),
+      )
+      .filter((candidate) => HTTP_SCHEME.test(candidate))
+      .flatMap((candidate) => resolveUrl(candidate, baseUrl) ?? []);
+    return { total: urls.length, examples: urls.slice(0, MAX_FACT_EXAMPLES) };
+  }
+
+  private urlsOfAttribute(attribute: string, value: string): string[] {
+    if (attribute !== 'srcset') return [value.trim()];
+    return value.split(SRCSET_SEPARATOR).map((candidate) => candidate.trim().split(/\s+/)[0] ?? '');
   }
 
   private extractCanonical($: CheerioAPI, pageUrl: string): string | null {
