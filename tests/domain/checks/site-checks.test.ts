@@ -258,6 +258,43 @@ describe('check 137 (llms.txt missing)', () => {
   });
 });
 
+const robotsFile = (facts: SiteFile['facts'], status: number | null = 200): SiteFile => ({
+  kind: 'robots',
+  url: u('robots.txt'),
+  status,
+  error: null,
+  facts,
+});
+
+const robotsCrawl = (files: SiteFile[]): CrawlResult =>
+  crawlOf([], [], { robotsFound: true, sitemapFound: false }, null, [], [], files);
+
+describe('check 16 (invalid robots.txt)', () => {
+  it('emits a single occurrence listing the invalid lines with number and text', () => {
+    const lines = [
+      { number: 2, text: 'bogus' },
+      { number: 5, text: 'Noindex: /x' },
+    ];
+    const facts = { invalidLines: lines, invalidCount: 2, sitemapDeclarations: 0 };
+
+    const result = runCheck(siteChecks, 16, robotsCrawl([robotsFile(facts)]));
+
+    expect(result.occurrences).toEqual([{ checkId: 16, pageUrl: null, info: { lines } }]);
+  });
+
+  it.each([
+    ['a valid file', robotsFile({ invalidLines: [], invalidCount: 0, sitemapDeclarations: 1 })],
+    ['an absent file', robotsFile(null, 404)],
+    ['facts that are null', robotsFile(null)],
+  ])('does not flag %s', (_label, file) => {
+    expect(runCheck(siteChecks, 16, robotsCrawl([file])).count).toBe(0);
+  });
+
+  it('does not flag a snapshot without any robots row', () => {
+    expect(runCheck(siteChecks, 16, robotsCrawl([])).count).toBe(0);
+  });
+});
+
 describe('check 205 (HSTS missing)', () => {
   const HSTS = { 'strict-transport-security': 'max-age=31536000' };
   const home = (url: string, overrides: Partial<Page> = {}): Page =>
@@ -350,6 +387,7 @@ describe('registry metadata', () => {
         7: 'error',
         8: 'error',
         15: 'error',
+        16: 'error',
         125: 'warning',
         137: 'notice',
         205: 'notice',

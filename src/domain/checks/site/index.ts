@@ -4,6 +4,7 @@ import { check7 } from './check-007-duplicate-content.js';
 import { check8 } from './check-008-broken-internal-links.js';
 import { check15 } from './check-015-duplicate-meta-description.js';
 import { check1000 } from './check-1000-url-variants.js';
+import { check16 } from './check-016-robots-invalid.js';
 import { check125 } from './check-125-sitemap-missing.js';
 import { check137 } from './check-137-llms-missing.js';
 import { check203 } from './check-203-robots-missing.js';
@@ -15,6 +16,7 @@ export const siteChecks: readonly Check[] = [
   check7,
   check8,
   check15,
+  check16,
   check125,
   check137,
   check203,

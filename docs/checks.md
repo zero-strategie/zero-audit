@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 63 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 64 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has checks 45 and 222 so far.
@@ -22,6 +22,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 9 | error | crawlability | page | A page did not answer within the crawler's time limit (`timeout`). | Look at the server's performance and load. |
 | 11 | error | crawlability | page | A page could not be reached: connection, DNS, blocked or other network failure. `info.kind` gives the failure. | Check the host, DNS and firewall, then the URL itself. |
 | 15 | error | on-page | page | Several pages share the same meta description. | Write a specific description for each page. |
+| 16 | error | crawlability | site | The `robots.txt` contains invalid lines. One occurrence per audit; `info.lines` lists up to 20 lines as `number` and `text` (comment removed, cut at 200 characters). | Fix or remove these lines so that crawlers apply your rules. |
 | 20 | error | on-page | page | An HTML page answering 2xx has no `<meta name="viewport">`. | Add `<meta name="viewport" content="width=device-width, initial-scale=1">` to the head. |
 | 21 | error | other | page | An HTML page answering 2xx weighs more than 2 MiB (2,097,152 bytes, UTF-8 size of the received document). `info.bytes` gives the size. | Trim the markup: remove inline data, split the page, paginate long lists. |
 | 23 | error | international | page | An HTML page answering 2xx has a `<link rel="alternate" hreflang>` whose value is neither `x-default` nor a valid `language[-script][-region]` code (case ignored). `info.invalid` lists the invalid values. | Use a real language code, optionally with a region: `en-GB`, not `en-UK`; `fr-FR`, not `fr_FR`. |
@@ -108,6 +109,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 30 applies to https HTML 2xx pages whose HTML facts were recorded. Resources are read from the markup, resolved against `<base>`, and never requested. `<a>` links are not resources (check 31). A `Content-Security-Policy: upgrade-insecure-requests` header, which makes browsers upgrade these requests, is not taken into account.
   - Check 44 applies to HTML 2xx pages whose HTML facts were recorded; only `<a href>` values are examined (rule A3), and the other link checks are unchanged.
   - Checks 39 and 40 apply to HTML 2xx pages whose HTML facts were recorded. Check 40 ignores a refresh with no `url=` (a plain reload).
+  - Check 16 reads the grammar facts of `robots.txt` (RFC 9309 plus the `Crawl-delay`, `Host` and `Clean-param` extensions, accepted without warning). A line is invalid when it is not `key: value`, when its key is unknown, or when `Allow`, `Disallow` or `Crawl-delay` appears before any `User-agent`. A body that looks like HTML is invalid line by line. A missing `robots.txt` is never reported by check 16 (see check 203).
   - Check 23 applies to HTML 2xx pages that have at least one hreflang alternate (HTML only, not the `Link` header or sitemap). Codes are validated with the ICU data of Node: a known language, an optional known script and an optional two-letter region, with no variant or extension; deprecated codes such as `iw` are rejected. The language is not restricted to ISO 639-1. The current ISO 639-1 codes that ICU rewrites (`tl`, `tw`) are accepted; surrounding whitespace is not trimmed, so `" fr"` is reported.
   - Check 24 applies to the same pages as check 23 (HTML 2xx with at least one hreflang alternate) and reads the same HTML-only alternates. A self-reference is an alternate equal, after normalisation, to the page URL or to its declared canonical. Reciprocity with other pages is not checked.
   - Checks 25 and 204 only judge hreflang targets that the crawl already visited: a target outside the crawl (for instance beyond `--limit`, or on another host) is never queued nor reported (rule A5). Targets are matched on the normalised URL, fragment removed.

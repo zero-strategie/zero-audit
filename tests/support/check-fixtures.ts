@@ -9,6 +9,7 @@ import type {
   HostProbe,
   Link,
   Page,
+  SiteFile,
   SlashVariantProbe,
 } from '../../src/domain/crawl.js';
 
@@ -58,13 +59,14 @@ export const crawlOf = (
   hostProbe: HostProbe | null = null,
   slashProbes: SlashVariantProbe[] = [],
   blockedPages: Page[] = [],
+  siteFiles: SiteFile[] = [],
 ): CrawlResult => ({
   rootUrl: 'https://exemple.com/',
   internalHost: 'exemple.com',
   pages,
   blockedPages,
   links,
-  siteFiles: [],
+  siteFiles,
   hostProbe,
   sitemapUrls: [],
   slashProbes,
