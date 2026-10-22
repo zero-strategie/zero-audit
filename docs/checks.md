@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 64 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 65 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has checks 45 and 222 so far.
@@ -57,6 +57,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 121 | warning | on-page | page | An HTML page answering 2xx is built with `<frameset>` or `<frame>`. An `<iframe>` alone is not reported. | Replace frames with a regular page layout so that each URL carries its full content. |
 | 122 | warning | crawlability | page | The path of a URL contains an underscore. | Use hyphens to separate words in URLs. |
 | 123 | warning | linking | page | A page has internal links with `rel="nofollow"`. There is one occurrence per page; `info.targets` lists the target URLs, sorted. The `rel` value is read as a list of tokens, case ignored (`noopener NoFollow` counts, `nofollowed` does not). | Check that the attribute is intended; otherwise remove it so link equity flows to your own pages. |
+| 124 | warning | crawlability | site | The sitemap exists but robots.txt declares no `Sitemap:` line. Only reported when robots.txt and a sitemap were both found. | Add a `Sitemap:` line with the absolute sitemap URL to robots.txt. |
 | 125 | warning | crawlability | site | No sitemap was found. | Publish a sitemap and declare it in robots.txt. |
 | 129 | warning | other | page | An HTML page answering 2xx is served without a compression `content-encoding` (gzip, br, zstd or deflate; a list such as `gzip, identity` counts as compressed, `identity` alone does not). | Enable gzip or brotli on the web server. |
 | 136 | warning | crawlability | page | A URL is 101 to 200 characters long. `info.length` gives the length. A URL of more than 200 characters is reported by 201 only. | Shorten the URL: drop unnecessary words, folders and parameters. |

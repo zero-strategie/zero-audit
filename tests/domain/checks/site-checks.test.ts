@@ -156,6 +156,33 @@ describe('check 125 (sitemap missing)', () => {
   });
 });
 
+describe('check 124 (sitemap not declared in robots.txt)', () => {
+  const declared = (count: number): SiteFile =>
+    robotsFile({ invalidLines: [], invalidCount: 0, sitemapDeclarations: count });
+  const crawlWith = (
+    files: SiteFile[],
+    site: { robotsFound: boolean; sitemapFound: boolean },
+  ): CrawlResult => crawlOf([], [], site, null, [], [], files);
+
+  it('flags a found sitemap when robots.txt has no Sitemap line', () => {
+    const result = runCheck(
+      siteChecks,
+      124,
+      crawlWith([declared(0)], { robotsFound: true, sitemapFound: true }),
+    );
+
+    expect(result.occurrences).toEqual([{ checkId: 124, pageUrl: null, info: {} }]);
+  });
+
+  it.each([
+    ['robots.txt declares a sitemap', [declared(1)], { robotsFound: true, sitemapFound: true }],
+    ['robots.txt is absent', [robotsFile(null, 404)], { robotsFound: false, sitemapFound: true }],
+    ['no sitemap was found', [declared(0)], { robotsFound: true, sitemapFound: false }],
+  ])('does not flag when %s', (_label, files, site) => {
+    expect(runCheck(siteChecks, 124, crawlWith(files, site)).count).toBe(0);
+  });
+});
+
 describe('check 203 (robots.txt missing)', () => {
   it('flags the site when no robots.txt was found', () => {
     const missing = runCheck(
@@ -388,6 +415,7 @@ describe('registry metadata', () => {
         8: 'error',
         15: 'error',
         16: 'error',
+        124: 'warning',
         125: 'warning',
         137: 'notice',
         205: 'notice',
