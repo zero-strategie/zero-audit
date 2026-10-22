@@ -157,4 +157,17 @@ describe('CheerioHtmlParser header facts', () => {
     ).toBe('ISO-8859-1');
     expect(parse('<head></head>').charset).toBeNull();
   });
+
+  it('detects a leading doctype ignoring case, whitespace and comments', () => {
+    expect(parse('<!DOCTYPE html><html></html>').hasDoctype).toBe(true);
+    expect(parse('  \n<!-- c --> <!doctype HTML>\n<html></html>').hasDoctype).toBe(true);
+    expect(parse('<html><!DOCTYPE html></html>').hasDoctype).toBe(false);
+    expect(parse('<html></html>').hasDoctype).toBe(false);
+  });
+
+  it('reads the html lang, or null when absent or empty', () => {
+    expect(parse('<html lang="fr-FR"></html>').lang).toBe('fr-FR');
+    expect(parse('<html lang=""></html>').lang).toBeNull();
+    expect(parse('<html></html>').lang).toBeNull();
+  });
 });

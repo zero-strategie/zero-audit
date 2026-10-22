@@ -23,6 +23,10 @@ export interface ParsedHtml {
   viewport: string | null;
   /** Charset declared in the document (`<meta charset>` or `http-equiv=Content-Type`), not the HTTP header. */
   charset: string | null;
+  /** True when the raw html starts with a doctype (comments and whitespace allowed before). */
+  hasDoctype: boolean;
+  /** `lang` attribute of `<html>`, null when absent or empty. */
+  lang: string | null;
 }
 
 export interface HtmlParser {
