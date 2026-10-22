@@ -17,6 +17,8 @@ const CHARSET_IN_CONTENT_TYPE = /charset\s*=\s*([^\s;]+)/i;
 
 const CANONICAL_SELECTOR = 'link[rel~="canonical" i][href]';
 const META_REFRESH = /^\s*(\d+)\s*(?:[;,]\s*(?:url\s*=\s*)?(.*))?$/i;
+const HTML_COMMENT = /<!--[\s\S]*?(?:-->|$)/g;
+const FRAME_TAG = /<frame(?:set)?[\s/>]/i;
 const LEADING_DOCTYPE = /^(?:\s|<!--[\s\S]*?-->)*<!doctype\s/i;
 
 const normalizeSpaces = (text: string): string => text.replace(/\s+/g, ' ').trim();
@@ -44,6 +46,7 @@ export class CheerioHtmlParser implements HtmlParser {
       charset: this.extractCharset($),
       hasDoctype: LEADING_DOCTYPE.test(html),
       imagesWithoutAlt: this.extractImagesWithoutAlt($),
+      hasFrames: FRAME_TAG.test(html.replace(HTML_COMMENT, '')),
       lang: orNull($('html').first().attr('lang')?.trim() ?? ''),
     };
   }

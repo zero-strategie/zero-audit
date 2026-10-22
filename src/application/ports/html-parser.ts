@@ -45,6 +45,8 @@ export interface ParsedHtml {
   metaRefresh: MetaRefresh | null;
   /** `<img>` elements with no `alt` attribute (`alt=""` is valid), listed by raw `src`. */
   imagesWithoutAlt: CappedExamples;
+  /** True when a `<frameset>` or `<frame>` exists; the raw html is scanned too, as parse5 drops misplaced ones. */
+  hasFrames: boolean;
 }
 
 export interface HtmlParser {

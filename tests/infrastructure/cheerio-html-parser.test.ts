@@ -209,4 +209,12 @@ describe('CheerioHtmlParser header facts', () => {
     expect(imagesWithoutAlt.total).toBe(25);
     expect(imagesWithoutAlt.examples).toHaveLength(20);
   });
+
+  it('detects frames, including those parse5 drops, but not iframes or commented frames', () => {
+    expect(parse('<frameset><frame src="/a"></frameset>').hasFrames).toBe(true);
+    expect(parse('<body><p>x</p><frameset cols="*"></frameset>').hasFrames).toBe(true);
+    expect(parse('<body><div><frame src="/a"></div></body>').hasFrames).toBe(true);
+    expect(parse('<body><iframe src="/a"></iframe></body>').hasFrames).toBe(false);
+    expect(parse('<body><!-- <frame src="/a"> --></body>').hasFrames).toBe(false);
+  });
 });
