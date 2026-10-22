@@ -40,8 +40,6 @@ describe('local Postgres setup files', () => {
     for (const variable of [
       'HOST',
       'PORT',
-      'ZERO_AUDIT_MAILER',
-      'BREVO',
       'ZERO_AUDIT_MAIL_FROM',
       'ZERO_AUDIT_PUBLIC_URL',
       'ZERO_AUDIT_ADMIN_EMAILS',

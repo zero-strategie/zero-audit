@@ -120,20 +120,6 @@ export class EmailAlreadyRegistered extends DomainError {
   }
 }
 
-export class MailDeliveryFailed extends DomainError {
-  constructor(reason: string) {
-    super(`E-mail delivery failed: ${reason}`);
-    this.name = 'MailDeliveryFailed';
-  }
-}
-
-export class MailerUnavailable extends DomainError {
-  constructor() {
-    super('No mailer is configured');
-    this.name = 'MailerUnavailable';
-  }
-}
-
 export class InvalidOrExpiredToken extends DomainError {
   constructor() {
     super('The token is unknown, already used or expired');
