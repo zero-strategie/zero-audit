@@ -19,9 +19,7 @@ describe('finalRootUrl', () => {
   });
 
   it('returns the root itself when it failed without any redirect', () => {
-    const crawl = crawlOf([
-      makePage(ROOT, { status: null, error: 'ECONNRESET', isHtml: false }),
-    ]);
+    const crawl = crawlOf([makePage(ROOT, { status: null, error: 'ECONNRESET', isHtml: false })]);
     expect(finalRootUrl(crawl)).toBe(ROOT);
   });
 
