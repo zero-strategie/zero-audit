@@ -242,6 +242,23 @@ describe('migration 002 on a milestone 1 database', () => {
     ]);
   });
 
+  it('keeps a stored markup theme for the markup check 45 and maps it to on-page for check 3', async () => {
+    const path = buildMilestone1Database();
+    const db = new Database(path);
+    db.prepare(
+      "INSERT INTO check_results (snapshot_id, check_id, severity, theme, count, examined) VALUES ('with-pages', 45, 'error', 'markup', 1, 2)",
+    ).run();
+    db.close();
+    const repo = SqliteSnapshotRepository.open(path);
+    const details = await repo.getById('with-pages');
+    repo.close();
+
+    const themeOf = (id: number): string | undefined =>
+      details?.checkResults.find(({ checkId }) => checkId === id)?.theme;
+    expect(themeOf(3)).toBe('on-page');
+    expect(themeOf(45)).toBe('markup');
+  });
+
   it('reads a milestone 1 snapshot with an empty list of site files', async () => {
     const repo = SqliteSnapshotRepository.open(buildMilestone1Database());
     const details = await repo.getById('with-pages');

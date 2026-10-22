@@ -129,6 +129,10 @@ describe('runCli', () => {
     expect(run.out).toContain('Pages par groupe');
     expect(exported.scores.health.score).toEqual(expect.any(Number));
     expect(exported.scores.themes.https).toEqual({ score: 0, variation: null });
+    expect(Object.keys(exported.scores.themes)).toEqual(
+      expect.arrayContaining(['international', 'markup']),
+    );
+    expect(Object.keys(exported.scores.themes)).toHaveLength(7);
     expect(run.out).toMatch(/Santé du site : \d+\n/);
     expect(run.out).not.toContain('/ 100');
     expect(run.out).toMatch(/https : 0\b/);

@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { CheckResult } from '../../src/domain/check.js';
 import type { Link } from '../../src/domain/crawl.js';
 import type { Admission } from '../../src/application/ports/audit-queue.js';
 import { SnapshotImmutable } from '../../src/domain/errors.js';
@@ -220,6 +221,27 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
     const details = await repository.getById(id);
     expect(canonical(details?.checkResults[0]?.occurrences[0]?.info)).toBe(canonical(info));
     expect(details?.snapshot.startedAt.toISOString()).toBe('2026-01-01T10:00:00.123Z');
+  });
+
+  it('reads a stored markup theme as on-page for check 3 and as markup for check 45', async () => {
+    const id = await createRunning();
+    const stored = (checkId: number): CheckResult => ({
+      checkId,
+      severity: 'error',
+      theme: 'markup',
+      count: 0,
+      examined: 1,
+      occurrences: [],
+    });
+    await repository.addCheckResults(id, [stored(3), stored(45)]);
+
+    const details = await repository.getById(id);
+    expect(details?.checkResults.map(({ checkId, theme }) => [checkId, theme])).toEqual([
+      [3, 'on-page'],
+      [45, 'markup'],
+    ]);
+    const rows = await database.pool.query('SELECT theme FROM check_results ORDER BY id');
+    expect(rows.rows).toEqual([{ theme: 'markup' }, { theme: 'markup' }]);
   });
 
   it('applies every migration once and does nothing on a second run', async () => {
