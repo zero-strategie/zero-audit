@@ -360,6 +360,41 @@ describe('check 38 (canonical pointing to an error page)', () => {
   });
 });
 
+describe('check 113 (too many URL parameters)', () => {
+  it('flags URLs with more than 2 query parameters, counting repeated keys', () => {
+    const result = run(113, [
+      makePage(`${u('p')}?a=1&b=2&c=3`),
+      makePage(`${u('q')}?a=1&a=2&b=3`),
+      makePage(`${u('r')}?a=1&b=2`),
+      makePage(u('s')),
+    ]);
+    expect(flaggedUrls(result)).toEqual([`${u('p')}?a=1&b=2&c=3`, `${u('q')}?a=1&a=2&b=3`]);
+    expect(result.occurrences[0]?.info).toEqual({ count: 3 });
+    expect(result.examined).toBe(4);
+  });
+
+  it('examines every crawled page, including error pages', () => {
+    const result = run(113, [
+      makePage(`${u('x')}?a=1&b=2&c=3&d=4`, { status: 404, isHtml: false }),
+      makePage(u('net'), { status: null, error: 'dns', isHtml: false }),
+    ]);
+    expect(result.count).toBe(1);
+    expect(result.examined).toBe(2);
+  });
+});
+
+describe('check 122 (underscore in URL path)', () => {
+  it('flags an underscore in the path but not in the query string', () => {
+    const result = run(122, [
+      makePage(u('mon_article')),
+      makePage(`${u('mon-article')}?x=a_b`),
+      makePage(u('clean')),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('mon_article')]);
+    expect(result.examined).toBe(3);
+  });
+});
+
 describe('check 3 (title missing)', () => {
   it('flags null and empty titles on HTML 2xx pages only', () => {
     const result = run(3, [
@@ -522,6 +557,8 @@ describe('registry metadata', () => {
       11: 'error',
       33: 'error',
       38: 'error',
+      113: 'warning',
+      122: 'warning',
       109: 'warning',
       209: 'notice',
       212: 'notice',

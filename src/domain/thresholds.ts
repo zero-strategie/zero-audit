@@ -4,3 +4,4 @@ export const LOW_WORD_COUNT = 200;
 export const LOW_TEXT_RATIO = 0.1;
 export const MIN_REDIRECT_CHAIN_HOPS = 2;
 export const MAX_CLICK_DEPTH = 3;
+export const MAX_QUERY_PARAMETERS = 2;
