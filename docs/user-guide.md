@@ -290,7 +290,7 @@ You can set `ZERO_AUDIT_STORE=postgres` instead of passing `--store` every time.
 Tools crawl different sets of URLs and define some checks differently. For example, they may count `robots.txt` as a page, or merge URL variants. The [checks reference](checks.md) documents our definitions.
 
 **Why is a theme "non calculable"?**
-None of its weighted checks examined anything. For example, the `https` theme only has a notice for now.
+None of its weighted checks examined anything. For example, on a site served over http, check 31 examines nothing.
 
 **Can I audit a site I don't own?**
 Technically yes, but only do it with permission, and keep the default delay.

@@ -30,6 +30,6 @@ describe('checks documentation', () => {
     ['docs/user-guide.md', '../../docs/user-guide.md'],
     ['docs/checks.md', '../../docs/checks.md'],
   ])('announces the registered number of checks in %s', (_name, path) => {
-    expect(read(path)).toContain(`${String(allChecks.length)} checks`);
+    expect(read(path)).toMatch(new RegExp(`\\b${String(allChecks.length)} checks\\b`));
   });
 });
