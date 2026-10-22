@@ -2,6 +2,7 @@ import type { PageCheck } from '../../check.js';
 import { check1 } from './check-001-5xx.js';
 import { check2 } from './check-002-4xx.js';
 import { check3 } from './check-003-title-missing.js';
+import { check4 } from './check-004-blocked-by-robots.js';
 import { check101 } from './check-101-title-too-short.js';
 import { check102 } from './check-102-title-too-long.js';
 import { check103 } from './check-103-h1-missing.js';
@@ -15,6 +16,7 @@ export const pageChecks: readonly PageCheck[] = [
   check1,
   check2,
   check3,
+  check4,
   check101,
   check102,
   check103,

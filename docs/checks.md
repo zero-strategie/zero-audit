@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 20 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 21 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page` or `other`. Each theme gets its own score.
@@ -15,6 +15,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 1 | error | crawlability | page | A page answers with a 5xx status. | Fix the server error, and check the logs and upstreams. |
 | 2 | error | crawlability | page | A page answers with a 4xx status. | Restore the page, redirect it (301), or remove the links to it. |
 | 3 | error | on-page | page | An HTML page has no `<title>`. | Add a unique, descriptive title. |
+| 4 | notice | crawlability | page | An internal page is blocked from crawling by `robots.txt`. There is one occurrence per blocked URL. | Check that the block is intended; otherwise relax the matching `Disallow` rule. |
 | 6 | error | on-page | page | Several pages share the same title. There is one occurrence per page involved. | Give each page its own title. |
 | 8 | error | linking | page | An internal link points to a page that failed (4xx, 5xx or network error). The occurrence is on the linking page. | Update or remove the link. |
 | 15 | error | on-page | page | Several pages share the same meta description. | Write a specific description for each page. |
@@ -38,6 +39,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 - **Pages examined.**
   - Most page checks apply to HTML pages answering 2xx.
   - Checks 1 and 2 apply to every page that got an HTTP response.
+  - Check 4 always applies: its `examined` is the number of pages explored, and the occurrences come from the URLs the crawler skipped because of `robots.txt`.
   - Check 8 applies to every page that has internal links.
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**

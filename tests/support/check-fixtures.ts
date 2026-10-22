@@ -55,11 +55,12 @@ export const crawlOf = (
   site: CrawlResult['site'] = { robotsFound: false, sitemapFound: false },
   hostProbe: HostProbe | null = null,
   slashProbes: SlashVariantProbe[] = [],
+  blockedPages: Page[] = [],
 ): CrawlResult => ({
   rootUrl: 'https://exemple.com/',
   internalHost: 'exemple.com',
   pages,
-  blockedPages: [],
+  blockedPages,
   links,
   siteFiles: [],
   hostProbe,

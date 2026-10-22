@@ -45,6 +45,40 @@ describe('check 2 (4xx)', () => {
   });
 });
 
+describe('check 4 (blocked by robots.txt)', () => {
+  const blocked = (name: string): Page =>
+    makePage(name, { status: null, isHtml: false, blockedByRobots: true });
+
+  it('emits one occurrence per blocked URL', () => {
+    const result = runCheck(
+      pageChecks,
+      4,
+      crawlOf([makePage(u('a'))], [], undefined, null, [], [blocked(u('p1')), blocked(u('p2'))]),
+    );
+    expect(flaggedUrls(result)).toEqual([u('p1'), u('p2')]);
+  });
+
+  it('emits nothing when no page is blocked', () => {
+    expect(run(4, [makePage(u('a'))]).count).toBe(0);
+  });
+
+  it('examines the explored pages, not the blocked ones', () => {
+    const result = runCheck(
+      pageChecks,
+      4,
+      crawlOf(
+        [makePage(u('a')), makePage(u('b')), makePage(u('c'))],
+        [],
+        undefined,
+        null,
+        [],
+        [blocked(u('p1'))],
+      ),
+    );
+    expect(result.examined).toBe(3);
+  });
+});
+
 describe('check 3 (title missing)', () => {
   it('flags null and empty titles on HTML 2xx pages only', () => {
     const result = run(3, [
@@ -202,6 +236,7 @@ describe('registry metadata', () => {
       1: 'error',
       2: 'error',
       3: 'error',
+      4: 'notice',
       101: 'warning',
       102: 'warning',
       103: 'warning',
