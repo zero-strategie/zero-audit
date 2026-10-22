@@ -562,6 +562,8 @@ describe('registry metadata', () => {
       113: 'warning',
       115: 'warning',
       116: 'warning',
+      110: 'warning',
+      121: 'warning',
       122: 'warning',
       129: 'warning',
       136: 'warning',
@@ -1150,6 +1152,59 @@ describe('check 116 (doctype not declared)', () => {
     const result = run(116, [
       withDoctype('gone', false, { status: 404 }),
       withDoctype('img', false, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 110 (images without alt)', () => {
+  const withImages = (
+    name: string,
+    total: number,
+    examples: string[],
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { imagesWithoutAlt: { total, examples } }, ...overrides });
+
+  it('flags a page with 2 images without alt, with the total and the examples', () => {
+    const result = run(110, [withImages('bad', 2, ['/a.png', '/b.png']), withImages('ok', 0, [])]);
+    expect(flaggedUrls(result)).toEqual([u('bad')]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 2, examples: ['/a.png', '/b.png'] });
+    expect(result.examined).toBe(2);
+  });
+
+  it('keeps the real total when the examples are capped (50 images)', () => {
+    const examples = Array.from({ length: 20 }, (_, i) => `/i${String(i)}.png`);
+    const result = run(110, [withImages('many', 50, examples)]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 50, examples });
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(110, [
+      withImages('gone', 3, ['/a.png'], { status: 404 }),
+      withImages('img', 3, ['/a.png'], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 121 (frames)', () => {
+  const withFrames = (name: string, hasFrames: boolean, overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { hasFrames }, ...overrides });
+
+  it('flags a page built with frames and not one without', () => {
+    const result = run(121, [withFrames('framed', true), withFrames('plain', false)]);
+    expect(flaggedUrls(result)).toEqual([u('framed')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(121, [
+      withFrames('gone', true, { status: 404 }),
+      withFrames('img', true, { isHtml: false }),
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);

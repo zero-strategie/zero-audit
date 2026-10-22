@@ -5,7 +5,7 @@ import { allChecks } from '../../src/domain/checks/index.js';
 import { crawlOf, makePage, u } from '../support/check-fixtures.js';
 
 describe('full check registry', () => {
-  it('returns exactly the 48 checks of the milestone with catalogue severities', () => {
+  it('returns exactly the 50 checks of the milestone with catalogue severities', () => {
     const results = runChecks(crawlOf([makePage(u('a'))]), new CheckRegistry(allChecks));
 
     expect(results.map((r) => [r.checkId, r.severity])).toEqual([
@@ -33,12 +33,14 @@ describe('full check registry', () => {
       [106, 'warning'],
       [108, 'warning'],
       [109, 'warning'],
+      [110, 'warning'],
       [111, 'error'],
       [112, 'warning'],
       [113, 'warning'],
       [115, 'warning'],
       [116, 'warning'],
       [117, 'warning'],
+      [121, 'warning'],
       [122, 'warning'],
       [123, 'warning'],
       [125, 'warning'],
