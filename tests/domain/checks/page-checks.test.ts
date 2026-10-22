@@ -561,6 +561,7 @@ describe('registry metadata', () => {
       38: 'error',
       113: 'warning',
       122: 'warning',
+      129: 'warning',
       136: 'warning',
       201: 'notice',
       109: 'warning',
@@ -970,6 +971,44 @@ describe('check 31 (http links on an https site)', () => {
         [makePage(httpsRoot)],
         [makeLink(httpsRoot, 'http://autre.fr/a', { type: 'external' })],
       ),
+    );
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 129 (uncompressed pages)', () => {
+  const withEncoding = (name: string, encoding?: string): Page =>
+    makePage(u(name), { headers: encoding === undefined ? {} : { 'content-encoding': encoding } });
+
+  it('flags an HTML 200 page without content-encoding', () => {
+    const result = runCheck(pageChecks, 129, crawlOf([withEncoding('a')]));
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.examined).toBe(1);
+  });
+
+  it.each(['gzip', 'br', 'zstd', 'deflate', 'gzip, identity', 'GZIP'])(
+    'does not flag content-encoding %s',
+    (encoding) => {
+      const result = runCheck(pageChecks, 129, crawlOf([withEncoding('a', encoding)]));
+      expect(flaggedUrls(result)).toEqual([]);
+      expect(result.examined).toBe(1);
+    },
+  );
+
+  it('flags content-encoding identity', () => {
+    const result = runCheck(pageChecks, 129, crawlOf([withEncoding('a', 'identity')]));
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('does not examine non-HTML pages or error pages', () => {
+    const result = runCheck(
+      pageChecks,
+      129,
+      crawlOf([
+        makePage(u('img'), { isHtml: false, contentType: 'image/png' }),
+        makePage(u('gone'), { status: 404 }),
+      ]),
     );
     expect(flaggedUrls(result)).toEqual([]);
     expect(result.examined).toBe(0);

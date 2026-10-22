@@ -49,6 +49,14 @@ describe('UndiciHttpClient', () => {
     );
   });
 
+  it('keeps the default Accept-Encoding, which offers gzip', async () => {
+    server = await startFixtureServer({ '/': { status: 200, body: 'ok' } });
+
+    await clientWith().get(`${server.baseUrl}/`);
+
+    expect(server.requests[0]?.headers['accept-encoding']).toContain('gzip');
+  });
+
   it('returns a 301 with its location header without following it', async () => {
     server = await startFixtureServer({
       '/old': { status: 301, headers: { Location: '/new' } },

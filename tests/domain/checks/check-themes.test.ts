@@ -41,6 +41,7 @@ const EXPECTED_THEME_BY_CHECK_ID: Readonly<Record<number, string>> = {
   105: 'on-page',
   106: 'on-page',
   112: 'on-page',
+  129: 'other',
   117: 'on-page',
   8: 'linking',
   213: 'linking',

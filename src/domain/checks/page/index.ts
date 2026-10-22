@@ -22,6 +22,7 @@ import { check113 } from './check-113-too-many-parameters.js';
 import { check117 } from './check-117-low-word-count.js';
 import { check122 } from './check-122-underscore-in-url.js';
 import { check123 } from './check-123-internal-nofollow.js';
+import { check129 } from './check-129-uncompressed.js';
 import { check136 } from './check-136-url-too-long.js';
 import { check201 } from './check-201-url-over-200.js';
 import { check202 } from './check-202-external-nofollow.js';
@@ -56,6 +57,7 @@ export const pageChecks: readonly PageCheck[] = [
   check117,
   check122,
   check123,
+  check129,
   check136,
   check201,
   check202,
