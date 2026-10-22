@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const SRC = join(import.meta.dirname, '..', '..', 'src');
 const INNER_LAYERS = ['composition', 'application', 'domain', 'infrastructure'];
-const CLI_IMPORT = /from\s+'(\.\.\/)+cli\//;
+const CLI_IMPORT = /(from\s+|import\()['"](\.\.\/)+cli\//;
 
 const sourceFiles = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>

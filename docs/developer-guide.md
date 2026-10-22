@@ -159,7 +159,7 @@ Postgres migrations are serialised by an advisory lock. Opening a storage migrat
 
 Migrations are **additive**: never edit one that has shipped. Add a new file to **both** folders. The numbering differs between the two, because Postgres started with a consolidated `001_init.sql`.
 
-`src/cli/storage-factory.ts` picks the adapter from `--store` or `ZERO_AUDIT_STORE`, plus `DATABASE_URL`.
+`createStorage` (`src/composition/storage.ts`) picks the adapter from `--store` or `ZERO_AUDIT_STORE`, plus `DATABASE_URL`.
 
 ## HTTP API
 
