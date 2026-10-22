@@ -946,9 +946,12 @@ describe('check 215 (linked resources)', () => {
 
     it('does not flag a path ending in .rss or .atom', () => {
       for (const name of ['news.rss', 'news.ATOM']) {
-        expect(flaggedUrls(runCheck(pageChecks, 215, crawlLinking(u(name), 'internal')))).toEqual(
-          [],
+        const result = runCheck(
+          pageChecks,
+          215,
+          crawlLinking(u(name), 'internal', xmlPage(u(name))),
         );
+        expect(flaggedUrls(result)).toEqual([]);
       }
     });
 
