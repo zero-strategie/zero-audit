@@ -357,6 +357,15 @@ describe('CheerioHtmlParser header facts', () => {
     });
   });
 
+  it('resolves relative subresources against an http base before filtering', () => {
+    const html = '<head><base href="http://cdn.h/assets/"></head><body><img src="a.png"></body>';
+
+    expect(parse(html).insecureResources).toEqual({
+      total: 1,
+      examples: ['http://cdn.h/assets/a.png'],
+    });
+  });
+
   it('lists declared feeds as absolute urls', () => {
     const html = `<head><link rel="alternate" type="application/rss+xml" href="/rss.xml">
       <link rel="alternate" type="application/atom+xml" href="/atom.xml">

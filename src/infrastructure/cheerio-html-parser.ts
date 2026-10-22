@@ -200,8 +200,8 @@ export class CheerioHtmlParser implements HtmlParser {
           (attribute) => this.urlsOfAttribute(attribute, $(element).attr(attribute) ?? ''),
         ),
       )
-      .filter((candidate) => HTTP_SCHEME.test(candidate))
-      .flatMap((candidate) => resolveUrl(candidate, baseUrl) ?? []);
+      .flatMap((candidate) => (candidate === '' ? [] : (resolveUrl(candidate, baseUrl) ?? [])))
+      .filter((resolved) => HTTP_SCHEME.test(resolved));
     return { total: urls.length, examples: urls.slice(0, MAX_FACT_EXAMPLES) };
   }
 
