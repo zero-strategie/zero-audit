@@ -35,13 +35,19 @@ describe('local Postgres setup files', () => {
     }
   });
 
-  it('documents HOST and PORT for the API and the web image in .env.example', () => {
+  it('documents HOST and PORT for the API and no web-only variable in .env.example', () => {
     const example = read('.env.example');
-    for (const variable of ['HOST', 'PORT', 'ZERO_AUDIT_API_URL']) {
+    for (const variable of ['HOST', 'PORT']) {
       expect(example).toMatch(new RegExp(`^#? ?${variable}=`, 'm'));
     }
-    expect(example).toMatch(/API image/i);
-    expect(example).toMatch(/web image/i);
+    for (const variable of [
+      'ZERO_AUDIT_API_URL',
+      'ZERO_AUDIT_SOURCE_URL',
+      'ZERO_AUDIT_PUBLIC_HOSTS',
+    ]) {
+      expect(example).not.toContain(variable);
+    }
+    expect(example).not.toMatch(/web image/i);
   });
 
   it('documents HOST and the exposure warning in the guides', () => {

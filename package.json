@@ -15,8 +15,8 @@
     "audit": "tsx src/cli/main.ts",
     "zero-audit": "tsx src/cli/main.ts",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit && pnpm --filter web typecheck",
-    "test": "vitest run && pnpm --filter web test",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "format": "prettier --write .",
     "build": "tsc -p tsconfig.build.json && cp -R src/infrastructure/sqlite/migrations dist/infrastructure/sqlite/ && cp -R src/infrastructure/postgres/migrations dist/infrastructure/postgres/"
   },
@@ -46,7 +46,6 @@
     "tsx": "^4.23.15",
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.2",
-    "vitest": "^5.0.5",
-    "eslint-plugin-astro": "3.2.1"
+    "vitest": "^5.0.5"
   }
 }
