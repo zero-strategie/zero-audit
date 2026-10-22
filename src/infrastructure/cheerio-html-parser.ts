@@ -3,6 +3,8 @@ import { load, type CheerioAPI } from 'cheerio';
 import type {
   CappedExamples,
   HtmlParser,
+  JsonLdFacts,
+  JsonLdInvalidReason,
   MetaRefresh,
   ParsedHtml,
   RawLink,
@@ -20,6 +22,48 @@ const META_REFRESH = /^\s*(\d+)\s*(?:[;,]\s*(?:url\s*=\s*)?(.*))?$/i;
 const HTML_COMMENT = /<!--[\s\S]*?(?:-->|$)/g;
 const FRAME_TAG = /<frame(?:set)?[\s/>]/i;
 const LEADING_DOCTYPE = /^(?:\s|<!--[\s\S]*?-->)*<!doctype\s/i;
+
+type JsonObject = Record<string, unknown>;
+
+const isObject = (value: unknown): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const typesOf = (node: JsonObject): string[] => {
+  const declared = node['@type'];
+  const list = Array.isArray(declared) ? declared : [declared];
+  return list.filter((type): type is string => typeof type === 'string' && type !== '');
+};
+
+const topLevelNodes = (context: JsonObject): unknown[] => {
+  const graph = context['@graph'];
+  return Array.isArray(graph) ? graph : [context];
+};
+
+const parseJson = (text: string): { value: unknown } | null => {
+  try {
+    return { value: JSON.parse(text) };
+  } catch {
+    return null;
+  }
+};
+
+/** Returns the types found, or the reason why the block is invalid. */
+const inspectJsonLd = (text: string): string[] | JsonLdInvalidReason => {
+  const parsed = parseJson(text);
+  if (parsed === null) return 'unparseable';
+  const root = parsed.value;
+  const contexts: unknown[] = Array.isArray(root) ? root : [root];
+  const types: string[] = [];
+  for (const context of contexts) {
+    if (!isObject(context) || context['@context'] === undefined) return 'missing-context';
+    for (const node of topLevelNodes(context)) {
+      const nodeTypes = isObject(node) ? typesOf(node) : [];
+      if (nodeTypes.length === 0) return 'missing-type';
+      types.push(...nodeTypes);
+    }
+  }
+  return types;
+};
 
 const normalizeSpaces = (text: string): string => text.replace(/\s+/g, ' ').trim();
 const orNull = (text: string): string | null => (text === '' ? null : text);
@@ -46,6 +90,7 @@ export class CheerioHtmlParser implements HtmlParser {
       charset: this.extractCharset($),
       hasDoctype: LEADING_DOCTYPE.test(html),
       imagesWithoutAlt: this.extractImagesWithoutAlt($),
+      jsonLd: this.extractJsonLd($),
       hasFrames: FRAME_TAG.test(html.replace(HTML_COMMENT, '')),
       lang: orNull($('html').first().attr('lang')?.trim() ?? ''),
     };
@@ -109,6 +154,23 @@ export class CheerioHtmlParser implements HtmlParser {
       .toArray()
       .map((element) => $(element).attr('src') ?? '');
     return { total: sources.length, examples: sources.slice(0, MAX_FACT_EXAMPLES) };
+  }
+
+  private extractJsonLd($: CheerioAPI): JsonLdFacts {
+    const blocks = $('script[type="application/ld+json" i]').toArray();
+    const types = new Set<string>();
+    const invalidReasons: JsonLdInvalidReason[] = [];
+    for (const block of blocks) {
+      const found = inspectJsonLd($(block).text());
+      if (typeof found === 'string') invalidReasons.push(found);
+      else found.forEach((type) => types.add(type));
+    }
+    return {
+      count: blocks.length,
+      invalid: invalidReasons.length,
+      types: [...types],
+      invalidReasons,
+    };
   }
 
   private extractTitle($: CheerioAPI): string | null {

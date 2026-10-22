@@ -217,4 +217,49 @@ describe('CheerioHtmlParser header facts', () => {
     expect(parse('<body><iframe src="/a"></iframe></body>').hasFrames).toBe(false);
     expect(parse('<body><!-- <frame src="/a"> --></body>').hasFrames).toBe(false);
   });
+
+  describe('json-ld', () => {
+    const block = (json: string) => `<script type="application/ld+json">${json}</script>`;
+
+    it('counts blocks, flags unparseable ones with a reason and collects types', () => {
+      const html =
+        block('{"@context":"https://schema.org","@type":"Article"}') + block('{not json');
+
+      expect(parse(html).jsonLd).toEqual({
+        count: 2,
+        invalid: 1,
+        types: ['Article'],
+        invalidReasons: ['unparseable'],
+      });
+    });
+
+    it('requires a root @context and a @type on each top-level node', () => {
+      const reasons = (json: string) => parse(block(json)).jsonLd.invalidReasons;
+
+      expect(reasons('{"@type":"Thing"}')).toEqual(['missing-context']);
+      expect(reasons('{"@context":"c","name":"x"}')).toEqual(['missing-type']);
+      expect(reasons('{"@context":"c","@graph":[{"@type":"A"},{"name":"b"}]}')).toEqual([
+        'missing-type',
+      ]);
+      expect(reasons('{"@context":"c","@graph":[{"@type":"A"},{"@type":["B","C"]}]}')).toEqual([]);
+      expect(reasons('{"@context":"c","@type":"A"}')).toEqual([]);
+      expect(reasons('[{"@context":"c","@type":"A"},{"@context":"c"}]')).toEqual(['missing-type']);
+      expect(reasons('42')).toEqual(['missing-context']);
+    });
+
+    it('lists distinct types of valid blocks only', () => {
+      const html =
+        block('{"@context":"c","@graph":[{"@type":"A"},{"@type":["B","A"]}]}') +
+        block('{"@context":"c","@type":"D"}') +
+        block('{"@context":"c","name":"no type"}');
+
+      expect(parse(html).jsonLd.types).toEqual(['A', 'B', 'D']);
+      expect(parse('<p>none</p>').jsonLd).toEqual({
+        count: 0,
+        invalid: 0,
+        types: [],
+        invalidReasons: [],
+      });
+    });
+  });
 });

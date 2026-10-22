@@ -20,6 +20,17 @@ export interface CappedExamples {
   examples: string[];
 }
 
+export type JsonLdInvalidReason = 'unparseable' | 'missing-context' | 'missing-type';
+
+export interface JsonLdFacts {
+  count: number;
+  invalid: number;
+  /** Distinct `@type` values of the valid blocks, in document order. */
+  types: string[];
+  /** One reason per invalid block, in document order. */
+  invalidReasons: JsonLdInvalidReason[];
+}
+
 export interface ParsedHtml {
   links: RawLink[];
   title: string | null;
@@ -47,6 +58,7 @@ export interface ParsedHtml {
   imagesWithoutAlt: CappedExamples;
   /** True when a `<frameset>` or `<frame>` exists; the raw html is scanned too, as parse5 drops misplaced ones. */
   hasFrames: boolean;
+  jsonLd: JsonLdFacts;
 }
 
 export interface HtmlParser {
