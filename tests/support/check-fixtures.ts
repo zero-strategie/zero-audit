@@ -31,6 +31,8 @@ export const makePage = (url: string, overrides: Partial<Page> = {}): Page => ({
   textRatio: 0.3,
   contentHash: null,
   blockedByRobots: false,
+  htmlFacts: null,
+  inSitemap: null,
   ...overrides,
 });
 

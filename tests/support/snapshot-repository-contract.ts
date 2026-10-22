@@ -31,6 +31,8 @@ const page = (overrides: Partial<Page> = {}): Page => ({
   textRatio: 0.0734,
   contentHash: 'abc123',
   blockedByRobots: false,
+  htmlFacts: null,
+  inSitemap: null,
   ...overrides,
 });
 
@@ -173,6 +175,32 @@ export const describeSnapshotRepositoryContract = (
       expect(details?.checkResults).toEqual(results);
     });
 
+    it('reads back the html facts and the sitemap flag of a page', async () => {
+      const { repo, id } = await createRunning();
+      const analysed = page({
+        htmlFacts: { images: { total: 25, examples: ['a.png', 'b.png'] }, hasViewport: true },
+        inSitemap: true,
+      });
+      const absent = page({ url: 'https://example.test/other', inSitemap: false });
+      await repo.addPages(id, [analysed, absent]);
+
+      expect((await repo.getById(id))?.pages).toEqual([analysed, absent]);
+    });
+
+    it('reads back the facts of a site file', async () => {
+      const { repo, id } = await createRunning();
+      const robots: SiteFile = {
+        kind: 'robots',
+        url: 'https://example.test/robots.txt',
+        status: 200,
+        error: null,
+        facts: { invalidLines: { total: 1, examples: [3] } },
+      };
+      await repo.addSiteFiles(id, [robots]);
+
+      expect((await repo.getById(id))?.siteFiles).toEqual([robots]);
+    });
+
     it('reads back an empty list of site files when none was written', async () => {
       const { repo, id } = await createRunning();
       expect((await repo.getById(id))?.siteFiles).toEqual([]);
@@ -185,12 +213,14 @@ export const describeSnapshotRepositoryContract = (
         url: 'https://example.test/robots.txt',
         status: 200,
         error: null,
+        facts: null,
       };
       const sitemapB: SiteFile = {
         kind: 'sitemap',
         url: 'https://example.test/b.xml',
         status: 404,
         error: null,
+        facts: null,
       };
       const sitemapA: SiteFile = { ...sitemapB, url: 'https://example.test/a.xml', status: 200 };
       const llms: SiteFile = {
@@ -198,6 +228,7 @@ export const describeSnapshotRepositoryContract = (
         url: 'https://example.test/llms.txt',
         status: null,
         error: 'connection',
+        facts: null,
       };
 
       await repo.addSiteFiles(id, [sitemapB, robots, llms, sitemapA]);

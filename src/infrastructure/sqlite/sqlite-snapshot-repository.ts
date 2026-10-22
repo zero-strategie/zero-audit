@@ -12,6 +12,8 @@ import type {
   LinkType,
   Page,
   SiteFile,
+  SiteFileFacts,
+  HtmlFacts,
   SiteFileKind,
   SlashVariantProbe,
 } from '../../domain/crawl.js';
@@ -55,6 +57,8 @@ interface PageRow {
   text_ratio: number | null;
   content_hash: string | null;
   blocked_by_robots: number;
+  html_facts: string | null;
+  in_sitemap: number | null;
 }
 
 interface LinkRow {
@@ -66,6 +70,7 @@ interface LinkRow {
 }
 
 interface SiteFileRow {
+  facts: string | null;
   kind: SiteFileKind;
   url: string;
   status: number | null;
@@ -123,6 +128,12 @@ const toSnapshot = (row: SnapshotRow): Snapshot =>
     heartbeatAt: row.heartbeat_at === null ? null : new Date(row.heartbeat_at),
   });
 
+const parseFacts = (json: string | null): HtmlFacts | SiteFileFacts | null =>
+  json === null ? null : (JSON.parse(json) as HtmlFacts | SiteFileFacts);
+
+const stringifyFacts = (facts: HtmlFacts | SiteFileFacts | null): string | null =>
+  facts === null ? null : JSON.stringify(facts);
+
 const toPage = (row: PageRow): Page => ({
   url: row.url,
   depth: row.depth,
@@ -142,6 +153,8 @@ const toPage = (row: PageRow): Page => ({
   textRatio: row.text_ratio,
   contentHash: row.content_hash,
   blockedByRobots: row.blocked_by_robots === 1,
+  htmlFacts: parseFacts(row.html_facts),
+  inSitemap: row.in_sitemap === null ? null : row.in_sitemap === 1,
 });
 
 const toLink = (row: LinkRow): Link => ({
@@ -157,6 +170,7 @@ const toSiteFile = (row: SiteFileRow): SiteFile => ({
   url: row.url,
   status: row.status,
   error: row.error,
+  facts: parseFacts(row.facts),
 });
 
 const toHostProbe = (row: HostProbeRow): HostProbe => ({
@@ -484,8 +498,8 @@ export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue 
       const insert = this.db.prepare(
         `INSERT INTO pages (snapshot_id, url, depth, status, error, redirect_target, redirect_chain, headers,
            response_time_ms, content_type, is_html, title, meta_description, canonical, h1, word_count,
-           text_ratio, content_hash, blocked_by_robots)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           text_ratio, content_hash, blocked_by_robots, html_facts, in_sitemap)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       for (const page of pages) {
         insert.run(
@@ -508,6 +522,8 @@ export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue 
           page.textRatio,
           page.contentHash,
           page.blockedByRobots ? 1 : 0,
+          stringifyFacts(page.htmlFacts),
+          page.inSitemap === null ? null : page.inSitemap ? 1 : 0,
         );
       }
     });
@@ -527,9 +543,11 @@ export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue 
   addSiteFiles(id: string, files: readonly SiteFile[]): Promise<void> {
     return this.writeToRunning(id, () => {
       const insert = this.db.prepare(
-        'INSERT INTO site_files (snapshot_id, kind, url, status, error) VALUES (?, ?, ?, ?, ?)',
+        'INSERT INTO site_files (snapshot_id, kind, url, status, error, facts) VALUES (?, ?, ?, ?, ?, ?)',
       );
-      for (const file of files) insert.run(id, file.kind, file.url, file.status, file.error);
+      for (const file of files) {
+        insert.run(id, file.kind, file.url, file.status, file.error, stringifyFacts(file.facts));
+      }
     });
   }
 

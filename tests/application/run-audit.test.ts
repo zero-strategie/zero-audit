@@ -21,8 +21,8 @@ const crawlResult: CrawlResult = {
   blockedPages: [],
   links: [makeLink(ROOT, 'https://exemple.com/a')],
   siteFiles: [
-    { kind: 'robots', url: `${ROOT}robots.txt`, status: 200, error: null },
-    { kind: 'llms', url: `${ROOT}llms.txt`, status: null, error: 'connection' },
+    { kind: 'robots', url: `${ROOT}robots.txt`, status: 200, error: null, facts: null },
+    { kind: 'llms', url: `${ROOT}llms.txt`, status: null, error: 'connection', facts: null },
   ],
   hostProbe: {
     url: 'https://www.exemple.com/',

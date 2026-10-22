@@ -53,6 +53,6 @@ describe('REQUIRED_PACK_FILES', () => {
   });
 
   it('expects 17 migrations', () => {
-    expect(REQUIRED_PACK_FILES.filter((file) => file.endsWith('.sql'))).toHaveLength(17);
+    expect(REQUIRED_PACK_FILES.filter((file) => file.endsWith('.sql'))).toHaveLength(19);
   });
 });

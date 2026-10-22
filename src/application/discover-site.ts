@@ -36,8 +36,8 @@ const toSiteFile = (
   response: HttpResponse | NetworkFailure,
 ): SiteFile =>
   isNetworkFailure(response)
-    ? { kind, url, status: null, error: response.kind }
-    : { kind, url, status: response.status, error: null };
+    ? { kind, url, status: null, error: response.kind, facts: null }
+    : { kind, url, status: response.status, error: null, facts: null };
 
 const isGzipped = (url: string): boolean => new URL(url).pathname.endsWith(GZIP_EXTENSION);
 

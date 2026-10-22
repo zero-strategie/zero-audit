@@ -228,6 +228,7 @@ const llmsFile = (status: number | null, error: string | null = null): SiteFile 
   url: u('llms.txt'),
   status,
   error,
+  facts: null,
 });
 
 describe('check 137 (llms.txt missing)', () => {
@@ -246,7 +247,13 @@ describe('check 137 (llms.txt missing)', () => {
   });
 
   it('does not flag a snapshot recorded without any llms row', () => {
-    const robots: SiteFile = { kind: 'robots', url: u('robots.txt'), status: 404, error: null };
+    const robots: SiteFile = {
+      kind: 'robots',
+      url: u('robots.txt'),
+      status: 404,
+      error: null,
+      facts: null,
+    };
     expect(runCheck(siteChecks, 137, llmsCrawl([robots])).count).toBe(0);
   });
 });

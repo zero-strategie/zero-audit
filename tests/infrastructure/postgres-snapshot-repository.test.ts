@@ -253,7 +253,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         const { rows } = await legacy.pool.query<Record<string, string>>(
           `SELECT table_name, column_name, data_type FROM information_schema.columns
            WHERE table_schema = current_schema() AND table_name NOT IN ('slash_probes', 'users', 'sessions', 'email_tokens', 'api_launches', 'workers')
-             AND column_name NOT IN ('text_ratio', 'owner_id', 'launched_by', 'attempts', 'queued_at', 'heartbeat_at')
+             AND column_name NOT IN ('text_ratio', 'html_facts', 'in_sitemap', 'facts', 'owner_id', 'launched_by', 'attempts', 'queued_at', 'heartbeat_at')
            ORDER BY table_name, column_name`,
         );
         return rows;
@@ -271,6 +271,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         { version: 4 },
         { version: 5 },
         { version: 6 },
+        { version: 7 },
       ]);
       await expect(legacy.pool.query('SELECT * FROM slash_probes')).resolves.toBeDefined();
     } finally {
@@ -300,7 +301,14 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       await migrate(legacy.pool);
 
       const after = await pageColumns();
-      expect(after.filter((column) => column['column_name'] !== 'text_ratio')).toEqual(before);
+      expect(
+        after.filter(
+          (column) =>
+            !['text_ratio', 'html_facts', 'in_sitemap', 'facts'].includes(
+              String(column['column_name']),
+            ),
+        ),
+      ).toEqual(before);
       expect(after.find((column) => column['column_name'] === 'text_ratio')).toEqual({
         column_name: 'text_ratio',
         data_type: 'double precision',
@@ -314,6 +322,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         { version: 4 },
         { version: 5 },
         { version: 6 },
+        { version: 7 },
       ]);
     } finally {
       await legacy.dispose();
@@ -427,6 +436,45 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
              VALUES ('x', 'p1', 'paused', now(), 10)`,
           ),
         ).rejects.toThrow(/check/);
+      } finally {
+        await legacy.dispose();
+      }
+    });
+  });
+
+  describe('migration 007 on a database at migration 006', () => {
+    it('reads a snapshot written before the migration with null facts', async () => {
+      const legacy = await createTestDatabase(TEST_DATABASE_URL ?? '');
+      try {
+        const files = [
+          '001_init.sql',
+          '002_slash_probes.sql',
+          '003_page_text_ratio.sql',
+          '004_accounts.sql',
+          '005_api_launches.sql',
+          '006_audit_queue.sql',
+        ];
+        for (const file of files) await legacy.pool.query(readMigration(file));
+        await legacy.pool.query(
+          'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())',
+        );
+        await legacy.pool.query(
+          'INSERT INTO schema_migrations (version) VALUES (1), (2), (3), (4), (5), (6)',
+        );
+        await legacy.pool.query(
+          `INSERT INTO projects (id, root_url, created_at) VALUES ('p1', 'https://a.test/', now());
+           INSERT INTO snapshots (id, project_id, status, started_at, pages_limit)
+           VALUES ('s1', 'p1', 'finished', now(), 10);
+           INSERT INTO pages (snapshot_id, url, depth, redirect_chain, headers, response_time_ms, is_html, h1)
+           VALUES ('s1', 'https://a.test/', 0, '[]', '{}', 5, true, '[]');
+           INSERT INTO site_files (snapshot_id, kind, url, status) VALUES ('s1', 'robots', 'https://a.test/robots.txt', 200)`,
+        );
+        await migrate(legacy.pool);
+
+        const details = await new PostgresSnapshotRepository(legacy.pool).getById('s1');
+
+        expect(details?.pages.map((p) => [p.htmlFacts, p.inSitemap])).toEqual([[null, null]]);
+        expect(details?.siteFiles.map((file) => file.facts)).toEqual([null]);
       } finally {
         await legacy.dispose();
       }

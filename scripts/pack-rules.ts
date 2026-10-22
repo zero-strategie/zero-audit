@@ -10,6 +10,7 @@ const SQLITE_MIGRATIONS = [
   '009_accounts.sql',
   '010_api_launches.sql',
   '011_audit_queue.sql',
+  '012_page_html_facts.sql',
 ];
 
 const POSTGRES_MIGRATIONS = [
@@ -19,6 +20,7 @@ const POSTGRES_MIGRATIONS = [
   '004_accounts.sql',
   '005_api_launches.sql',
   '006_audit_queue.sql',
+  '007_page_html_facts.sql',
 ];
 
 const migrationPaths = (engine: string, names: readonly string[]): string[] =>

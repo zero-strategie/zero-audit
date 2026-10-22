@@ -49,9 +49,9 @@ const details: SnapshotDetails = {
   ],
   links: [],
   siteFiles: [
-    { kind: 'llms', url: 'https://e.com/llms.txt', status: null, error: 'connection' },
-    { kind: 'robots', url: 'https://e.com/robots.txt', status: 200, error: null },
-    { kind: 'sitemap', url: 'https://e.com/sitemap.xml', status: 404, error: null },
+    { kind: 'llms', url: 'https://e.com/llms.txt', status: null, error: 'connection', facts: null },
+    { kind: 'robots', url: 'https://e.com/robots.txt', status: 200, error: null, facts: null },
+    { kind: 'sitemap', url: 'https://e.com/sitemap.xml', status: 404, error: null, facts: null },
   ],
   hostProbe: null,
   slashProbes: [],

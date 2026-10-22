@@ -264,6 +264,8 @@ class CrawlRun {
       textRatio: parsed?.textRatio ?? null,
       contentHash: parsed?.contentHash ?? null,
       blockedByRobots: false,
+      htmlFacts: null,
+      inSitemap: null,
     };
     if (isNetworkFailure(response)) {
       return {
@@ -308,6 +310,8 @@ class CrawlRun {
       textRatio: null,
       contentHash: null,
       blockedByRobots: true,
+      htmlFacts: null,
+      inSitemap: null,
     };
   }
 

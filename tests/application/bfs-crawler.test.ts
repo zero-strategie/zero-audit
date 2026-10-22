@@ -295,9 +295,9 @@ describe('BfsCrawler technical files', () => {
     });
 
     expect(result.siteFiles).toEqual([
-      { kind: 'robots', url: `${SITE}/robots.txt`, status: 200, error: null },
-      { kind: 'sitemap', url: `${SITE}/sitemap.xml`, status: 404, error: null },
-      { kind: 'llms', url: `${SITE}/llms.txt`, status: null, error: 'timeout' },
+      { kind: 'robots', url: `${SITE}/robots.txt`, status: 200, error: null, facts: null },
+      { kind: 'sitemap', url: `${SITE}/sitemap.xml`, status: 404, error: null, facts: null },
+      { kind: 'llms', url: `${SITE}/llms.txt`, status: null, error: 'timeout', facts: null },
     ]);
     expect(result.pages.map((p) => p.url)).toEqual([`${SITE}/`]);
   });

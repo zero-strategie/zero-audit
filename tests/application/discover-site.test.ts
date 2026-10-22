@@ -188,9 +188,21 @@ describe('DiscoverSite technical files', () => {
     });
 
     expect(result.siteFiles).toEqual([
-      { kind: 'robots', url: 'https://exemple.com/robots.txt', status: 200, error: null },
-      { kind: 'sitemap', url: 'https://exemple.com/sitemap.xml', status: 200, error: null },
-      { kind: 'llms', url: 'https://exemple.com/llms.txt', status: 404, error: null },
+      {
+        kind: 'robots',
+        url: 'https://exemple.com/robots.txt',
+        status: 200,
+        error: null,
+        facts: null,
+      },
+      {
+        kind: 'sitemap',
+        url: 'https://exemple.com/sitemap.xml',
+        status: 200,
+        error: null,
+        facts: null,
+      },
+      { kind: 'llms', url: 'https://exemple.com/llms.txt', status: 404, error: null, facts: null },
     ]);
   });
 
@@ -204,8 +216,8 @@ describe('DiscoverSite technical files', () => {
     });
 
     expect(result.siteFiles.filter(({ kind }) => kind === 'sitemap')).toEqual([
-      { kind: 'sitemap', url: 'https://exemple.com/s1.xml', status: 200, error: null },
-      { kind: 'sitemap', url: 'https://exemple.com/s2.xml', status: 404, error: null },
+      { kind: 'sitemap', url: 'https://exemple.com/s1.xml', status: 200, error: null, facts: null },
+      { kind: 'sitemap', url: 'https://exemple.com/s2.xml', status: 404, error: null, facts: null },
     ]);
     expect(http.requested).not.toContain('https://exemple.com/sitemap.xml');
   });
@@ -218,6 +230,7 @@ describe('DiscoverSite technical files', () => {
       url: 'https://exemple.com/llms.txt',
       status: null,
       error: 'connection',
+      facts: null,
     });
   });
 
