@@ -282,4 +282,37 @@ describe('CheerioHtmlParser header facts', () => {
 
     expect(parsed.hreflang).toEqual([{ lang: 'en-GB', url: 'https://h/en' }]);
   });
+
+  it('lists malformed anchor hrefs raw, with a total', () => {
+    const hrefs = ['http:/x', 'https//x', 'htp://x', 'foo:bar', 'http://[bad'];
+    const html = hrefs.map((href) => `<a href="${href}">x</a>`).join('');
+
+    expect(parse(html).malformedLinks).toEqual({ total: 5, examples: hrefs });
+  });
+
+  it('caps the malformed examples but keeps the total', () => {
+    const html = Array.from({ length: 25 }, (_, i) => `<a href="htp://x${i}">x</a>`).join('');
+
+    const { malformedLinks } = parse(html);
+
+    expect(malformedLinks.total).toBe(25);
+    expect(malformedLinks.examples).toHaveLength(20);
+  });
+
+  it('ignores empty, fragment-only and void javascript hrefs and valid schemes', () => {
+    const hrefs = [
+      '#',
+      '',
+      '#top',
+      'javascript:void(0)',
+      '/a',
+      'mailto:a@b.c',
+      'tel:+33',
+      'https://h/z',
+      'data:text/plain,x',
+    ];
+    const html = hrefs.map((href) => `<a href="${href}">x</a>`).join('');
+
+    expect(parse(html).malformedLinks).toEqual({ total: 0, examples: [] });
+  });
 });

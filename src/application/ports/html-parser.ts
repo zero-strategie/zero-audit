@@ -74,6 +74,8 @@ export interface ParsedHtml {
   htmlBytes: number;
   /** `<link rel="alternate" hreflang>` elements in document order; unresolvable hrefs are skipped. */
   hreflang: Hreflang[];
+  /** Raw `<a href>` values that are broken (see `isMalformedHref`); they never appear in `links`. */
+  malformedLinks: CappedExamples;
 }
 
 export interface HtmlParser {

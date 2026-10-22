@@ -12,7 +12,7 @@ import type {
   RawLink,
 } from '../application/ports/html-parser.js';
 import { MAX_FACT_EXAMPLES } from '../domain/thresholds.js';
-import { resolveUrl } from '../domain/url.js';
+import { isMalformedHref, resolveUrl } from '../domain/url.js';
 
 const TEXT_NODE_TYPE = 3;
 const NON_VISIBLE_SELECTOR = 'script, style, noscript, template';
@@ -105,6 +105,7 @@ export class CheerioHtmlParser implements HtmlParser {
       semanticElements: SEMANTIC_ELEMENTS.filter((tag) => $(tag).length > 0),
       htmlBytes: Buffer.byteLength(html, 'utf8'),
       hreflang: this.extractHreflang($, baseUrl),
+      malformedLinks: this.extractMalformedLinks($, baseUrl),
       hasFrames: FRAME_TAG.test(html.replace(HTML_COMMENT, '')),
       lang: orNull($('html').first().attr('lang')?.trim() ?? ''),
     };
@@ -149,6 +150,14 @@ export class CheerioHtmlParser implements HtmlParser {
         const url = resolveUrl($(element).attr('href') ?? '', baseUrl);
         return url === null ? [] : [{ lang: $(element).attr('hreflang') ?? '', url }];
       });
+  }
+
+  private extractMalformedLinks($: CheerioAPI, baseUrl: string): CappedExamples {
+    const hrefs = $('a[href]')
+      .toArray()
+      .map((element) => $(element).attr('href') ?? '')
+      .filter((href) => isMalformedHref(href, baseUrl));
+    return { total: hrefs.length, examples: hrefs.slice(0, MAX_FACT_EXAMPLES) };
   }
 
   private extractCanonical($: CheerioAPI, pageUrl: string): string | null {
