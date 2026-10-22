@@ -41,6 +41,16 @@ describe('validateRobotsTxt', () => {
     expect(validateRobotsTxt(body)).toMatchObject({ invalidLines: [1], invalidCount: 1 });
   });
 
+  it('accepts a sitemap before any user-agent but flags a group rule placed there', () => {
+    const body = 'Sitemap: https://exemple.com/a.xml\nAllow: /\nUser-agent: *';
+
+    expect(validateRobotsTxt(body)).toMatchObject({
+      invalidLines: [2],
+      invalidCount: 1,
+      sitemapDeclarations: 1,
+    });
+  });
+
   it('flags the whole file when the body looks like HTML', () => {
     const body = '﻿<!DOCTYPE html>\n<html><body>Not found</body></html>';
 
