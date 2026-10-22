@@ -291,7 +291,9 @@ describe('CheerioHtmlParser header facts', () => {
   });
 
   it('caps the malformed examples but keeps the total', () => {
-    const html = Array.from({ length: 25 }, (_, i) => `<a href="htp://x${i}">x</a>`).join('');
+    const html = Array.from({ length: 25 }, (_, i) => `<a href="htp://x${String(i)}">x</a>`).join(
+      '',
+    );
 
     const { malformedLinks } = parse(html);
 
@@ -339,5 +341,18 @@ describe('CheerioHtmlParser header facts', () => {
         'http://h/o',
       ],
     });
+  });
+
+  it('lists declared feeds as absolute urls', () => {
+    const html = `<head><link rel="alternate" type="application/rss+xml" href="/rss.xml">
+      <link rel="alternate" type="application/atom+xml" href="/atom.xml">
+      <link rel="alternate" type="application/feed+json" href="/feed.json">
+      <link rel="alternate" type="text/html" href="/other"></head>`;
+
+    expect(parse(html).declaredFeeds).toEqual([
+      'https://h/rss.xml',
+      'https://h/atom.xml',
+      'https://h/feed.json',
+    ]);
   });
 });

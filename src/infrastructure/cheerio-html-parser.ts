@@ -45,6 +45,9 @@ const RESOURCE_SELECTOR = [
 ].join(', ');
 const SRCSET_SEPARATOR = /,\s+|\s*,(?=\s*(?:https?:)?\/\/)/;
 const HTTP_SCHEME = /^http:\/\//i;
+const FEED_SELECTOR = ['rss+xml', 'atom+xml', 'feed+json']
+  .map((type) => `link[rel~="alternate" i][type="application/${type}" i][href]`)
+  .join(', ');
 const META_REFRESH = /^\s*(\d+)\s*(?:[;,]\s*(?:url\s*=\s*)?(.*))?$/i;
 const SEMANTIC_ELEMENTS: readonly SemanticElement[] = [
   'main',
@@ -131,6 +134,9 @@ export class CheerioHtmlParser implements HtmlParser {
       hreflang: this.extractHreflang($, baseUrl),
       malformedLinks: this.extractMalformedLinks($, baseUrl),
       insecureResources: this.extractInsecureResources($, baseUrl),
+      declaredFeeds: $(FEED_SELECTOR)
+        .toArray()
+        .flatMap((element) => resolveUrl($(element).attr('href') ?? '', baseUrl) ?? []),
       hasFrames: FRAME_TAG.test(html.replace(HTML_COMMENT, '')),
       lang: orNull($('html').first().attr('lang')?.trim() ?? ''),
     };
@@ -189,8 +195,8 @@ export class CheerioHtmlParser implements HtmlParser {
     const urls = $(RESOURCE_SELECTOR)
       .toArray()
       .flatMap((element) =>
-        (RESOURCE_ATTRIBUTES[element.tagName] ?? []).flatMap((attribute) =>
-          this.urlsOfAttribute(attribute, $(element).attr(attribute) ?? ''),
+        (RESOURCE_ATTRIBUTES[$(element).prop('tagName')?.toLowerCase() ?? ''] ?? []).flatMap(
+          (attribute) => this.urlsOfAttribute(attribute, $(element).attr(attribute) ?? ''),
         ),
       )
       .filter((candidate) => HTTP_SCHEME.test(candidate))

@@ -78,6 +78,8 @@ export interface ParsedHtml {
   malformedLinks: CappedExamples;
   /** Absolute `http://` URLs of subresources (not anchors), in document order, `srcset` candidates included. */
   insecureResources: CappedExamples;
+  /** Absolute URLs of `<link rel="alternate">` feeds (rss, atom, json feed), in document order. */
+  declaredFeeds: string[];
 }
 
 export interface HtmlParser {
