@@ -25,7 +25,7 @@ Only audit sites you own or are allowed to crawl.
 | Markup | 2 | invalid JSON-LD structured data, pages with no semantic HTML5 element |
 | Other | 5 | slow responses, uncompressed pages, missing or malformed `llms.txt`, pages over 2 MiB or with too much content |
 
-The [checks reference](docs/checks.md) lists every check with its threshold and how to fix it. Since 1.1.0 an audit runs 71 checks instead of 20: comparing an audit made with 1.0 to one made with 1.1 shows the new checks' findings as new issues, even if the site did not change.
+The [checks reference](docs/checks.md) lists every check with its threshold and how to fix it. Since 1.2.0 an audit runs 71 checks (44 in 1.1, 20 in 1.0): comparing an audit made with an older version to a newer one shows the new checks' findings as new issues, even if the site did not change.
 
 ## Installation
 
