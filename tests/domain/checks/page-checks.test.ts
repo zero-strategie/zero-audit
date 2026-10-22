@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { CheckResult } from '../../../src/domain/check.js';
-import type { Page } from '../../../src/domain/crawl.js';
+import type { Link, Page } from '../../../src/domain/crawl.js';
 import { pageChecks } from '../../../src/domain/checks/page/index.js';
 import {
   crawlOf,
+  makeLink,
   expectCatalogueMetadata,
   expectNoCatalogueTitleCopied,
   flaggedUrls,
@@ -205,6 +206,57 @@ describe('check 33 (redirect chains and loops)', () => {
   });
 });
 
+describe('check 212 (more than 3 clicks from the home page)', () => {
+  const ROOT = 'https://exemple.com/';
+  const chain = (...names: string[]): Page[] => names.map((name) => makePage(u(name)));
+  const linksAlong = (...urls: string[]) =>
+    urls.slice(1).map((target, i) => makeLink(urls[i] ?? ROOT, target));
+  const run212 = (pages: Page[], links: Link[], rootUrl = ROOT): CheckResult =>
+    runCheck(pageChecks, 212, { ...crawlOf(pages, links), rootUrl });
+
+  it('flags a page at 4 clicks and not one at 3 clicks, with its depth', () => {
+    const path = [ROOT, u('a'), u('b'), u('c'), u('d')];
+    const result = run212([makePage(ROOT), ...chain('a', 'b', 'c', 'd')], linksAlong(...path));
+    expect(flaggedUrls(result)).toEqual([u('d')]);
+    expect(result.occurrences[0]?.info).toEqual({ clicks: 4 });
+    expect(result.examined).toBe(5);
+  });
+
+  it('uses link clicks and not the crawl depth recorded from the sitemap', () => {
+    const path = [ROOT, u('a'), u('b'), u('c'), u('d')];
+    const pages = [makePage(ROOT), ...chain('a', 'b', 'c'), makePage(u('d'), { depth: 1 })];
+    expect(flaggedUrls(run212(pages, linksAlong(...path)))).toEqual([u('d')]);
+  });
+
+  it('does not flag a page that no link leads to', () => {
+    const result = run212([makePage(ROOT), makePage(u('sitemap-only'), { depth: 1 })], []);
+    expect(result.count).toBe(0);
+  });
+
+  it('counts from the final root and not from the redirecting start URL', () => {
+    const start = 'http://exemple.com/';
+    const path = [ROOT, u('a'), u('b'), u('c')];
+    const pages = [
+      makePage(start, { status: 301, isHtml: false, redirectTarget: ROOT }),
+      makePage(ROOT),
+      ...chain('a', 'b', 'c'),
+    ];
+    expect(run212(pages, linksAlong(...path), start).count).toBe(0);
+  });
+
+  it('flags only HTML 2xx pages', () => {
+    const path = [ROOT, u('a'), u('b'), u('c'), u('d')];
+    const pages = [
+      makePage(ROOT),
+      ...chain('a', 'b', 'c'),
+      makePage(u('d'), { status: 404, isHtml: false }),
+    ];
+    const result = run212(pages, linksAlong(...path));
+    expect(result.count).toBe(0);
+    expect(result.examined).toBe(4);
+  });
+});
+
 describe('check 3 (title missing)', () => {
   it('flags null and empty titles on HTML 2xx pages only', () => {
     const result = run(3, [
@@ -367,6 +419,7 @@ describe('registry metadata', () => {
       11: 'error',
       33: 'error',
       109: 'warning',
+      212: 'notice',
       214: 'notice',
       101: 'warning',
       102: 'warning',

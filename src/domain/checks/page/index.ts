@@ -15,6 +15,7 @@ import { check106 } from './check-106-meta-description-missing.js';
 import { check109 } from './check-109-temporary-redirect.js';
 import { check112 } from './check-112-low-text-ratio.js';
 import { check117 } from './check-117-low-word-count.js';
+import { check212 } from './check-212-deep-page.js';
 import { check214 } from './check-214-permanent-redirect.js';
 
 export const pageChecks: readonly PageCheck[] = [
@@ -34,5 +35,6 @@ export const pageChecks: readonly PageCheck[] = [
   check109,
   check112,
   check117,
+  check212,
   check214,
 ];
