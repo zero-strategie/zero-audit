@@ -9,6 +9,7 @@ import { check20 } from './check-020-viewport-missing.js';
 import { check21 } from './check-021-large-html.js';
 import { check23 } from './check-023-hreflang-invalid.js';
 import { check24 } from './check-024-hreflang-conflict.js';
+import { check25 } from './check-025-hreflang-broken-target.js';
 import { check26 } from './check-026-http-page.js';
 import { check30 } from './check-030-mixed-content.js';
 import { check31 } from './check-031-http-link-on-https.js';
@@ -60,6 +61,7 @@ export const pageChecks: readonly PageCheck[] = [
   check21,
   check23,
   check24,
+  check25,
   check26,
   check30,
   check31,

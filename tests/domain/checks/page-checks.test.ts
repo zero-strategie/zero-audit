@@ -557,6 +557,7 @@ describe('registry metadata', () => {
       11: 'error',
       23: 'error',
       24: 'error',
+      25: 'error',
       26: 'error',
       30: 'error',
       31: 'warning',
@@ -1527,5 +1528,56 @@ describe('check 24 (hreflang conflicts)', () => {
     ]);
     expect(flaggedUrls(result)).toEqual([]);
     expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 25 (hreflang to an error or redirected page)', () => {
+  const withHreflang = (name: string, entries: [string, string][]): Page =>
+    makePage(u(name), {
+      htmlFacts: { lang: 'en', hreflang: entries.map(([lang, url]) => ({ lang, url })) },
+    });
+
+  it('flags a hreflang to a crawled 404 or redirected page with the target and its status', () => {
+    const result = run(25, [
+      withHreflang('p', [
+        ['fr', u('gone')],
+        ['de', `${u('moved')}#top`],
+      ]),
+      makePage(u('gone'), { status: 404, isHtml: false }),
+      makePage(u('moved'), { status: 301, isHtml: false }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('p')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      targets: [
+        { lang: 'fr', url: u('gone'), status: 404 },
+        { lang: 'de', url: `${u('moved')}#top`, status: 301 },
+      ],
+    });
+    expect(result.examined).toBe(1);
+  });
+
+  it('flags a hreflang to a 5xx page or to a network failure', () => {
+    const result = run(25, [
+      withHreflang('a', [['fr', u('down')]]),
+      withHreflang('b', [['fr', u('net')]]),
+      makePage(u('down'), { status: 503, isHtml: false }),
+      makePage(u('net'), { status: null, error: 'timeout', isHtml: false }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('a'), u('b')]);
+    expect(result.occurrences[1]?.info).toEqual({
+      targets: [{ lang: 'fr', url: u('net'), status: null }],
+    });
+  });
+
+  it('ignores uncrawled targets, healthy targets and pages without judgeable hreflang', () => {
+    const result = run(25, [
+      withHreflang('ok', [['fr', u('fine')]]),
+      withHreflang('unknown', [['fr', u('never-crawled')]]),
+      makePage(u('none')),
+      makePage(u('old'), { htmlFacts: null }),
+      makePage(u('fine')),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(2);
   });
 });
