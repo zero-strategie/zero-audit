@@ -578,3 +578,19 @@ describe('registry metadata', () => {
     expectNoCatalogueTitleCopied(pageChecks);
   });
 });
+
+const urlOfLength = (n: number): string => `${u('')}${'a'.repeat(n - u('').length)}`;
+
+describe('check 136 (URL too long)', () => {
+  it('flags URLs from 101 to 200 characters and reports their length', () => {
+    const result = run(136, [
+      makePage(urlOfLength(100)),
+      makePage(urlOfLength(101)),
+      makePage(urlOfLength(200)),
+      makePage(urlOfLength(201)),
+    ]);
+    expect(flaggedUrls(result)).toEqual([urlOfLength(101), urlOfLength(200)]);
+    expect(result.occurrences.map((o) => o.info)).toEqual([{ length: 101 }, { length: 200 }]);
+    expect(result.examined).toBe(4);
+  });
+});
