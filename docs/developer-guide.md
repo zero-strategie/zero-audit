@@ -7,6 +7,7 @@ This guide explains how the zero-audit core is built, how to use it as a library
 - [Architecture](#architecture)
 - [Using the library](#using-the-library)
 - [Data model](#data-model)
+- [Legacy tables](#legacy-tables)
 - [Add a check](#add-a-check)
 - [Writing a storage adapter](#writing-a-storage-adapter)
 - [SSRF guard](#ssrf-guard)
@@ -169,6 +170,21 @@ const showcase = await overview.execute(ANONYMOUS_READER);
 | `issue_occurrences` | per occurrence: check, page URL, `info` (JSON) |
 
 The domain types are in `src/domain/crawl.ts`, `snapshot.ts`, `project.ts` and `check.ts`.
+
+## Legacy tables
+
+The core migrations still create tables and columns that belong to accounts, because the hosted product built on the core uses them. The core does not manage accounts. These objects are created by the core migrations, used by the hosted product, and never dropped: migrations are never edited.
+
+| Object | Role |
+|---|---|
+| `users` | accounts of the hosted product |
+| `sessions` | login sessions of those accounts |
+| `email_tokens` | single-use tokens sent by e-mail (confirmation, reset) |
+| `api_launches` | journal of attributed launches, keyed by a hash of the e-mail address; the admission rules count it |
+| `projects.owner_id` | owner of a project; `NULL` for the showcase, read through `Reader` |
+| `snapshots.launched_by` | account that launched an audit; `NULL` for the command line |
+
+The core itself only writes `api_launches` (through `AuditQueue.enqueue`, when a launch has an owner) and reads `owner_id` for visibility. Do not document these tables inside the `.sql` files: a test forbids touching them.
 
 ## Add a check
 

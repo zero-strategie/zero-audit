@@ -10,6 +10,11 @@ This program is distributed in the hope that it will be useful, but WITHOUT ANY
 WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
 
+Dual licensing: Zero Stratégie also runs this code in its own hosted service,
+under a licence other than the AGPL. This is possible because every contributor
+accepts the Contributor Licence Agreement (see the CLA.md file), which lets
+Zero Stratégie relicense contributions.
+
 Commercial licence: to embed or host zero-audit without the obligations of the
 AGPL, a commercial licence is available from Zero Stratégie
 (https://zero-strategie.dev).

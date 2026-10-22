@@ -32,6 +32,11 @@ const bySlashProbeOrder = (a: SlashVariantProbe, b: SlashVariantProbe): number =
 const bySiteFileOrder = (a: SiteFile, b: SiteFile): number =>
   compare(a.kind, b.kind) || compare(a.url, b.url);
 
+/**
+ * The launch journal (`api_launches`) records every launch attributed to an account, keyed by a
+ * hash of the e-mail address, so the admission counters survive an account erasure. See the
+ * "Legacy tables" section of docs/developer-guide.md.
+ */
 export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueue, StorageHealth {
   private readonly stored = new Map<string, Stored>();
   private readonly presences = new Map<string, Date>();

@@ -21,7 +21,11 @@ export interface StoreSelection {
   databaseUrl: string | null;
 }
 
-/** The underlying connection, for a hosted product that attaches its own repositories to the same database. */
+/**
+ * The underlying connection, for a hosted product that attaches its own repositories to the same
+ * database. The database also holds the legacy account tables, including the launch journal
+ * `api_launches`: see the "Legacy tables" section of docs/developer-guide.md.
+ */
 export type StorageConnection = { kind: 'sqlite'; db: Database } | { kind: 'postgres'; pool: Pool };
 
 export interface Storage {
