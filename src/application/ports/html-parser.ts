@@ -14,6 +14,12 @@ export interface MetaRefresh {
   target: string | null;
 }
 
+export interface CappedExamples {
+  total: number;
+  /** At most `MAX_FACT_EXAMPLES` entries, in document order. */
+  examples: string[];
+}
+
 export interface ParsedHtml {
   links: RawLink[];
   title: string | null;
@@ -37,6 +43,8 @@ export interface ParsedHtml {
   canonicalCount: number;
   /** First `<meta http-equiv="refresh">` with a valid delay, else null. */
   metaRefresh: MetaRefresh | null;
+  /** `<img>` elements with no `alt` attribute (`alt=""` is valid), listed by raw `src`. */
+  imagesWithoutAlt: CappedExamples;
 }
 
 export interface HtmlParser {

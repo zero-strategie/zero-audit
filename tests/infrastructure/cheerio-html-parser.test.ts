@@ -195,4 +195,18 @@ describe('CheerioHtmlParser header facts', () => {
     expect(refresh('soon')).toBeNull();
     expect(parse('<head></head>').metaRefresh).toBeNull();
   });
+
+  it('lists images without an alt attribute, keeping empty alt as valid', () => {
+    const html = '<img src="/a.png"><img src="/b.png" alt=""><img src="/c.png" alt="c">';
+
+    expect(parse(html).imagesWithoutAlt).toEqual({ total: 1, examples: ['/a.png'] });
+  });
+
+  it('caps image examples at 20 while counting all of them', () => {
+    const html = Array.from({ length: 25 }, (_, i) => `<img src="/i${i}.png">`).join('');
+    const { imagesWithoutAlt } = parse(html);
+
+    expect(imagesWithoutAlt.total).toBe(25);
+    expect(imagesWithoutAlt.examples).toHaveLength(20);
+  });
 });

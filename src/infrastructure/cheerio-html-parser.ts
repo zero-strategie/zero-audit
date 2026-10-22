@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import { load, type CheerioAPI } from 'cheerio';
 import type {
+  CappedExamples,
   HtmlParser,
   MetaRefresh,
   ParsedHtml,
   RawLink,
 } from '../application/ports/html-parser.js';
+import { MAX_FACT_EXAMPLES } from '../domain/thresholds.js';
 import { resolveUrl } from '../domain/url.js';
 
 const TEXT_NODE_TYPE = 3;
@@ -41,6 +43,7 @@ export class CheerioHtmlParser implements HtmlParser {
       viewport: $('meta[name="viewport" i]').first().attr('content') ?? null,
       charset: this.extractCharset($),
       hasDoctype: LEADING_DOCTYPE.test(html),
+      imagesWithoutAlt: this.extractImagesWithoutAlt($),
       lang: orNull($('html').first().attr('lang')?.trim() ?? ''),
     };
   }
@@ -96,6 +99,13 @@ export class CheerioHtmlParser implements HtmlParser {
     const rawTarget = match[2]?.trim().replace(/^(["'])(.*)\1$/, '$2');
     const target = rawTarget ? resolveUrl(rawTarget, baseUrl) : null;
     return { delaySeconds: Number(match[1]), target };
+  }
+
+  private extractImagesWithoutAlt($: CheerioAPI): CappedExamples {
+    const sources = $('img:not([alt])')
+      .toArray()
+      .map((element) => $(element).attr('src') ?? '');
+    return { total: sources.length, examples: sources.slice(0, MAX_FACT_EXAMPLES) };
   }
 
   private extractTitle($: CheerioAPI): string | null {
