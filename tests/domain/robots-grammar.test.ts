@@ -3,6 +3,14 @@ import { validateRobotsTxt } from '../../src/domain/robots-grammar.js';
 import { MAX_FACT_EXAMPLES, MAX_INVALID_LINE_TEXT_LENGTH } from '../../src/domain/thresholds.js';
 
 describe('validateRobotsTxt', () => {
+  it('reports the lines of a UTF-16 file decoded as UTF-8 as invalid', () => {
+    const body = Buffer.from('User-agent: *\nDisallow: /', 'utf16le').toString('utf8');
+
+    const { invalidLines } = validateRobotsTxt(body);
+
+    expect(invalidLines.length).toBeGreaterThan(0);
+  });
+
   it('accepts a well-formed file and counts its sitemap declarations', () => {
     const body = [
       '# comment',

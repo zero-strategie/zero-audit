@@ -10,6 +10,7 @@ import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../doma
 import { AuditAttemptLost, SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
 import { hashToken } from './hash-token.js';
+import { normalizeFacts } from './facts-serialization.js';
 
 interface Stored {
   snapshot: Snapshot;
@@ -214,7 +215,11 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
   }
 
   addPages(id: string, pages: readonly Page[]): Promise<void> {
-    return this.write(id, (entry) => entry.pages.push(...pages));
+    return this.write(id, (entry) =>
+      entry.pages.push(
+        ...pages.map((page) => ({ ...page, htmlFacts: normalizeFacts(page.htmlFacts) })),
+      ),
+    );
   }
 
   addLinks(id: string, links: readonly Link[]): Promise<void> {
@@ -222,7 +227,11 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
   }
 
   addSiteFiles(id: string, files: readonly SiteFile[]): Promise<void> {
-    return this.write(id, (entry) => entry.siteFiles.push(...files));
+    return this.write(id, (entry) =>
+      entry.siteFiles.push(
+        ...files.map((file) => ({ ...file, facts: normalizeFacts(file.facts) })),
+      ),
+    );
   }
 
   addHostProbe(id: string, probe: HostProbe): Promise<void> {

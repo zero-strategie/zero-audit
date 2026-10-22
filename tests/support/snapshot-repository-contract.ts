@@ -187,6 +187,25 @@ export const describeSnapshotRepositoryContract = (
       expect((await repo.getById(id))?.pages).toEqual([analysed, absent]);
     });
 
+    it('replaces NUL characters in the facts of a site file', async () => {
+      const { repo, id } = await createRunning();
+      const robots: SiteFile = {
+        kind: 'robots',
+        url: 'https://example.test/robots.txt',
+        status: 200,
+        error: null,
+        facts: {
+          invalidLines: { total: 1, examples: [{ line: 1, text: 'U\u0000s\u0000e\u0000r' }] },
+        },
+      };
+      await repo.addSiteFiles(id, [robots]);
+
+      const files = (await repo.getById(id))?.siteFiles;
+      expect(files?.[0]?.facts).toEqual({
+        invalidLines: { total: 1, examples: [{ line: 1, text: 'U\uFFFDs\uFFFDe\uFFFDr' }] },
+      });
+    });
+
     it('reads back the facts of a site file', async () => {
       const { repo, id } = await createRunning();
       const robots: SiteFile = {

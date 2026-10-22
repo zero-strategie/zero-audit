@@ -23,6 +23,7 @@ import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { hashToken } from '../hash-token.js';
 import { withTransaction } from './pool.js';
 import { PostgresProjectRepository } from './postgres-project-repository.js';
+import { stringifyFacts } from '../facts-serialization.js';
 
 type Queryable = pg.Pool | pg.PoolClient;
 
@@ -129,9 +130,6 @@ const toSnapshot = (row: SnapshotRow): Snapshot =>
     queuedAt: row.queued_at,
     heartbeatAt: row.heartbeat_at,
   });
-
-const stringifyFacts = (facts: HtmlFacts | SiteFileFacts | null): string | null =>
-  facts === null ? null : JSON.stringify(facts);
 
 const toPage = (row: PageRow): Page => ({
   url: row.url,

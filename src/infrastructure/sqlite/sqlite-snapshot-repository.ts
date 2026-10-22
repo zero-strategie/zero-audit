@@ -24,6 +24,7 @@ import { hashToken } from '../hash-token.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
 import { migrate } from './migrate.js';
 import { openDatabase } from './open-database.js';
+import { stringifyFacts } from '../facts-serialization.js';
 
 interface SnapshotRow {
   id: string;
@@ -130,9 +131,6 @@ const toSnapshot = (row: SnapshotRow): Snapshot =>
 
 const parseFacts = (json: string | null): HtmlFacts | SiteFileFacts | null =>
   json === null ? null : (JSON.parse(json) as HtmlFacts | SiteFileFacts);
-
-const stringifyFacts = (facts: HtmlFacts | SiteFileFacts | null): string | null =>
-  facts === null ? null : JSON.stringify(facts);
 
 const toPage = (row: PageRow): Page => ({
   url: row.url,
