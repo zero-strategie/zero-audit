@@ -8,6 +8,7 @@ const NON_VISIBLE_SELECTOR = 'script, style, noscript, template';
 
 const CHARSET_IN_CONTENT_TYPE = /charset\s*=\s*([^\s;]+)/i;
 
+const CANONICAL_SELECTOR = 'link[rel~="canonical" i][href]';
 const LEADING_DOCTYPE = /^(?:\s|<!--[\s\S]*?-->)*<!doctype\s/i;
 
 const normalizeSpaces = (text: string): string => text.replace(/\s+/g, ' ').trim();
@@ -22,6 +23,7 @@ export class CheerioHtmlParser implements HtmlParser {
       title: this.extractTitle($),
       metaDescription: $('meta[name="description" i]').first().attr('content')?.trim() ?? null,
       canonical: this.extractCanonical($, pageUrl),
+      canonicalCount: $(CANONICAL_SELECTOR).length,
       h1: $('h1')
         .toArray()
         .map((element) => normalizeSpaces($(element).text())),
@@ -68,7 +70,7 @@ export class CheerioHtmlParser implements HtmlParser {
   }
 
   private extractCanonical($: CheerioAPI, pageUrl: string): string | null {
-    const href = $('link[rel~="canonical" i][href]').first().attr('href');
+    const href = $(CANONICAL_SELECTOR).first().attr('href');
     return href === undefined ? null : resolveUrl(href, pageUrl);
   }
 

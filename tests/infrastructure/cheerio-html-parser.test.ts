@@ -170,4 +170,14 @@ describe('CheerioHtmlParser header facts', () => {
     expect(parse('<html lang=""></html>').lang).toBeNull();
     expect(parse('<html></html>').lang).toBeNull();
   });
+
+  it('counts canonical links and keeps the first as canonical', () => {
+    const parsed = parse(
+      '<head><link rel="canonical" href="/a"><link rel="canonical" href="/a"></head>',
+    );
+
+    expect(parsed.canonicalCount).toBe(2);
+    expect(parsed.canonical).toBe('https://h/a');
+    expect(parse('<head></head>').canonicalCount).toBe(0);
+  });
 });

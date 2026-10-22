@@ -27,6 +27,8 @@ export interface ParsedHtml {
   hasDoctype: boolean;
   /** `lang` attribute of `<html>`, null when absent or empty. */
   lang: string | null;
+  /** Number of `<link rel="canonical">` elements, duplicates included. */
+  canonicalCount: number;
 }
 
 export interface HtmlParser {
