@@ -41,6 +41,7 @@
     "format": "prettier --write .",
     "build": "tsc -p tsconfig.build.json && cp -R src/infrastructure/sqlite/migrations dist/infrastructure/sqlite/ && cp -R src/infrastructure/postgres/migrations dist/infrastructure/postgres/",
     "pack:check": "tsx scripts/check-pack.ts",
+    "pack:smoke": "tsx scripts/smoke-pack.ts",
     "prepublishOnly": "pnpm build"
   },
   "pnpm": {
