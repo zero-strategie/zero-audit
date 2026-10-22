@@ -1,9 +1,9 @@
 # Checks reference
 
-zero-audit runs 61 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 62 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
-- **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has no check yet and is not computable (no score) until its checks land.
+- **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme only has check 45 so far.
 - **Scope**: a *page* check examines each page it applies to, and its `examined` count is the number of those pages. A *site* check examines the site as a whole, so its `examined` is 1.
 
 The ids follow the numbering used by Semrush's Site Audit, so that results can be compared. zero-audit is an independent project, not affiliated with or endorsed by Semrush, and the check wording is original. Ids **1000–1999** are reserved for our own checks. The CLI and the dashboard show the labels in French.
@@ -35,6 +35,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 39 | error | crawlability | page | An HTML page answering 2xx declares two or more `<link rel="canonical">`, even identical ones. `info.urls` lists their URLs in document order (capped at 20). | Keep a single canonical per page. |
 | 40 | error | crawlability | page | An HTML page answering 2xx redirects with `<meta http-equiv="refresh">` to a target URL. `info.delaySeconds` and `info.target` give the delay and the destination. The target is not queued for crawling. | Use a server-side redirect (301) instead. |
 | 44 | error | linking | page | An HTML page answering 2xx has `<a>` links whose href is broken: it cannot be parsed as a URL, its scheme is outside the closed list (http, https, mailto, tel, sms, ftp, javascript, data), or it is a malformed `http` (`http:/x`, `https//x`). `#`, empty and `javascript:void(0)` are ignored. One occurrence per page; `info.total` is the real count and `info.examples` the raw hrefs (capped at 20). | Fix or remove these links. |
+| 45 | error | markup | page | An HTML page answering 2xx has at least one invalid JSON-LD block (`<script type="application/ld+json">`). A block is valid when it parses as JSON, has an `@context` at its root, and every top-level node (object, array item or `@graph` item) has an `@type`. `info.invalid` gives the number of invalid blocks and `info.reasons` their reasons (`unparseable`, `missing-context`, `missing-type`). One occurrence per page. schema.org vocabulary, microdata and RDFa are not validated. | Fix the JSON syntax, add `@context` and `@type`. |
 | 46 | error | on-page | page | An HTML page answering 2xx has a viewport meta tag whose content sets no `width` (an empty content counts). `min-width` is not a width. | Set `width=device-width` in the viewport content. |
 | 101 | warning | on-page | page | The title is shorter than 30 characters. | Make the title more descriptive. |
 | 102 | warning | on-page | page | The title is longer than 60 characters. | Shorten it so it is not truncated in search results. |

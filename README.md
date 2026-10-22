@@ -1,11 +1,11 @@
 # zero-audit
 
-`@zero-strategie/zero-audit-core` is the open-source engine of zero-audit, a technical SEO audit tool. It crawls a website, runs [61 checks](docs/checks.md), scores the site's health and keeps every audit as an immutable snapshot so that you can see what changed between two audits.
+`@zero-strategie/zero-audit-core` is the open-source engine of zero-audit, a technical SEO audit tool. It crawls a website, runs [62 checks](docs/checks.md), scores the site's health and keeps every audit as an immutable snapshot so that you can see what changed between two audits.
 
 It ships as a library and as a command-line tool. A hosted product built on this engine is available at [https://audit.zero-strategie.dev](https://audit.zero-strategie.dev).
 
 - **Crawler**: honours robots.txt and sitemaps, runs breadth-first with a politeness delay, follows redirects and probes URL variants.
-- **Checks**: 61 checks in seven themes (see below), each with a severity (error, warning or notice) and the list of affected pages.
+- **Checks**: 62 checks in seven themes (see below), each with a severity (error, warning or notice) and the list of affected pages.
 - **Scores**: site health and per-theme scores (crawlability, https, linking, on-page, international, markup, other), with the variation since the previous audit.
 - **History**: new and fixed issues between two audits, and a `compare` command.
 - **Storage**: SQLite out of the box, or Postgres.
@@ -22,7 +22,7 @@ Only audit sites you own or are allowed to crawl.
 | Linking | 8 | broken internal links, pages with a single incoming link, too many links on a page, nofollow links, empty or generic anchor text ("click here"), files linked as pages |
 | HTTPS | 3 | pages served over http, http links on an https site, missing HSTS |
 | International | 0 | hreflang annotations and language declarations (checks to come) |
-| Markup | 0 | structured data and other markup validity (checks to come) |
+| Markup | 1 | invalid JSON-LD structured data (more checks to come) |
 | Other | 3 | slow responses, uncompressed pages, missing `llms.txt` |
 
 The [checks reference](docs/checks.md) lists every check with its threshold and how to fix it. Since 1.1.0 an audit runs 44 checks instead of 20: comparing an audit made with 1.0 to one made with 1.1 shows the new checks' findings as new issues, even if the site did not change.

@@ -599,6 +599,7 @@ describe('registry metadata', () => {
       217: 'notice',
       215: 'notice',
       20: 'error',
+      45: 'error',
       46: 'error',
     });
   });
@@ -1634,5 +1635,42 @@ describe('check 204 (hreflang language differs from the target language)', () =>
       makePage(u('plain'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);
+  });
+});
+
+describe('check 45 (invalid structured data)', () => {
+  const withJsonLd = (
+    name: string,
+    jsonLd: { count: number; invalid: number; invalidReasons: string[] },
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { jsonLd: { types: [], ...jsonLd } }, ...overrides });
+
+  it('flags a page with invalid JSON-LD blocks, with their count and reasons', () => {
+    const result = run(45, [
+      withJsonLd('none', { count: 0, invalid: 0, invalidReasons: [] }),
+      withJsonLd('valid', { count: 2, invalid: 0, invalidReasons: [] }),
+      withJsonLd('broken', {
+        count: 3,
+        invalid: 2,
+        invalidReasons: ['unparseable', 'missing-type'],
+      }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('broken')]);
+    expect(result.occurrences[0]?.info).toEqual({
+      invalid: 2,
+      reasons: ['unparseable', 'missing-type'],
+    });
+    expect(result.examined).toBe(3);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const broken = { count: 1, invalid: 1, invalidReasons: ['missing-context'] };
+    const result = run(45, [
+      withJsonLd('gone', broken, { status: 404 }),
+      withJsonLd('img', broken, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
   });
 });
