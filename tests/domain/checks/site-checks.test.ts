@@ -183,6 +183,64 @@ describe('check 124 (sitemap not declared in robots.txt)', () => {
   });
 });
 
+describe('check 17 (invalid sitemap)', () => {
+  const sitemapFile = (facts: SiteFile['facts']): SiteFile => ({
+    kind: 'sitemap',
+    url: u('sitemap.xml'),
+    status: 200,
+    error: null,
+    facts,
+  });
+  const facts = (overrides: Record<string, unknown> = {}): SiteFile['facts'] => ({
+    malformedXml: false,
+    truncated: false,
+    issues: { total: 0, examples: [] },
+    ...overrides,
+  });
+  const run17 = (file: SiteFile): CheckResult =>
+    runCheck(
+      siteChecks,
+      17,
+      crawlOf([], [], { robotsFound: true, sitemapFound: true }, null, [], [], [file]),
+    );
+
+  it('emits an occurrence with the schema issues of the sitemap', () => {
+    const issues = {
+      total: 1,
+      examples: [{ type: 'missing-loc', source: u('sitemap.xml'), loc: null, value: null }],
+    };
+
+    const result = run17(sitemapFile(facts({ issues })));
+
+    expect(result.occurrences).toEqual([
+      {
+        checkId: 17,
+        pageUrl: null,
+        info: { sitemap: u('sitemap.xml'), malformedXml: false, issues },
+      },
+    ]);
+  });
+
+  it('flags malformed XML even without schema issues (125 may report it too)', () => {
+    const result = run17(sitemapFile(facts({ malformedXml: true })));
+
+    expect(result.occurrences.map((o) => o.info)).toEqual([
+      expect.objectContaining({ malformedXml: true }),
+    ]);
+  });
+
+  it.each([
+    [
+      'a truncated sitemap',
+      sitemapFile(facts({ truncated: true, issues: { total: 2, examples: [] } })),
+    ],
+    ['a conforming sitemap', sitemapFile(facts())],
+    ['facts that are null', sitemapFile(null)],
+  ])('does not flag %s', (_label, file) => {
+    expect(run17(file).count).toBe(0);
+  });
+});
+
 describe('check 203 (robots.txt missing)', () => {
   it('flags the site when no robots.txt was found', () => {
     const missing = runCheck(
@@ -415,6 +473,7 @@ describe('registry metadata', () => {
         8: 'error',
         15: 'error',
         16: 'error',
+        17: 'error',
         124: 'warning',
         125: 'warning',
         137: 'notice',
