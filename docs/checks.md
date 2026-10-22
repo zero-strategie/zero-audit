@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 34 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 44 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page` or `other`. Each theme gets its own score.
