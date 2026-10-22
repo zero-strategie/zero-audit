@@ -26,7 +26,7 @@ import {
   type WorkerConfig,
   type WorkerHealthConfig,
 } from './config.js';
-import { createAuditWorker, createRunAudit } from './audit-factory.js';
+import { createAuditWorker, createRunAudit } from '../composition/audit.js';
 import { writeJsonExport } from './json-export.js';
 import { ProgressReporter } from './progress-reporter.js';
 import { renderComparison } from './render-compare.js';
@@ -36,7 +36,7 @@ import {
   migrateStorage,
   type Storage,
   type StorageFactory,
-} from './storage-factory.js';
+} from '../composition/storage.js';
 import { USAGE } from './usage.js';
 
 export const EXIT_SUCCESS = 0;

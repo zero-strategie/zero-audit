@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AuditEvents } from '../../src/application/ports/audit-events.js';
 import { createInterruptController } from '../../src/cli/interrupt-controller.js';
-import type { Storage } from '../../src/cli/storage-factory.js';
+import type { Storage } from '../../src/composition/storage.js';
 
 const ROOT = 'https://exemple.com/';
 

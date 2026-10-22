@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createStorage, redactDatabaseUrl } from '../../src/cli/storage-factory.js';
+import { createStorage, redactDatabaseUrl } from '../../src/composition/storage.js';
 import { TEST_DATABASE_URL } from '../support/postgres-test-database.js';
 
 describe('redactDatabaseUrl', () => {

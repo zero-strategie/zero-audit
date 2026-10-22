@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli, type CliIo } from '../../src/cli/run-cli.js';
-import { createStorage } from '../../src/cli/storage-factory.js';
+import { createStorage } from '../../src/composition/storage.js';
 
 const HOST = 'worker-host';
 const NOW = new Date('2026-03-01T12:00:00.000Z');

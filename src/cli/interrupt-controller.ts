@@ -1,5 +1,5 @@
 import type { AuditEvents } from '../application/ports/audit-events.js';
-import type { Storage } from './storage-factory.js';
+import type { Storage } from '../composition/storage.js';
 
 const EXIT_SUCCESS = 0;
 export const EXIT_INTERRUPTED = 130;

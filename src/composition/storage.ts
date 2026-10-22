@@ -11,7 +11,15 @@ import { PostgresSnapshotRepository } from '../infrastructure/postgres/postgres-
 import { PostgresStorageMigrator } from '../infrastructure/postgres/postgres-storage-migrator.js';
 import { SqliteStorageMigrator } from '../infrastructure/sqlite/sqlite-storage-migrator.js';
 import { SqliteSnapshotRepository } from '../infrastructure/sqlite/sqlite-snapshot-repository.js';
-import type { StoreSelection } from './config.js';
+
+export const STORE_KINDS = ['sqlite', 'postgres'] as const;
+export type StoreKind = (typeof STORE_KINDS)[number];
+
+export interface StoreSelection {
+  store: StoreKind;
+  /** Only read when `store` is `postgres`. */
+  databaseUrl: string | null;
+}
 
 /** The underlying connection, for a hosted product that attaches its own repositories to the same database. */
 export type StorageConnection = { kind: 'sqlite'; db: Database } | { kind: 'postgres'; pool: Pool };

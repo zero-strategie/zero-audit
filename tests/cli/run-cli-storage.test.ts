@@ -9,7 +9,7 @@ import {
   type Storage,
   type StorageConfig,
   type StorageFactory,
-} from '../../src/cli/storage-factory.js';
+} from '../../src/composition/storage.js';
 import { startFixtureServer, type FixtureServer } from '../support/fixture-server.js';
 import { TEST_DATABASE_URL } from '../support/postgres-test-database.js';
 

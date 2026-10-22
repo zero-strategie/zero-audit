@@ -1,13 +1,8 @@
 import { parseArgs } from 'node:util';
 
-export const STORE_KINDS = ['sqlite', 'postgres'] as const;
-export type StoreKind = (typeof STORE_KINDS)[number];
+import { STORE_KINDS, type StoreKind, type StoreSelection } from '../composition/storage.js';
 
-export interface StoreSelection {
-  store: StoreKind;
-  /** Only read when `store` is `postgres`. */
-  databaseUrl: string | null;
-}
+export { STORE_KINDS, type StoreKind, type StoreSelection };
 
 /** `queue` hands the audit to a worker, `wait` also waits for its end, `direct` crawls in the process. */
 export type AuditMode = 'queue' | 'wait' | 'direct';

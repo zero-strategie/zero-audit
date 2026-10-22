@@ -14,20 +14,20 @@ import { RobotsParserAdapter } from '../infrastructure/robots-parser-adapter.js'
 import { SystemClock } from '../infrastructure/system-clock.js';
 import { UndiciHttpClient } from '../infrastructure/undici-http-client.js';
 import { buildUserAgent } from '../infrastructure/user-agent.js';
-import type { Storage } from './storage-factory.js';
+import type { Storage } from './storage.js';
 
 export interface RunAuditOptions {
   storage: Pick<Storage, 'projects' | 'snapshots'>;
   events: AuditEvents;
-  /** Refuse non-public targets (SSRF guard). */
-  blockPrivateAddresses: boolean;
+  /** Refuse non-public targets (SSRF guard); on unless explicitly lifted. */
+  blockPrivateAddresses?: boolean;
 }
 
-/** Single composition of a real audit, used by the CLI. */
+/** Single composition of a real audit, used by the CLI and by library consumers. */
 export const createRunAudit = ({
   storage,
   events,
-  blockPrivateAddresses,
+  blockPrivateAddresses = true,
 }: RunAuditOptions): RunAudit => {
   const clock = new SystemClock();
   const http = new UndiciHttpClient({
@@ -57,7 +57,7 @@ export interface AuditWorkerOptions {
   storage: Pick<Storage, 'projects' | 'snapshots' | 'queue'>;
   logger: Logger;
   /** The SSRF guard of the worker is on unless it is explicitly lifted. */
-  allowPrivateTargets: boolean;
+  allowPrivateTargets?: boolean;
   delayMs: number;
   /** Audits crawled in parallel. */
   concurrency: number;
@@ -73,7 +73,7 @@ const ignoredEvents: AuditEvents = {
 export const createAuditWorker = ({
   storage,
   logger,
-  allowPrivateTargets,
+  allowPrivateTargets = false,
   delayMs,
   concurrency,
 }: AuditWorkerOptions): ProcessAuditQueue => {

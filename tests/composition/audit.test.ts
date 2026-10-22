@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AuditEvents } from '../../src/application/ports/audit-events.js';
 import { RootUnreachable } from '../../src/domain/errors.js';
-import { createRunAudit } from '../../src/cli/audit-factory.js';
+import { createRunAudit } from '../../src/composition/audit.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
 import { startFixtureServer, type FixtureServer } from '../support/fixture-server.js';
