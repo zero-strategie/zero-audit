@@ -26,6 +26,18 @@ describe('README of the open-source engine', () => {
     expect(readme).not.toContain('contains no Semrush code, data or text');
   });
 
+  it.each(['docs/reference', 'copy of that catalogue', 'public issue catalogue'])(
+    'does not claim to hold a Semrush catalogue (%s)',
+    (text) => {
+      expect(readme).not.toContain(text);
+    },
+  );
+
+  it('says the check ids follow the numbering of Semrush Site Audit, without affiliation', () => {
+    expect(readme).toContain("follow the numbering used by Semrush's Site Audit");
+    expect(readme).toContain('not affiliated with or endorsed by Semrush');
+  });
+
   it('states that the CLI messages are in French', () => {
     expect(readme).toMatch(/messages.*French/is);
   });

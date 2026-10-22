@@ -6,7 +6,7 @@ zero-audit runs 20 checks on every audit. Each check has a numeric id, a severit
 - **Theme**: `crawlability`, `https`, `linking`, `on-page` or `other`. Each theme gets its own score.
 - **Scope**: a *page* check examines each page it applies to, and its `examined` count is the number of those pages. A *site* check examines the site as a whole, so its `examined` is 1.
 
-The ids follow the numbering commonly used by commercial site-audit tools, so results stay easy to compare with them. Ids **1000–1999** are reserved for our own checks. The CLI and the dashboard show the labels in French.
+The ids follow the numbering used by Semrush's Site Audit, so that results can be compared. zero-audit is an independent project, not affiliated with or endorsed by Semrush, and the check wording is original. Ids **1000–1999** are reserved for our own checks. The CLI and the dashboard show the labels in French.
 
 Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src/domain/checks/`.
 
