@@ -38,7 +38,7 @@ describe('package entry points', () => {
   it('declares publishable npm metadata', () => {
     const pkg = readPackage();
     expect(pkg.name).toBe('@zero-strategie/zero-audit-core');
-    expect(pkg.version).toBe('1.0.1');
+    expect(pkg.version).toBe('1.1.0');
     expect(pkg.private).toBeUndefined();
     expect(pkg.type).toBe('module');
     expect(pkg.main).toBe('dist/index.js');
