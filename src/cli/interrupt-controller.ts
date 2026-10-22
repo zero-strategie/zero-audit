@@ -5,24 +5,19 @@ const EXIT_SUCCESS = 0;
 export const EXIT_INTERRUPTED = 130;
 export const EXIT_TERMINATED = 143;
 
-export interface ClosableServer {
-  close(): Promise<void>;
-}
-
 export interface StoppableWorker {
   stop(): Promise<void>;
 }
 
 export interface InterruptController {
   onStorageOpened(storage: Storage): void;
-  onServerStarted(server: ClosableServer): void;
   onWorkerStarted(worker: StoppableWorker): void;
   /** The dedicated `worker` command: a signal hands the running audit back to the queue and exits 0. */
   onWorkerProcessStarted(worker: StoppableWorker): void;
   onAuditStarted(snapshotId: string, rootUrl: string): void;
-  /** Meant for SIGINT: stops the server, fails the running snapshot if any, releases the storage, then exits. */
+  /** Meant for SIGINT: fails the running snapshot if any, releases the storage, then exits. */
   interrupt(): Promise<void>;
-  /** Meant for SIGTERM (`docker stop`): same cleanup; a stopped server is a clean exit, an aborted audit is not. */
+  /** Meant for SIGTERM (`docker stop`): same cleanup; a stopped worker is a clean exit, an aborted audit is not. */
   terminate(): Promise<void>;
 }
 
@@ -32,13 +27,11 @@ export const createInterruptController = (
 ): InterruptController => {
   let storage: Storage | null = null;
   let audit: { snapshotId: string; rootUrl: string } | null = null;
-  let server: ClosableServer | null = null;
   let worker: StoppableWorker | null = null;
   let isWorkerProcess = false;
   const shutDown = async (exitCode: number): Promise<void> => {
     try {
       try {
-        await server?.close();
         await worker?.stop();
         if (storage !== null && audit !== null) {
           await storage.snapshots.fail(audit.snapshotId, new Date());
@@ -55,9 +48,6 @@ export const createInterruptController = (
     onStorageOpened: (opened) => {
       storage = opened;
     },
-    onServerStarted: (started) => {
-      server = started;
-    },
     onWorkerStarted: (started) => {
       worker = started;
     },
@@ -69,6 +59,6 @@ export const createInterruptController = (
       audit = { snapshotId, rootUrl };
     },
     interrupt: () => shutDown(isWorkerProcess ? EXIT_SUCCESS : EXIT_INTERRUPTED),
-    terminate: () => shutDown(server === null && !isWorkerProcess ? EXIT_TERMINATED : EXIT_SUCCESS),
+    terminate: () => shutDown(!isWorkerProcess ? EXIT_TERMINATED : EXIT_SUCCESS),
   };
 };

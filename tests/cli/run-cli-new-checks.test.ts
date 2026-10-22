@@ -4,9 +4,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type StorageConfig } from '../../src/cli/storage-factory.js';
-import { idleAuditDependencies } from '../support/audit-doubles.js';
-import { idleAccountDependencies } from '../support/auth-doubles.js';
-import { buildServer } from '../../src/http/server.js';
+import { ListIssues } from '../../src/application/list-issues.js';
+import { allChecks } from '../../src/domain/checks/index.js';
+import { ANONYMOUS_READER } from '../../src/domain/reader.js';
 import { startFixtureServer, type FixtureServer } from '../support/fixture-server.js';
 import { TEST_DATABASE_URL } from '../support/postgres-test-database.js';
 
@@ -44,45 +44,42 @@ describe('checks 105, 137 and 205 end to end', () => {
   });
 
   describe.each(STORES)('with %s', (store, skip) => {
-    it.skipIf(skip)('reports 105 and 137, and no 205 over http, through the API', async () => {
-      const configs: StorageConfig[] = [];
-      let snapshotId = '';
-      const args = [server.baseUrl, '--direct', '--delay', '0', '--db', join(dir, 'audit.db')];
+    it.skipIf(skip)(
+      'reports 105 and 137, and no 205 over http, from the stored snapshot',
+      async () => {
+        const configs: StorageConfig[] = [];
+        let snapshotId = '';
+        const args = [server.baseUrl, '--direct', '--delay', '0', '--db', join(dir, 'audit.db')];
 
-      const code = await runCli(
-        store === 'postgres' ? [...args, '--store', 'postgres'] : args,
-        { DATABASE_URL: TEST_DATABASE_URL },
-        silentIo,
-        {
-          storageFactory: (config) => {
-            configs.push(config);
-            return createStorage(config);
+        const code = await runCli(
+          store === 'postgres' ? [...args, '--store', 'postgres'] : args,
+          { DATABASE_URL: TEST_DATABASE_URL },
+          silentIo,
+          {
+            storageFactory: (config) => {
+              configs.push(config);
+              return createStorage(config);
+            },
+            onAuditStarted: (id) => {
+              snapshotId = id;
+            },
           },
-          onAuditStarted: (id) => {
-            snapshotId = id;
-          },
-        },
-      );
-
-      expect(code).toBe(0);
-      const storage = await createStorage(configs[0] as StorageConfig);
-      const app = buildServer({
-        ...idleAccountDependencies(),
-        projects: storage.projects,
-        snapshots: storage.snapshots,
-        health: storage.health,
-        ...idleAuditDependencies(),
-      });
-      try {
-        const response = await app.inject(`/snapshots/${snapshotId}/issues`);
-        const counts = Object.fromEntries(
-          response.json<{ checkId: number; count: number }[]>().map((i) => [i.checkId, i.count]),
         );
-        expect(counts).toMatchObject({ 105: 1, 137: 1, 205: 0 });
-      } finally {
-        await app.close();
-        await storage.close();
-      }
-    });
+
+        expect(code).toBe(0);
+        const storage = await createStorage(configs[0] as StorageConfig);
+        try {
+          const issues = await new ListIssues(
+            storage.snapshots,
+            storage.projects,
+            allChecks,
+          ).execute(ANONYMOUS_READER, snapshotId, {});
+          const counts = Object.fromEntries(issues.map((i) => [i.checkId, i.count]));
+          expect(counts).toMatchObject({ 105: 1, 137: 1, 205: 0 });
+        } finally {
+          await storage.close();
+        }
+      },
+    );
   });
 });

@@ -19,11 +19,11 @@ import type { Storage } from './storage-factory.js';
 export interface RunAuditOptions {
   storage: Pick<Storage, 'projects' | 'snapshots'>;
   events: AuditEvents;
-  /** Refuse non-public targets (SSRF guard); on for audits launched from the server. */
+  /** Refuse non-public targets (SSRF guard). */
   blockPrivateAddresses: boolean;
 }
 
-/** Single composition of a real audit, shared by the CLI and the HTTP server. */
+/** Single composition of a real audit, used by the CLI. */
 export const createRunAudit = ({
   storage,
   events,
@@ -56,7 +56,7 @@ export const createRunAudit = ({
 export interface AuditWorkerOptions {
   storage: Pick<Storage, 'projects' | 'snapshots' | 'queue'>;
   logger: Logger;
-  /** Same switch as `serve`: the SSRF guard of the worker is on unless it is explicitly lifted. */
+  /** The SSRF guard of the worker is on unless it is explicitly lifted. */
   allowPrivateTargets: boolean;
   delayMs: number;
   /** Audits crawled in parallel. */
@@ -69,7 +69,7 @@ const ignoredEvents: AuditEvents = {
   failed: () => undefined,
 };
 
-/** Single composition of the worker loop, shared by `serve` (embedded mode) and the worker command. */
+/** Single composition of the worker loop, used by the worker command. */
 export const createAuditWorker = ({
   storage,
   logger,

@@ -219,6 +219,7 @@ describe('runCli', () => {
     [['not a url']],
     [['http://x.test', '--limit', '0']],
     [['http://x.test', '--delay', '-1']],
+    [['serve']],
   ])('exits 2 with usage and no side effect for %j', async (argv) => {
     const run = capture();
 

@@ -1,6 +1,4 @@
 import { parseArgs } from 'node:util';
-import { InvalidEmail } from '../domain/errors.js';
-import { normalizeEmail } from '../domain/user.js';
 
 export const STORE_KINDS = ['sqlite', 'postgres'] as const;
 export type StoreKind = (typeof STORE_KINDS)[number];
@@ -31,35 +29,6 @@ export interface CompareConfig extends StoreSelection {
   dbPath: string;
 }
 
-export const WORKER_MODES = ['embedded', 'external'] as const;
-export type WorkerMode = (typeof WORKER_MODES)[number];
-
-export const MAILER_KINDS = ['console', 'brevo'] as const;
-export const DEFAULT_MAIL_FROM = 'no-reply@agents.zero-strategie.dev';
-
-/** `disabled` is the default: sign-up and resets answer 503 until a mailer is chosen. */
-export type MailConfig =
-  | { kind: 'disabled' | 'console'; from: string; publicUrl: string | null }
-  | { kind: 'brevo'; from: string; publicUrl: string; apiKey: string };
-
-export interface ServeConfig extends StoreSelection {
-  host: string;
-  port: number;
-  dbPath: string;
-  /** Disables the SSRF guard; only the exact value `true` of the environment variable does. */
-  allowPrivateTargets: boolean;
-  delayMs: number;
-  mail: MailConfig;
-  /** Normalized with `normalizeEmail`. */
-  adminEmails: string[];
-  /** Ceiling of audits launched through the API per 24 hours, all accounts together. */
-  launchesPerDay: number;
-  /** `embedded` runs the worker loop inside `serve`; `external` leaves it to a worker process. */
-  workerMode: WorkerMode;
-  /** Ceiling of audits waiting in the queue, all accounts together. */
-  queueMax: number;
-}
-
 export interface WorkerConfig extends StoreSelection {
   dbPath: string;
   /** Audits crawled in parallel by the process. */
@@ -84,7 +53,6 @@ export type ParsedCommand =
   | { kind: 'usage-error'; message: string }
   | { kind: 'audit'; config: AuditConfig }
   | ({ kind: 'compare' } & CompareConfig)
-  | ({ kind: 'serve' } & ServeConfig)
   | ({ kind: 'migrate' } & MigrateConfig)
   | ({ kind: 'worker' } & WorkerConfig)
   | ({ kind: 'worker-health' } & WorkerHealthConfig);
@@ -93,10 +61,6 @@ type Environment = Readonly<Record<string, string | undefined>>;
 
 export const DEFAULT_LIMIT = 100;
 export const DEFAULT_DELAY_MS = 1000;
-export const DEFAULT_HOST = '127.0.0.1';
-export const DEFAULT_PORT = 3000;
-export const DEFAULT_LAUNCHES_PER_DAY = 30;
-export const DEFAULT_QUEUE_MAX = 20;
 export const DEFAULT_WORKER_CONCURRENCY = 1;
 export const DEFAULT_DB_PATH = './.zero-audit/audit.db';
 
@@ -104,19 +68,8 @@ const DELAY_ENV = 'ZERO_AUDIT_DELAY_MS';
 const DB_ENV = 'ZERO_AUDIT_DB_PATH';
 const ALLOW_PRIVATE_TARGETS_ENV = 'ZERO_AUDIT_ALLOW_PRIVATE_TARGETS';
 const STORE_ENV = 'ZERO_AUDIT_STORE';
-const MAILER_ENV = 'ZERO_AUDIT_MAILER';
-const BREVO_API_KEY_ENV = 'ZERO_AUDIT_BREVO_API_KEY';
-const MAIL_FROM_ENV = 'ZERO_AUDIT_MAIL_FROM';
-const ADMIN_EMAILS_ENV = 'ZERO_AUDIT_ADMIN_EMAILS';
-const LAUNCHES_PER_DAY_ENV = 'ZERO_AUDIT_LAUNCHES_PER_DAY';
-const WORKER_ENV = 'ZERO_AUDIT_WORKER';
 const WORKER_CONCURRENCY_ENV = 'ZERO_AUDIT_WORKER_CONCURRENCY';
-const QUEUE_MAX_ENV = 'ZERO_AUDIT_QUEUE_MAX';
-const PUBLIC_URL_ENV = 'ZERO_AUDIT_PUBLIC_URL';
-const HOST_ENV = 'HOST';
-const PORT_ENV = 'PORT';
 const DATABASE_URL_ENV = 'DATABASE_URL';
-const MAX_PORT = 65_535;
 const DIGITS = /^\d+$/;
 
 class UsageError extends Error {}
@@ -127,27 +80,6 @@ const parseInteger = (raw: string, name: string, minimum: number): number => {
     throw new UsageError(`${name} must be an integer >= ${String(minimum)} (received "${raw}")`);
   }
   return value;
-};
-
-const parsePort = (raw: string, name: string): number => {
-  const port = parseInteger(raw, name, 1);
-  if (port > MAX_PORT) {
-    throw new UsageError(`${name} must be an integer <= ${String(MAX_PORT)} (received "${raw}")`);
-  }
-  return port;
-};
-
-const isWorkerMode = (value: string): value is WorkerMode =>
-  WORKER_MODES.some((mode) => mode === value);
-
-const parseWorkerMode = (env: Environment): WorkerMode => {
-  const raw = env[WORKER_ENV] ?? 'embedded';
-  if (!isWorkerMode(raw)) {
-    throw new UsageError(
-      `${WORKER_ENV} must be one of ${WORKER_MODES.join(', ')} (received "${raw}")`,
-    );
-  }
-  return raw;
 };
 
 const isStoreKind = (value: string): value is StoreKind =>
@@ -172,56 +104,6 @@ const parseRootUrl = (raw: string | undefined): string => {
   }
   return raw;
 };
-
-const parsePublicUrl = (raw: string | undefined): string | null => {
-  if (raw === undefined) return null;
-  const parsed = URL.parse(raw);
-  const isHttp = parsed?.protocol === 'http:' || parsed?.protocol === 'https:';
-  if (!isHttp || raw.endsWith('/')) {
-    throw new UsageError(
-      `${PUBLIC_URL_ENV} must be an absolute http(s) URL without trailing slash (received "${raw}")`,
-    );
-  }
-  return raw;
-};
-
-const requireEnv = (env: Environment, name: string, reason: string): string => {
-  const value = env[name];
-  if (!value) throw new UsageError(`${name} is required ${reason}`);
-  return value;
-};
-
-const parseMail = (env: Environment): MailConfig => {
-  const kind = env[MAILER_ENV];
-  const from = env[MAIL_FROM_ENV] ?? DEFAULT_MAIL_FROM;
-  const publicUrl = parsePublicUrl(env[PUBLIC_URL_ENV]);
-  if (kind === undefined) return { kind: 'disabled', from, publicUrl };
-  if (kind === 'console') return { kind, from, publicUrl };
-  if (kind !== 'brevo') {
-    throw new UsageError(
-      `${MAILER_ENV} must be one of: ${MAILER_KINDS.join(', ')} (received "${kind}")`,
-    );
-  }
-  const reason = `when ${MAILER_ENV}=brevo`;
-  const apiKey = requireEnv(env, BREVO_API_KEY_ENV, reason);
-  if (publicUrl === null) throw new UsageError(`${PUBLIC_URL_ENV} is required ${reason}`);
-  return { kind, from, publicUrl, apiKey };
-};
-
-const parseAdminEmails = (raw: string | undefined): string[] =>
-  (raw ?? '')
-    .split(',')
-    .filter((entry) => entry.trim() !== '')
-    .map((entry) => {
-      try {
-        return normalizeEmail(entry);
-      } catch (error) {
-        if (!(error instanceof InvalidEmail)) throw error;
-        throw new UsageError(
-          `${ADMIN_EMAILS_ENV} must list e-mail addresses (received "${entry}")`,
-        );
-      }
-    });
 
 const parseConcurrency = (env: Environment): number =>
   parseInteger(
@@ -284,34 +166,6 @@ const buildCompareConfig = (argv: readonly string[], env: Environment): CompareC
   };
 };
 
-const buildServeConfig = (argv: readonly string[], env: Environment): ServeConfig => {
-  const { values } = parseArgs({
-    args: [...argv],
-    options: { port: { type: 'string' }, db: { type: 'string' }, store: { type: 'string' } },
-  });
-  const port =
-    values.port !== undefined
-      ? parsePort(values.port, '--port')
-      : parsePort(env[PORT_ENV] ?? String(DEFAULT_PORT), PORT_ENV);
-  return {
-    host: env[HOST_ENV] ?? DEFAULT_HOST,
-    port,
-    dbPath: values.db ?? env[DB_ENV] ?? DEFAULT_DB_PATH,
-    allowPrivateTargets: env[ALLOW_PRIVATE_TARGETS_ENV] === 'true',
-    delayMs: parseInteger(env[DELAY_ENV] ?? String(DEFAULT_DELAY_MS), DELAY_ENV, 0),
-    mail: parseMail(env),
-    adminEmails: parseAdminEmails(env[ADMIN_EMAILS_ENV]),
-    launchesPerDay: parseInteger(
-      env[LAUNCHES_PER_DAY_ENV] ?? String(DEFAULT_LAUNCHES_PER_DAY),
-      LAUNCHES_PER_DAY_ENV,
-      1,
-    ),
-    workerMode: parseWorkerMode(env),
-    queueMax: parseInteger(env[QUEUE_MAX_ENV] ?? String(DEFAULT_QUEUE_MAX), QUEUE_MAX_ENV, 1),
-    ...parseStore(values.store, env),
-  };
-};
-
 const buildMigrateConfig = (argv: readonly string[], env: Environment): MigrateConfig => {
   const { values } = parseArgs({
     args: [...argv],
@@ -348,7 +202,6 @@ const buildWorkerHealthConfig = (argv: readonly string[], env: Environment): Wor
 
 const buildCommand = (argv: readonly string[], env: Environment): ParsedCommand => {
   const [first, ...rest] = argv;
-  if (first === 'serve') return { kind: 'serve', ...buildServeConfig(rest, env) };
   if (first === 'worker') return { kind: 'worker', ...buildWorkerConfig(rest, env) };
   if (first === 'worker-health') {
     return { kind: 'worker-health', ...buildWorkerHealthConfig(rest, env) };

@@ -195,84 +195,12 @@ describe('parseCommand subcommands', () => {
     expect(parseCommand(['audit', ...argv], {}).kind).toBe('audit');
   });
 
-  it('parses `serve` as a serve command, never as a URL', () => {
-    expect(parseCommand(['serve'], {})).toEqual({
-      kind: 'serve',
-      host: '127.0.0.1',
-      port: 3000,
-      dbPath: './.zero-audit/audit.db',
-      store: 'sqlite',
-      databaseUrl: null,
-      allowPrivateTargets: false,
-      delayMs: 1000,
-      mail: { kind: 'disabled', from: 'no-reply@agents.zero-strategie.dev', publicUrl: null },
-      adminEmails: [],
-      launchesPerDay: 30,
-      workerMode: 'embedded',
-      queueMax: 20,
-    });
+  it('rejects `serve` as a usage error: the command no longer exists', () => {
+    expect(parseCommand(['serve'], {}).kind).toBe('usage-error');
   });
 
-  it.each([
-    ['true', true],
-    ['TRUE', false],
-    ['1', false],
-    ['yes', false],
-    ['', false],
-  ])('reads ZERO_AUDIT_ALLOW_PRIVATE_TARGETS="%s" as allowPrivateTargets %s', (value, expected) => {
-    const command = parseCommand(['serve'], { ZERO_AUDIT_ALLOW_PRIVATE_TARGETS: value });
-
-    expect(command).toMatchObject({ kind: 'serve', allowPrivateTargets: expected });
-  });
-
-  it('reads the serve delay from ZERO_AUDIT_DELAY_MS', () => {
-    expect(parseCommand(['serve'], { ZERO_AUDIT_DELAY_MS: '250' })).toMatchObject({
-      kind: 'serve',
-      delayMs: 250,
-    });
-  });
-
-  it('rejects an invalid ZERO_AUDIT_DELAY_MS for serve', () => {
-    expect(parseCommand(['serve'], { ZERO_AUDIT_DELAY_MS: 'x' }).kind).toBe('usage-error');
-  });
-
-  it('reads the serve host and port from HOST and PORT', () => {
-    expect(parseCommand(['serve'], { HOST: '0.0.0.0', PORT: '8080' })).toMatchObject({
-      host: '0.0.0.0',
-      port: 8080,
-    });
-  });
-
-  it('lets --port win over PORT', () => {
-    expect(parseCommand(['serve', '--port', '9000'], { PORT: '8080' })).toMatchObject({
-      port: 9000,
-    });
-  });
-
-  it.each(['abc', '70000'])('rejects PORT="%s" with an explicit message', (port) => {
-    const command = parseCommand(['serve'], { PORT: port });
-
-    expect(command.kind).toBe('usage-error');
-    expect(command).toMatchObject({ message: expect.stringContaining('PORT') as string });
-  });
-
-  it('reads the serve port from --port', () => {
-    expect(parseCommand(['serve', '--port', '4000'], {})).toMatchObject({ port: 4000 });
-  });
-
-  it.each(['abc', '0', '65536', '-1', '30.5'])('rejects the serve port "%s"', (port) => {
-    const command = parseCommand(['serve', '--port', port], {});
-
-    expect(command.kind).toBe('usage-error');
-    expect(command).toMatchObject({ message: expect.stringContaining('--port') as string });
-  });
-
-  it('applies --store and --db to serve', () => {
-    expect(
-      parseCommand(['serve', '--store', 'postgres', '--db', 'x.db'], {
-        DATABASE_URL: 'postgresql://h/d',
-      }),
-    ).toMatchObject({ store: 'postgres', databaseUrl: 'postgresql://h/d', dbPath: 'x.db' });
+  it('does not mention serve in the usage', () => {
+    expect(USAGE).not.toContain('serve');
   });
 
   it('parses `compare <A> <B>` with the database path', () => {
@@ -336,166 +264,14 @@ describe('parseCommand migrate', () => {
 });
 
 describe('usage of the worker commands', () => {
-  it.each([
-    'worker',
-    'worker-health',
-    '--wait',
-    '--direct',
-    'ZERO_AUDIT_WORKER',
-    'ZERO_AUDIT_WORKER_CONCURRENCY',
-    'ZERO_AUDIT_QUEUE_MAX',
-  ])('mentions %s', (token) => {
-    expect(USAGE).toContain(token);
-  });
+  it.each(['worker', 'worker-health', '--wait', '--direct', 'ZERO_AUDIT_WORKER_CONCURRENCY'])(
+    'mentions %s',
+    (token) => {
+      expect(USAGE).toContain(token);
+    },
+  );
 
   it('is what --help prints', () => {
     expect(parseCommand(['--help'], {})).toEqual({ kind: 'help' });
   });
-});
-
-describe('parseCommand mailer configuration', () => {
-  const PUBLIC_URL = 'https://audit.exemple.test';
-  const mailOf = (env: Record<string, string>) => {
-    const command = parseCommand(['serve'], env);
-    if (command.kind !== 'serve') throw new Error(`expected serve, got ${command.kind}`);
-    return command.mail;
-  };
-  const messageOf = (env: Record<string, string>): string => {
-    const command = parseCommand(['serve'], env);
-    if (command.kind !== 'usage-error')
-      throw new Error(`expected usage-error, got ${command.kind}`);
-    return command.message;
-  };
-
-  it('uses the disabled mailer when ZERO_AUDIT_MAILER is not set', () => {
-    expect(mailOf({}).kind).toBe('disabled');
-  });
-
-  it('uses the console mailer when ZERO_AUDIT_MAILER=console', () => {
-    expect(mailOf({ ZERO_AUDIT_MAILER: 'console' }).kind).toBe('console');
-  });
-
-  it('reads the Brevo key, the sender and the public URL for ZERO_AUDIT_MAILER=brevo', () => {
-    expect(
-      mailOf({
-        ZERO_AUDIT_MAILER: 'brevo',
-        ZERO_AUDIT_BREVO_API_KEY: 'key',
-        ZERO_AUDIT_PUBLIC_URL: PUBLIC_URL,
-        ZERO_AUDIT_MAIL_FROM: 'moi@exemple.test',
-      }),
-    ).toEqual({ kind: 'brevo', apiKey: 'key', publicUrl: PUBLIC_URL, from: 'moi@exemple.test' });
-  });
-
-  it('defaults the sender to no-reply@agents.zero-strategie.dev', () => {
-    expect(mailOf({}).from).toBe('no-reply@agents.zero-strategie.dev');
-  });
-
-  it.each([
-    ['ZERO_AUDIT_BREVO_API_KEY', { ZERO_AUDIT_PUBLIC_URL: PUBLIC_URL }],
-    ['ZERO_AUDIT_PUBLIC_URL', { ZERO_AUDIT_BREVO_API_KEY: 'key' }],
-  ])('fails naming %s when it is missing with the brevo mailer', (name, env) => {
-    expect(messageOf({ ZERO_AUDIT_MAILER: 'brevo', ...env })).toContain(name);
-  });
-
-  it('refuses an unknown ZERO_AUDIT_MAILER value', () => {
-    expect(messageOf({ ZERO_AUDIT_MAILER: 'smtp' })).toContain('ZERO_AUDIT_MAILER');
-  });
-
-  it.each(['audit.exemple.test', 'ftp://audit.exemple.test', `${PUBLIC_URL}/`])(
-    'refuses the public URL "%s"',
-    (url) => {
-      expect(messageOf({ ZERO_AUDIT_PUBLIC_URL: url })).toContain('ZERO_AUDIT_PUBLIC_URL');
-    },
-  );
-});
-
-describe('parseCommand administrator addresses', () => {
-  const adminsOf = (env: Record<string, string>) => {
-    const command = parseCommand(['serve'], env);
-    if (command.kind !== 'serve') throw new Error(`expected serve, got ${command.kind}`);
-    return command.adminEmails;
-  };
-
-  it('has no administrator by default', () => {
-    expect(adminsOf({})).toEqual([]);
-  });
-
-  it('reads a comma-separated list, trimmed and lowercased, ignoring empty entries', () => {
-    expect(
-      adminsOf({ ZERO_AUDIT_ADMIN_EMAILS: ' Admin@Exemple.test, ,boss@exemple.test,' }),
-    ).toEqual(['admin@exemple.test', 'boss@exemple.test']);
-  });
-
-  it('refuses an entry that is not an e-mail address, naming the variable', () => {
-    const command = parseCommand(['serve'], { ZERO_AUDIT_ADMIN_EMAILS: 'admin@exemple.test,oops' });
-
-    expect(command).toMatchObject({ kind: 'usage-error' });
-    expect(JSON.stringify(command)).toContain('ZERO_AUDIT_ADMIN_EMAILS');
-  });
-});
-
-describe('parseCommand serve: ZERO_AUDIT_LAUNCHES_PER_DAY', () => {
-  const launchesOf = (env: Record<string, string>) => {
-    const command = parseCommand(['serve'], env);
-    return command.kind === 'serve' ? command.launchesPerDay : command;
-  };
-
-  it('defaults to 30 launches per day', () => {
-    expect(launchesOf({})).toBe(30);
-  });
-
-  it('reads a positive integer', () => {
-    expect(launchesOf({ ZERO_AUDIT_LAUNCHES_PER_DAY: '12' })).toBe(12);
-  });
-
-  it.each(['0', '-3', 'many', '2.5', ''])('refuses %j, naming the variable', (value) => {
-    const command = parseCommand(['serve'], { ZERO_AUDIT_LAUNCHES_PER_DAY: value });
-
-    expect(command).toMatchObject({ kind: 'usage-error' });
-    expect(JSON.stringify(command)).toContain('ZERO_AUDIT_LAUNCHES_PER_DAY');
-  });
-});
-
-describe('parseCommand serve: ZERO_AUDIT_WORKER and ZERO_AUDIT_QUEUE_MAX', () => {
-  const serveOf = (env: Record<string, string>) => parseCommand(['serve'], env);
-
-  it('runs the worker inside serve by default, with every storage', () => {
-    expect(serveOf({})).toMatchObject({ workerMode: 'embedded' });
-    expect(
-      serveOf({ ZERO_AUDIT_STORE: 'postgres', DATABASE_URL: 'postgresql://x@h/d' }),
-    ).toMatchObject({
-      workerMode: 'embedded',
-    });
-  });
-
-  it.each(['embedded', 'external'])('reads ZERO_AUDIT_WORKER=%s', (mode) => {
-    expect(serveOf({ ZERO_AUDIT_WORKER: mode })).toMatchObject({ workerMode: mode });
-  });
-
-  it.each(['Embedded', 'both', '', 'none'])(
-    'refuses ZERO_AUDIT_WORKER=%j, naming the variable',
-    (value) => {
-      const command = serveOf({ ZERO_AUDIT_WORKER: value });
-
-      expect(command).toMatchObject({ kind: 'usage-error' });
-      expect(JSON.stringify(command)).toContain('ZERO_AUDIT_WORKER');
-      expect(JSON.stringify(command)).toContain('embedded');
-      expect(JSON.stringify(command)).toContain('external');
-    },
-  );
-
-  it('caps the queue at 20 audits by default and reads ZERO_AUDIT_QUEUE_MAX', () => {
-    expect(serveOf({})).toMatchObject({ queueMax: 20 });
-    expect(serveOf({ ZERO_AUDIT_QUEUE_MAX: '5' })).toMatchObject({ queueMax: 5 });
-  });
-
-  it.each(['0', '-1', 'lots', ''])(
-    'refuses ZERO_AUDIT_QUEUE_MAX=%j, naming the variable',
-    (value) => {
-      const command = serveOf({ ZERO_AUDIT_QUEUE_MAX: value });
-
-      expect(command).toMatchObject({ kind: 'usage-error' });
-      expect(JSON.stringify(command)).toContain('ZERO_AUDIT_QUEUE_MAX');
-    },
-  );
 });

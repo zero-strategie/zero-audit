@@ -35,26 +35,21 @@ describe('local Postgres setup files', () => {
     }
   });
 
-  it('documents HOST and PORT for the API and no web-only variable in .env.example', () => {
+  it('documents no API, e-mail, administrator or quota variable in .env.example', () => {
     const example = read('.env.example');
-    for (const variable of ['HOST', 'PORT']) {
-      expect(example).toMatch(new RegExp(`^#? ?${variable}=`, 'm'));
-    }
     for (const variable of [
-      'ZERO_AUDIT_API_URL',
-      'ZERO_AUDIT_SOURCE_URL',
-      'ZERO_AUDIT_PUBLIC_HOSTS',
+      'HOST',
+      'PORT',
+      'ZERO_AUDIT_MAILER',
+      'BREVO',
+      'ZERO_AUDIT_MAIL_FROM',
+      'ZERO_AUDIT_PUBLIC_URL',
+      'ZERO_AUDIT_ADMIN_EMAILS',
+      'ZERO_AUDIT_LAUNCHES_PER_DAY',
+      'ZERO_AUDIT_QUEUE_MAX',
+      'ZERO_AUDIT_WORKER=',
     ]) {
       expect(example).not.toContain(variable);
     }
-    expect(example).not.toMatch(/web image/i);
-  });
-
-  it('documents HOST and the exposure warning in the guides', () => {
-    const readme = read('README.md') + read('docs/user-guide.md') + read('docs/developer-guide.md');
-    expect(readme).not.toContain('no host option');
-    expect(readme).toContain('`HOST`');
-    expect(readme).toContain('SIGTERM');
-    expect(readme).toMatch(/only be published on `127\.0\.0\.1`/);
   });
 });

@@ -92,24 +92,6 @@ describe('createInterruptController', () => {
 
     expect(calls).toEqual(['close', 'exit:130']);
   });
-
-  it('closes the server before the storage, then exits 130', async () => {
-    const calls: string[] = [];
-    const controller = createInterruptController((code) => {
-      calls.push(`exit:${String(code)}`);
-    });
-    controller.onStorageOpened(fakeStorage(calls));
-    controller.onServerStarted({
-      close: () => {
-        calls.push('server-close');
-        return Promise.resolve();
-      },
-    });
-
-    await controller.interrupt();
-
-    expect(calls).toEqual(['server-close', 'close', 'exit:130']);
-  });
 });
 
 describe('createInterruptController terminate (SIGTERM)', () => {
@@ -126,34 +108,10 @@ describe('createInterruptController terminate (SIGTERM)', () => {
     expect(calls).toEqual(['fail:snap-1', 'close', 'exit:143']);
   });
 
-  it('closes the server then the storage and exits 0 when serving', async () => {
-    const calls: string[] = [];
-    const controller = createInterruptController((code) => {
-      calls.push(`exit:${String(code)}`);
-    });
-    controller.onStorageOpened(fakeStorage(calls));
-    controller.onServerStarted({
-      close: () => {
-        calls.push('server-close');
-        return Promise.resolve();
-      },
-    });
-
-    await controller.terminate();
-
-    expect(calls).toEqual(['server-close', 'close', 'exit:0']);
-  });
-
-  it('stops the worker after the server and before releasing the storage', async () => {
+  it('stops the worker before releasing the storage', async () => {
     const calls: string[] = [];
     const controller = createInterruptController(() => undefined);
     controller.onStorageOpened(fakeStorage(calls));
-    controller.onServerStarted({
-      close: () => {
-        calls.push('server-close');
-        return Promise.resolve();
-      },
-    });
     controller.onWorkerStarted({
       stop: () => {
         calls.push('worker-stop');
@@ -163,7 +121,7 @@ describe('createInterruptController terminate (SIGTERM)', () => {
 
     await controller.terminate();
 
-    expect(calls).toEqual(['server-close', 'worker-stop', 'close']);
+    expect(calls).toEqual(['worker-stop', 'close']);
   });
 
   it('still releases the storage when the worker cannot be stopped', async () => {
