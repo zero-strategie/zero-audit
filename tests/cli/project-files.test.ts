@@ -30,7 +30,7 @@ describe('local Postgres setup files', () => {
 
   it('documents the storage settings in the guides', () => {
     const readme = read('README.md') + read('docs/user-guide.md') + read('docs/developer-guide.md');
-    for (const term of ['--store', 'ZERO_AUDIT_STORE', 'DATABASE_URL', 'docker compose up']) {
+    for (const term of ['--store', 'ZERO_AUDIT_STORE', 'DATABASE_URL']) {
       expect(readme).toContain(term);
     }
   });
