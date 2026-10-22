@@ -578,6 +578,7 @@ describe('registry metadata', () => {
       202: 'notice',
       216: 'notice',
       217: 'notice',
+      215: 'notice',
     });
   });
 
@@ -816,6 +817,83 @@ describe('check 217 (non-descriptive anchors)', () => {
     );
     expect(flaggedUrls(result)).toEqual([u('a')]);
     expect(result.occurrences[0]?.info).toEqual({ targets: [u('m'), u('z')] });
+    expect(result.examined).toBe(1);
+  });
+});
+
+describe('check 215 (linked resources)', () => {
+  const crawlLinking = (target: string, type: Link['type'], targetPage?: Page) =>
+    crawlOf(
+      [makePage(u('a')), ...(targetPage ? [targetPage] : [])],
+      [makeLink(u('a'), target, { type })],
+    );
+  const resourcePage = (name: string, overrides: Partial<Page> = {}): Page =>
+    makePage(name, { contentType: 'application/json', isHtml: false, ...overrides });
+
+  it('flags an internal link to a listed extension, whatever its case', () => {
+    const result = runCheck(pageChecks, 215, crawlLinking(u('doc.PDF'), 'internal'));
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ targets: [u('doc.PDF')] });
+  });
+
+  it('flags an internal link without extension crawled as 200 non-HTML', () => {
+    const result = runCheck(
+      pageChecks,
+      215,
+      crawlLinking(u('export'), 'internal', resourcePage(u('export'))),
+    );
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('does not flag an internal link to a non-HTML target that is not a 2xx', () => {
+    const result = runCheck(
+      pageChecks,
+      215,
+      crawlLinking(u('export'), 'internal', resourcePage(u('export'), { status: 404 })),
+    );
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('judges an external link by its extension only', () => {
+    expect(
+      flaggedUrls(runCheck(pageChecks, 215, crawlLinking('https://autre.fr/a.zip', 'external'))),
+    ).toEqual([u('a')]);
+    expect(
+      flaggedUrls(runCheck(pageChecks, 215, crawlLinking('https://autre.fr/page', 'external'))),
+    ).toEqual([]);
+  });
+
+  it('reads the extension on the path, ignoring the query string', () => {
+    const result = runCheck(pageChecks, 215, crawlLinking(u('fichier.pdf?x=1'), 'internal'));
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+  });
+
+  it('does not flag an HTML 200 page without a listed extension', () => {
+    const result = runCheck(
+      pageChecks,
+      215,
+      crawlLinking(u('page'), 'internal', makePage(u('page'))),
+    );
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it('emits one occurrence per page with sorted targets and ignores resource links', () => {
+    const result = runCheck(
+      pageChecks,
+      215,
+      crawlOf(
+        [makePage(u('a')), makePage(u('error'), { status: 404 }), makePage(u('b'))],
+        [
+          makeLink(u('a'), u('z.pdf')),
+          makeLink(u('a'), u('m.zip')),
+          makeLink(u('a'), u('img.png'), { type: 'resource' }),
+          makeLink(u('error'), u('x.pdf')),
+          makeLink(u('b'), u('img.png'), { type: 'resource' }),
+        ],
+      ),
+    );
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ targets: [u('m.zip'), u('z.pdf')] });
     expect(result.examined).toBe(1);
   });
 });
