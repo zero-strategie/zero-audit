@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 44 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 46 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `international` and `markup` themes have no check yet and are not computable (no score) until their checks land.
@@ -22,10 +22,12 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 9 | error | crawlability | page | A page did not answer within the crawler's time limit (`timeout`). | Look at the server's performance and load. |
 | 11 | error | crawlability | page | A page could not be reached: connection, DNS, blocked or other network failure. `info.kind` gives the failure. | Check the host, DNS and firewall, then the URL itself. |
 | 15 | error | on-page | page | Several pages share the same meta description. | Write a specific description for each page. |
+| 20 | error | on-page | page | An HTML page answering 2xx has no `<meta name="viewport">`. | Add `<meta name="viewport" content="width=device-width, initial-scale=1">` to the head. |
 | 26 | error | https | page | An HTML page answering 2xx is served over `http:` rather than `https:`. | Serve the page over HTTPS and redirect the http URL to it. |
 | 31 | warning | https | page | A page on an https site has `<a>` links to internal URLs written with `http:`, including those that redirect to https. One occurrence per page; `info.targets` lists the target URLs, sorted. | Rewrite these links with `https:`. |
 | 33 | error | crawlability | page | A redirecting URL goes through at least 2 redirects before reaching its destination, or leads into a loop. `info` gives the `chain` (the URLs followed in order, without the starting URL) and `loop`, plus `truncated` when the 10-hop cap was reached. | Redirect straight to the final destination and update the links. |
 | 38 | error | crawlability | page | A page declares a canonical URL that points to a crawled page answering 4xx, 5xx or failing at network level. `info` gives the `canonical` and the `status` (`null` for a network failure). | Point the canonical to a page that answers 200, or remove it. |
+| 46 | error | on-page | page | An HTML page answering 2xx has a viewport meta tag whose content sets no `width` (an empty content counts). `min-width` is not a width. | Set `width=device-width` in the viewport content. |
 | 101 | warning | on-page | page | The title is shorter than 30 characters. | Make the title more descriptive. |
 | 102 | warning | on-page | page | The title is longer than 60 characters. | Shorten it so it is not truncated in search results. |
 | 103 | warning | on-page | page | An HTML page has no `<h1>`. | Add one main heading. |
@@ -81,6 +83,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 26 applies to HTML 2xx pages and reports each one whose URL starts with `http:`, whatever the scheme of the home page: a site served entirely over http has all its pages reported. An http URL that redirects (3xx) is not reported, since it does not serve content. As a consequence the `https` theme is now scored, and a crawl of an http-only site (including the local `http://127.0.0.1` fixtures) gets 0 for it.
   - Check 31 only applies when the final home page (after redirects) is `https:`; on an http site it examines nothing. It applies to HTML 2xx pages with at least one internal `<a>` link and reports internal links whose URL starts with `http:`, even when that URL redirects to https. External links are ignored.
   - Check 129 applies to HTML 2xx pages and reads the `content-encoding` response header. The crawler keeps the default `Accept-Encoding` of undici (gzip, deflate, and more), so a server that compresses only for browsers, or a CDN that negotiates differently, may be reported although real visitors get compressed pages.
+  - Checks 20 and 46 apply to HTML 2xx pages whose HTML facts were recorded; pages from snapshots made before the facts existed are not examined. Check 20 reports a missing viewport tag, check 46 a tag without `width=` (read case-insensitively), so a page is never reported by both. Only the first viewport tag is read.
   - Check 111 applies to HTML 2xx pages and compares the response time strictly to 3000 ms. It is the time seen by the crawler, from sending the request to reading the whole body, not a browser loading time: network distance and the crawler's own load can inflate it.
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**

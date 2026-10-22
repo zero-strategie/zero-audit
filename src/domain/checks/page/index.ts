@@ -5,10 +5,12 @@ import { check3 } from './check-003-title-missing.js';
 import { check4 } from './check-004-blocked-by-robots.js';
 import { check9 } from './check-009-timeout.js';
 import { check11 } from './check-011-unreachable.js';
+import { check20 } from './check-020-viewport-missing.js';
 import { check26 } from './check-026-http-page.js';
 import { check31 } from './check-031-http-link-on-https.js';
 import { check33 } from './check-033-redirect-chain.js';
 import { check38 } from './check-038-canonical-to-error.js';
+import { check46 } from './check-046-viewport-without-width.js';
 import { check101 } from './check-101-title-too-short.js';
 import { check102 } from './check-102-title-too-long.js';
 import { check103 } from './check-103-h1-missing.js';
@@ -41,10 +43,12 @@ export const pageChecks: readonly PageCheck[] = [
   check4,
   check9,
   check11,
+  check20,
   check26,
   check31,
   check33,
   check38,
+  check46,
   check101,
   check102,
   check103,

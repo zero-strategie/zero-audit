@@ -583,6 +583,8 @@ describe('registry metadata', () => {
       216: 'notice',
       217: 'notice',
       215: 'notice',
+      20: 'error',
+      46: 'error',
     });
   });
 
@@ -1044,5 +1046,53 @@ describe('check 111 (slow response)', () => {
     );
     expect(flaggedUrls(result)).toEqual([]);
     expect(result.examined).toBe(0);
+  });
+});
+
+describe('checks 20 and 46 (viewport)', () => {
+  const withViewport = (name: string, viewport: string | null, overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { viewport }, ...overrides });
+
+  it('flags a page without viewport with 20 only', () => {
+    const pages = [withViewport('a', null)];
+    expect(flaggedUrls(run(20, pages))).toEqual([u('a')]);
+    expect(flaggedUrls(run(46, pages))).toEqual([]);
+  });
+
+  it.each(['initial-scale=1', '', 'minimum-scale=1, user-scalable=no'])(
+    'flags the viewport "%s" without width with 46 only',
+    (viewport) => {
+      const pages = [withViewport('a', viewport)];
+      expect(flaggedUrls(run(46, pages))).toEqual([u('a')]);
+      expect(flaggedUrls(run(20, pages))).toEqual([]);
+    },
+  );
+
+  it.each(['width=device-width, initial-scale=1', 'initial-scale=1,WIDTH = 980', 'width=500'])(
+    'flags nothing for the viewport "%s"',
+    (viewport) => {
+      const pages = [withViewport('a', viewport)];
+      expect(flaggedUrls(run(20, pages))).toEqual([]);
+      expect(flaggedUrls(run(46, pages))).toEqual([]);
+      expect(run(20, pages).examined).toBe(1);
+      expect(run(46, pages).examined).toBe(1);
+    },
+  );
+
+  it('does not read a width-like token as a width', () => {
+    expect(flaggedUrls(run(46, [withViewport('a', 'min-width=300')]))).toEqual([u('a')]);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const pages = [
+      withViewport('gone', null, { status: 404 }),
+      withViewport('img', null, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ];
+    for (const id of [20, 46]) {
+      const result = run(id, pages);
+      expect(flaggedUrls(result)).toEqual([]);
+      expect(result.examined).toBe(0);
+    }
   });
 });
