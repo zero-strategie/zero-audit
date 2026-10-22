@@ -90,6 +90,7 @@ class CrawlRun {
   private readonly seen = new Set<string>();
   private readonly queue: QueueItem[] = [];
   private internalHost = '';
+  private sitemapUrls: ReadonlySet<string> | null = null;
 
   constructor(
     private readonly dependencies: BfsCrawlerDependencies,
@@ -109,6 +110,7 @@ class CrawlRun {
       sitemapReader: this.dependencies.sitemapReader,
     }).execute(finalRoot.url, this.internalHost);
     this.http.raiseDelayTo(discovery.robotsPolicy.crawlDelayMs ?? 0);
+    this.sitemapUrls = discovery.sitemapFound ? new Set(discovery.sitemapUrls) : null;
 
     for (const url of discovery.sitemapUrls) this.enqueue(url, 1);
     for (const fetched of rootChain) this.record(fetched);
@@ -123,6 +125,7 @@ class CrawlRun {
       blockedPages: this.blockedPages,
       links: this.links,
       siteFiles: discovery.siteFiles,
+      sitemapUrls: discovery.sitemapUrls,
       hostProbe,
       slashProbes,
       site: { robotsFound: discovery.robotsFound, sitemapFound: discovery.sitemapFound },
@@ -266,7 +269,7 @@ class CrawlRun {
       contentHash: parsed?.contentHash ?? null,
       blockedByRobots: false,
       htmlFacts: parsed === null ? null : toHtmlFacts(parsed),
-      inSitemap: null,
+      inSitemap: this.isInSitemap(url),
     };
     if (isNetworkFailure(response)) {
       return {
@@ -312,8 +315,13 @@ class CrawlRun {
       contentHash: null,
       blockedByRobots: true,
       htmlFacts: null,
-      inSitemap: null,
+      inSitemap: this.isInSitemap(url),
     };
+  }
+
+  /** Null when no sitemap was found: absence from a sitemap that does not exist means nothing. */
+  private isInSitemap(url: string): boolean | null {
+    return this.sitemapUrls === null ? null : this.sitemapUrls.has(url);
   }
 
   private redirectTargetOf({ url, response }: Pick<Fetched, 'url' | 'response'>): string | null {

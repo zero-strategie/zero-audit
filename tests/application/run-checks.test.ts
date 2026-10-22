@@ -40,6 +40,7 @@ const crawl: CrawlResult = {
   links: [],
   siteFiles: [],
   hostProbe: null,
+  sitemapUrls: [],
   slashProbes: [],
   site: { robotsFound: false, sitemapFound: false },
 };

@@ -31,6 +31,7 @@ const crawlResult: CrawlResult = {
     isHtml: true,
     canonical: null,
   },
+  sitemapUrls: [],
   slashProbes: [
     {
       url: 'https://exemple.com/a/',

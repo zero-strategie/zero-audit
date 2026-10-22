@@ -99,6 +99,8 @@ export interface CrawlResult {
   readonly blockedPages: readonly Page[];
   readonly links: readonly Link[];
   readonly siteFiles: readonly SiteFile[];
+  /** Normalized internal page URLs listed by the sitemaps, children included; not persisted. */
+  readonly sitemapUrls: readonly string[];
   /** Null when the root host is an IP or localhost: no alternate host exists. */
   readonly hostProbe: HostProbe | null;
   readonly slashProbes: readonly SlashVariantProbe[];

@@ -66,6 +66,7 @@ export const crawlOf = (
   links,
   siteFiles: [],
   hostProbe,
+  sitemapUrls: [],
   slashProbes,
   site,
 });
