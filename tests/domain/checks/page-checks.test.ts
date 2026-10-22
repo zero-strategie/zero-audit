@@ -559,6 +559,8 @@ describe('registry metadata', () => {
       38: 'error',
       113: 'warning',
       122: 'warning',
+      136: 'warning',
+      201: 'notice',
       109: 'warning',
       209: 'notice',
       212: 'notice',
@@ -592,5 +594,18 @@ describe('check 136 (URL too long)', () => {
     expect(flaggedUrls(result)).toEqual([urlOfLength(101), urlOfLength(200)]);
     expect(result.occurrences.map((o) => o.info)).toEqual([{ length: 101 }, { length: 200 }]);
     expect(result.examined).toBe(4);
+  });
+});
+
+describe('check 201 (URL over 200 characters)', () => {
+  it('flags only URLs longer than 200 characters and reports their length', () => {
+    const result = run(201, [
+      makePage(urlOfLength(101)),
+      makePage(urlOfLength(200)),
+      makePage(urlOfLength(201)),
+    ]);
+    expect(flaggedUrls(result)).toEqual([urlOfLength(201)]);
+    expect(result.occurrences[0]?.info).toEqual({ length: 201 });
+    expect(result.examined).toBe(3);
   });
 });
