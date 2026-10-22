@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 55 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 56 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `international` and `markup` themes have no check yet and are not computable (no score) until their checks land.
@@ -25,6 +25,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 20 | error | on-page | page | An HTML page answering 2xx has no `<meta name="viewport">`. | Add `<meta name="viewport" content="width=device-width, initial-scale=1">` to the head. |
 | 21 | error | other | page | An HTML page answering 2xx weighs more than 2 MiB (2,097,152 bytes, UTF-8 size of the received document). `info.bytes` gives the size. | Trim the markup: remove inline data, split the page, paginate long lists. |
 | 26 | error | https | page | An HTML page answering 2xx is served over `http:` rather than `https:`. | Serve the page over HTTPS and redirect the http URL to it. |
+| 30 | error | https | page | An HTML page answering 2xx served over `https:` loads resources over `http:` (mixed content): `img`/`source` (`src`, `srcset`), `script`, `link rel=stylesheet`, `iframe`, `video` (`src`, `poster`), `audio`, `embed`, `object`. `info.total` is the real count and `info.urls` the resolved URLs (capped at 20). | Load these resources over `https:`. |
 | 31 | warning | https | page | A page on an https site has `<a>` links to internal URLs written with `http:`, including those that redirect to https. One occurrence per page; `info.targets` lists the target URLs, sorted. | Rewrite these links with `https:`. |
 | 33 | error | crawlability | page | A redirecting URL goes through at least 2 redirects before reaching its destination, or leads into a loop. `info` gives the `chain` (the URLs followed in order, without the starting URL) and `loop`, plus `truncated` when the 10-hop cap was reached. | Redirect straight to the final destination and update the links. |
 | 38 | error | crawlability | page | A page declares a canonical URL that points to a crawled page answering 4xx, 5xx or failing at network level. `info` gives the `canonical` and the `status` (`null` for a network failure). | Point the canonical to a page that answers 200, or remove it. |
@@ -97,6 +98,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 116 applies to HTML 2xx pages whose HTML facts were recorded, like check 115. It looks for a doctype at the start of the raw document only.
   - Check 110 applies to HTML 2xx pages whose HTML facts were recorded and reports only a missing `alt` attribute: an empty `alt=""` is legitimate for decorative images and is never reported.
   - Check 121 applies to the same pages and looks for `<frameset>` and `<frame>` (commented-out ones are ignored); `<iframe>` does not count.
+  - Check 30 applies to https HTML 2xx pages whose HTML facts were recorded. Resources are read from the markup, resolved against `<base>`, and never requested. `<a>` links are not resources (check 31). A `Content-Security-Policy: upgrade-insecure-requests` header, which makes browsers upgrade these requests, is not taken into account.
   - Check 44 applies to HTML 2xx pages whose HTML facts were recorded; only `<a href>` values are examined (rule A3), and the other link checks are unchanged.
   - Checks 39 and 40 apply to HTML 2xx pages whose HTML facts were recorded. Check 40 ignores a refresh with no `url=` (a plain reload).
   - Check 21 applies to HTML 2xx pages whose HTML facts were recorded; the size is the UTF-8 byte length of the document the crawler read (threshold `MAX_HTML_BYTES`, 2 MiB), strictly exceeded. Check 220 compares the visible word count to `TOO_MUCH_CONTENT_WORDS` (10,000 words), strictly exceeded.

@@ -556,6 +556,7 @@ describe('registry metadata', () => {
       9: 'error',
       11: 'error',
       26: 'error',
+      30: 'error',
       31: 'warning',
       33: 'error',
       38: 'error',
@@ -1356,6 +1357,41 @@ describe('check 44 (malformed links)', () => {
     const result = run(44, [
       withMalformed('gone', 3, ['http:/x'], { status: 404 }),
       withMalformed('img', 3, ['http:/x'], { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 30 (mixed content)', () => {
+  const withInsecure = (
+    url: string,
+    total: number,
+    examples: string[],
+    overrides: Partial<Page> = {},
+  ) => makePage(url, { htmlFacts: { insecureResources: { total, examples } }, ...overrides });
+
+  it('flags an https page loading an http image, with the total and the URLs', () => {
+    const urls = ['http://cdn.exemple.com/a.png', 'http://cdn.exemple.com/b.js'];
+    const result = run(30, [withInsecure(u('mixed'), 2, urls), withInsecure(u('clean'), 0, [])]);
+    expect(flaggedUrls(result)).toEqual([u('mixed')]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 2, urls });
+    expect(result.examined).toBe(2);
+  });
+
+  it('keeps the real total when the URLs are capped', () => {
+    const urls = Array.from({ length: 20 }, (_, i) => `http://cdn.exemple.com/${String(i)}.png`);
+    const result = run(30, [withInsecure(u('many'), 31, urls)]);
+    expect(result.occurrences[0]?.info).toEqual({ total: 31, urls });
+  });
+
+  it('does not examine http pages, error pages, non-HTML pages or pages without facts', () => {
+    const insecure = ['http://cdn.exemple.com/a.png'];
+    const result = run(30, [
+      withInsecure('http://exemple.com/plain', 1, insecure),
+      withInsecure(u('gone'), 1, insecure, { status: 404 }),
+      withInsecure(u('img'), 1, insecure, { isHtml: false }),
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);
