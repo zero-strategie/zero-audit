@@ -5,8 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runCli, type CliIo } from '../../src/cli/run-cli.js';
 import { createStorage, type StorageConfig } from '../../src/composition/storage.js';
 import { ListIssues } from '../../src/application/list-issues.js';
+import type { Clock } from '../../src/application/ports/clock.js';
+import { SystemClock } from '../../src/infrastructure/system-clock.js';
 import { allChecks } from '../../src/domain/checks/index.js';
 import { ANONYMOUS_READER } from '../../src/domain/reader.js';
+import { SLOW_RESPONSE_MS } from '../../src/domain/thresholds.js';
 import {
   startFixtureServer,
   type FixtureRoute,
@@ -66,6 +69,16 @@ const SITE: Record<string, FixtureRoute> = {
 
 const silentIo: CliIo = { stdout: () => undefined, stderr: () => undefined, stderrIsTty: false };
 
+/** Every reading of the clock takes longer than the slow-response threshold. */
+class SlowClock implements Clock {
+  private current = 0;
+
+  now(): number {
+    this.current += SLOW_RESPONSE_MS + 1;
+    return this.current;
+  }
+}
+
 type StoreCase = readonly [name: 'sqlite' | 'postgres', skip: boolean];
 
 const STORES: readonly StoreCase[] = [
@@ -88,7 +101,9 @@ describe('checks of lot 1 end to end', () => {
   });
 
   describe.each(STORES)('with %s', (store, skip) => {
-    const auditCounts = async (): Promise<Record<number, number>> => {
+    const auditCounts = async (
+      clock: Clock = new SystemClock(),
+    ): Promise<Record<number, number>> => {
       const configs: StorageConfig[] = [];
       let snapshotId = '';
       const args = [server.baseUrl, '--direct', '--delay', '0', '--db', join(dir, 'audit.db')];
@@ -98,6 +113,7 @@ describe('checks of lot 1 end to end', () => {
         { DATABASE_URL: TEST_DATABASE_URL },
         silentIo,
         {
+          clock,
           storageFactory: (config) => {
             configs.push(config);
             return createStorage(config);
@@ -134,5 +150,11 @@ describe('checks of lot 1 end to end', () => {
         }
       },
     );
+
+    it.skipIf(skip)('reports 111 with an injected clock instead of a real wait', async () => {
+      const counts = await auditCounts(new SlowClock());
+
+      expect(counts[111]).toBeGreaterThanOrEqual(1);
+    });
   });
 });
