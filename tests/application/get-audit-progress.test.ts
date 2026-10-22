@@ -4,7 +4,7 @@ import { SnapshotNotFound } from '../../src/domain/errors.js';
 import { ANONYMOUS_READER, type Reader } from '../../src/domain/reader.js';
 import { InMemoryProjectRepository } from '../../src/infrastructure/in-memory-project-repository.js';
 import { InMemorySnapshotRepository } from '../../src/infrastructure/in-memory-snapshot-repository.js';
-import { NOW } from '../support/auth-doubles.js';
+import { NOW } from '../support/mutable-clock.js';
 
 const OWNER: Reader = { kind: 'account', userId: 'owner', isAdmin: false };
 const STRANGER: Reader = { kind: 'account', userId: 'stranger', isAdmin: false };

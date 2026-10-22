@@ -5,14 +5,10 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Link } from '../../src/domain/crawl.js';
 import type { Admission } from '../../src/application/ports/audit-queue.js';
-import { AuditInProgress, SnapshotImmutable } from '../../src/domain/errors.js';
+import { SnapshotImmutable } from '../../src/domain/errors.js';
 import { createPool } from '../../src/infrastructure/postgres/pool.js';
 import { migrate } from '../../src/infrastructure/postgres/migrate.js';
 import { PostgresSnapshotRepository } from '../../src/infrastructure/postgres/postgres-snapshot-repository.js';
-import { PostgresAccountEraser } from '../../src/infrastructure/postgres/postgres-account-eraser.js';
-import { PostgresEmailTokenRepository } from '../../src/infrastructure/postgres/postgres-email-token-repository.js';
-import { PostgresSessionRepository } from '../../src/infrastructure/postgres/postgres-session-repository.js';
-import { PostgresUserRepository } from '../../src/infrastructure/postgres/postgres-user-repository.js';
 import { postgresLegacyAccounts } from '../support/legacy-accounts.js';
 import { describeProjectRepositoryContract } from '../support/project-repository-contract.js';
 import {
@@ -20,16 +16,7 @@ import {
   TEST_DATABASE_URL,
   type TestDatabase,
 } from '../support/postgres-test-database.js';
-import {
-  type AccountStorage,
-  describeAccountEraserContract,
-  seedAccount,
-  seedProject,
-} from '../support/account-eraser-contract.js';
-import { describeEmailTokenRepositoryContract } from '../support/email-token-repository-contract.js';
-import { describeSessionRepositoryContract } from '../support/session-repository-contract.js';
 import { describeSnapshotRepositoryContract } from '../support/snapshot-repository-contract.js';
-import { describeUserRepositoryContract } from '../support/user-repository-contract.js';
 
 const ADMISSION_PAUSE_MS = 30;
 const startedAt = new Date('2026-01-01T10:00:00.123Z');
@@ -60,23 +47,11 @@ const canonical = (value: unknown): string =>
 describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
   let database: TestDatabase;
   let repository: PostgresSnapshotRepository;
-  let accounts: {
-    users: PostgresUserRepository;
-    sessions: PostgresSessionRepository;
-    emailTokens: PostgresEmailTokenRepository;
-    eraser: PostgresAccountEraser;
-  };
 
   beforeAll(async () => {
     database = await createTestDatabase(TEST_DATABASE_URL ?? '');
     await migrate(database.pool);
     repository = new PostgresSnapshotRepository(database.pool);
-    accounts = {
-      users: new PostgresUserRepository(database.pool),
-      sessions: new PostgresSessionRepository(database.pool),
-      emailTokens: new PostgresEmailTokenRepository(database.pool),
-      eraser: new PostgresAccountEraser(database.pool),
-    };
   });
 
   beforeEach(async () => {
@@ -121,7 +96,7 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         const active = await view.countActiveFor(accountId);
         // Widens the window between the read and the insert so a missing lock shows up reliably.
         await new Promise((resolve) => setTimeout(resolve, ADMISSION_PAUSE_MS));
-        if (active >= 1) throw new AuditInProgress();
+        if (active >= 1) throw new Error('account already has an active audit');
       };
 
       const outcomes = await Promise.allSettled([
@@ -150,27 +125,8 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
   });
   describeProjectRepositoryContract(() => ({
     projects: repository.projects,
-    users: accounts.users,
+    accounts: postgresLegacyAccounts(database.pool),
   }));
-  describeUserRepositoryContract(() => accounts.users);
-  describeSessionRepositoryContract(() => ({
-    sessions: accounts.sessions,
-    users: accounts.users,
-  }));
-  describeEmailTokenRepositoryContract(() => ({
-    emailTokens: accounts.emailTokens,
-    users: accounts.users,
-  }));
-
-  const storage = (): AccountStorage => ({
-    users: accounts.users,
-    projects: repository.projects,
-    snapshots: repository,
-    sessions: accounts.sessions,
-    emailTokens: accounts.emailTokens,
-    eraser: accounts.eraser,
-  });
-  describeAccountEraserContract(storage);
 
   describe('launch journal', () => {
     it('journals a launch under the SHA-256 of the e-mail of a user inserted with plain SQL', async () => {
@@ -190,50 +146,6 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
       expect(rows).toEqual([
         { email_hash: createHash('sha256').update('journal@example.test').digest('hex') },
       ]);
-    });
-  });
-
-  describe('secrets at rest', () => {
-    const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
-
-    it('stores the SHA-256 of a session identifier, never the identifier', async () => {
-      const user = await accounts.users.create({
-        email: 'u@example.fr',
-        passwordHash: 'h',
-        createdAt: startedAt,
-      });
-      await accounts.sessions.create({
-        id: 'raw-session-id',
-        userId: user.id,
-        createdAt: startedAt,
-        expiresAt: startedAt,
-      });
-
-      const { rows } = await database.pool.query('SELECT * FROM sessions');
-
-      expect(JSON.stringify(rows)).toContain(sha256('raw-session-id'));
-      expect(JSON.stringify(rows)).not.toContain('raw-session-id');
-    });
-
-    it('stores the SHA-256 of an e-mail token, never the token', async () => {
-      const user = await accounts.users.create({
-        email: 'u@example.fr',
-        passwordHash: 'h',
-        createdAt: startedAt,
-      });
-      await accounts.emailTokens.create({
-        token: 'raw-email-token',
-        userId: user.id,
-        email: user.email,
-        kind: 'verify',
-        createdAt: startedAt,
-        expiresAt: startedAt,
-      });
-
-      const { rows } = await database.pool.query('SELECT * FROM email_tokens');
-
-      expect(JSON.stringify(rows)).toContain(sha256('raw-email-token'));
-      expect(JSON.stringify(rows)).not.toContain('raw-email-token');
     });
   });
 
@@ -517,62 +429,6 @@ describe.skipIf(!TEST_DATABASE_URL)('PostgresSnapshotRepository', () => {
         ).rejects.toThrow(/check/);
       } finally {
         await legacy.dispose();
-      }
-    });
-  });
-  describe('account erasure', () => {
-    const ALL_TABLES = [
-      'users',
-      'sessions',
-      'email_tokens',
-      'projects',
-      'snapshots',
-      'pages',
-      'links',
-      'site_files',
-      'host_probes',
-      'slash_probes',
-      'check_results',
-      'issue_occurrences',
-    ];
-
-    const rowCounts = async (): Promise<Record<string, number>> =>
-      Object.fromEntries(
-        await Promise.all(ALL_TABLES.map(async (table) => [table, await count(table)] as const)),
-      );
-
-    const seedOthers = async (): Promise<void> => {
-      await seedAccount(storage(), { email: 'v@example.fr' });
-      await seedProject(storage(), { ownerId: null, rootUrl: 'https://showcase.test/' });
-    };
-
-    it('leaves exactly the rows of the other accounts and of the showcase', async () => {
-      await seedOthers();
-      const baseline = await rowCounts();
-      const u = await seedAccount(storage(), { email: 'u@example.fr' });
-
-      await accounts.eraser.eraseAccount(u.userId);
-
-      expect(await rowCounts()).toEqual(baseline);
-    });
-
-    it('rolls back every deletion when the erasure fails midway', async () => {
-      await seedOthers();
-      const u = await seedAccount(storage(), { email: 'u@example.fr' });
-      const before = await rowCounts();
-      await database.pool.query(
-        `CREATE FUNCTION fail_user_erasure() RETURNS trigger LANGUAGE plpgsql AS
-         $$ BEGIN RAISE EXCEPTION 'boom'; END $$`,
-      );
-      await database.pool.query(
-        'CREATE TRIGGER fail_user_erasure BEFORE DELETE ON users FOR EACH ROW EXECUTE FUNCTION fail_user_erasure()',
-      );
-      try {
-        await expect(accounts.eraser.eraseAccount(u.userId)).rejects.toThrow('boom');
-        expect(await rowCounts()).toEqual(before);
-      } finally {
-        await database.pool.query('DROP TRIGGER fail_user_erasure ON users');
-        await database.pool.query('DROP FUNCTION fail_user_erasure()');
       }
     });
   });

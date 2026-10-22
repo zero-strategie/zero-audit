@@ -299,21 +299,6 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
     );
   }
 
-  /** For `InMemoryAccountEraser` only: the port itself stays append-only. */
-  eraseOfProjects(projectIds: readonly string[]): void {
-    for (const [id, { snapshot }] of [...this.stored]) {
-      if (projectIds.includes(snapshot.projectId)) this.stored.delete(id);
-    }
-  }
-
-  /** For `InMemoryAccountEraser` only: returns how many entries were dropped. */
-  purgeLaunchesBefore(date: Date): number {
-    const kept = this.launchJournal.filter(({ launchedAt }) => launchedAt >= date);
-    const dropped = this.launchJournal.length - kept.length;
-    this.launchJournal.splice(0, this.launchJournal.length, ...kept);
-    return dropped;
-  }
-
   private async launchKeyOf(userId: string): Promise<string> {
     const email = await this.emailOf?.(userId);
     return hashToken(email ?? userId);

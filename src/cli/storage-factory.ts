@@ -1,37 +1,27 @@
+import type { Database } from 'better-sqlite3';
+import type { Pool } from 'pg';
 import type { AuditQueue } from '../application/ports/audit-queue.js';
-import type { AccountEraser } from '../application/ports/account-eraser.js';
-import type { EmailTokenRepository } from '../application/ports/email-token-repository.js';
-import type { SessionRepository } from '../application/ports/session-repository.js';
-import type { UserRepository } from '../application/ports/user-repository.js';
 import type { ProjectRepository } from '../application/ports/project-repository.js';
 import type { StorageHealth } from '../application/ports/storage-health.js';
 import type { SnapshotRepository } from '../application/ports/snapshot-repository.js';
 import { MigrateStorage } from '../application/migrate-storage.js';
 import { migrate } from '../infrastructure/postgres/migrate.js';
 import { createPool } from '../infrastructure/postgres/pool.js';
-import { PostgresAccountEraser } from '../infrastructure/postgres/postgres-account-eraser.js';
-import { PostgresEmailTokenRepository } from '../infrastructure/postgres/postgres-email-token-repository.js';
-import { PostgresSessionRepository } from '../infrastructure/postgres/postgres-session-repository.js';
-import { PostgresUserRepository } from '../infrastructure/postgres/postgres-user-repository.js';
 import { PostgresSnapshotRepository } from '../infrastructure/postgres/postgres-snapshot-repository.js';
 import { PostgresStorageMigrator } from '../infrastructure/postgres/postgres-storage-migrator.js';
 import { SqliteStorageMigrator } from '../infrastructure/sqlite/sqlite-storage-migrator.js';
-import { SqliteAccountEraser } from '../infrastructure/sqlite/sqlite-account-eraser.js';
-import { SqliteEmailTokenRepository } from '../infrastructure/sqlite/sqlite-email-token-repository.js';
-import { SqliteSessionRepository } from '../infrastructure/sqlite/sqlite-session-repository.js';
-import { SqliteUserRepository } from '../infrastructure/sqlite/sqlite-user-repository.js';
 import { SqliteSnapshotRepository } from '../infrastructure/sqlite/sqlite-snapshot-repository.js';
 import type { StoreSelection } from './config.js';
+
+/** The underlying connection, for a hosted product that attaches its own repositories to the same database. */
+export type StorageConnection = { kind: 'sqlite'; db: Database } | { kind: 'postgres'; pool: Pool };
 
 export interface Storage {
   readonly projects: ProjectRepository;
   readonly snapshots: SnapshotRepository;
   readonly queue: AuditQueue;
   readonly health: StorageHealth;
-  readonly users: UserRepository;
-  readonly sessions: SessionRepository;
-  readonly emailTokens: EmailTokenRepository;
-  readonly eraser: AccountEraser;
+  readonly connection: StorageConnection;
   /** Idempotent: releasing the connection twice (end of command and SIGINT) is harmless. */
   close(): Promise<void>;
 }
@@ -70,10 +60,7 @@ const openSqlite = (dbPath: string): Storage => {
     snapshots: repository,
     queue: repository,
     health: repository,
-    users: new SqliteUserRepository(repository.db),
-    sessions: new SqliteSessionRepository(repository.db),
-    emailTokens: new SqliteEmailTokenRepository(repository.db),
-    eraser: new SqliteAccountEraser(repository.db),
+    connection: { kind: 'sqlite', db: repository.db },
     close: once(() => {
       repository.close();
       return Promise.resolve();
@@ -103,10 +90,7 @@ const openPostgres = async (databaseUrl: string): Promise<Storage> => {
     snapshots: repository,
     queue: repository,
     health: repository,
-    users: new PostgresUserRepository(pool),
-    sessions: new PostgresSessionRepository(pool),
-    emailTokens: new PostgresEmailTokenRepository(pool),
-    eraser: new PostgresAccountEraser(pool),
+    connection: { kind: 'postgres', pool },
     close: once(() => pool.end()),
   };
 };

@@ -49,6 +49,21 @@ describe('createStorage', () => {
     await expect(storage.close()).resolves.toBeUndefined();
   });
 
+  it('exposes the SQLite connection with the account tables created by the migrations', async () => {
+    const storage = await createStorage({
+      store: 'sqlite',
+      databaseUrl: null,
+      dbPath: join(dir, 'audit.db'),
+    });
+
+    expect(storage.connection.kind).toBe('sqlite');
+    if (storage.connection.kind !== 'sqlite') throw new Error('expected a SQLite connection');
+    expect(storage.connection.db.prepare('SELECT count(*) AS n FROM users').get()).toEqual({
+      n: 0,
+    });
+    await storage.close();
+  });
+
   it('fails on an unreachable Postgres without leaking the password', async () => {
     const url = 'postgresql://zero:s3cret-pw@127.0.0.1:1/audit';
 
@@ -67,6 +82,17 @@ describe('createStorage', () => {
 describe.skipIf(TEST_DATABASE_URL === undefined)('createStorage with Postgres', () => {
   const open = () =>
     createStorage({ store: 'postgres', databaseUrl: TEST_DATABASE_URL ?? null, dbPath: '' });
+
+  it('exposes the Postgres pool with the account tables created by the migrations', async () => {
+    const storage = await open();
+
+    expect(storage.connection.kind).toBe('postgres');
+    if (storage.connection.kind !== 'postgres') throw new Error('expected a Postgres connection');
+    await expect(
+      storage.connection.pool.query('SELECT count(*) FROM users'),
+    ).resolves.toBeDefined();
+    await storage.close();
+  });
 
   it('closes the pool only once when close is called twice in sequence', async () => {
     const storage = await open();

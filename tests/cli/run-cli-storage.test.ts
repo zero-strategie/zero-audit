@@ -53,10 +53,7 @@ const spyOnFactory = (): SpiedFactory => {
       snapshots: real.snapshots,
       queue: real.queue,
       health: real.health,
-      users: real.users,
-      sessions: real.sessions,
-      emailTokens: real.emailTokens,
-      eraser: real.eraser,
+      connection: real.connection,
       close: async () => {
         closes += 1;
         if (closes === 1) effective += 1;

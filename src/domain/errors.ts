@@ -78,20 +78,6 @@ export class PrivateAddressRejected extends DomainError {
   }
 }
 
-export class AuditAlreadyQueuedForAccount extends DomainError {
-  constructor() {
-    super('The account already has an audit queued or running');
-    this.name = 'AuditAlreadyQueuedForAccount';
-  }
-}
-
-export class QueueFull extends DomainError {
-  constructor() {
-    super('The audit queue is full');
-    this.name = 'QueueFull';
-  }
-}
-
 export class HostNotResolved extends DomainError {
   constructor(readonly host: string) {
     super(`Host ${host} does not resolve`);
@@ -103,33 +89,5 @@ export class InvalidAuditUrl extends DomainError {
   constructor(readonly url: string) {
     super('Audit URL is not a complete http(s) address');
     this.name = 'InvalidAuditUrl';
-  }
-}
-
-export class InvalidEmail extends DomainError {
-  constructor() {
-    super('E-mail address is invalid');
-    this.name = 'InvalidEmail';
-  }
-}
-
-export class EmailAlreadyRegistered extends DomainError {
-  constructor() {
-    super('An account already exists for this e-mail address');
-    this.name = 'EmailAlreadyRegistered';
-  }
-}
-
-export class InvalidOrExpiredToken extends DomainError {
-  constructor() {
-    super('The token is unknown, already used or expired');
-    this.name = 'InvalidOrExpiredToken';
-  }
-}
-
-export class AuditInProgress extends DomainError {
-  constructor() {
-    super('An audit launched by this account is still running');
-    this.name = 'AuditInProgress';
   }
 }

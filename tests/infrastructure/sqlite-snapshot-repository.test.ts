@@ -8,31 +8,11 @@ import { SnapshotImmutable } from '../../src/domain/errors.js';
 import { UNKNOWN_PROJECT_ROOT_URL } from '../../src/domain/project.js';
 import { openDatabase } from '../../src/infrastructure/sqlite/open-database.js';
 import { SqliteSnapshotRepository } from '../../src/infrastructure/sqlite/sqlite-snapshot-repository.js';
-import { SqliteAccountEraser } from '../../src/infrastructure/sqlite/sqlite-account-eraser.js';
-import { SqliteEmailTokenRepository } from '../../src/infrastructure/sqlite/sqlite-email-token-repository.js';
-import { SqliteSessionRepository } from '../../src/infrastructure/sqlite/sqlite-session-repository.js';
-import { SqliteUserRepository } from '../../src/infrastructure/sqlite/sqlite-user-repository.js';
 import { sqliteLegacyAccounts } from '../support/legacy-accounts.js';
 import { describeProjectRepositoryContract } from '../support/project-repository-contract.js';
-import {
-  type AccountStorage,
-  describeAccountEraserContract,
-  seedAccount,
-  seedProject,
-} from '../support/account-eraser-contract.js';
-import { describeEmailTokenRepositoryContract } from '../support/email-token-repository-contract.js';
-import { describeSessionRepositoryContract } from '../support/session-repository-contract.js';
 import { describeSnapshotRepositoryContract } from '../support/snapshot-repository-contract.js';
-import { describeUserRepositoryContract } from '../support/user-repository-contract.js';
 
 const openInMemory = (): SqliteSnapshotRepository => SqliteSnapshotRepository.open(':memory:');
-
-const accountsOf = (repository: SqliteSnapshotRepository) => ({
-  users: new SqliteUserRepository(repository.db),
-  sessions: new SqliteSessionRepository(repository.db),
-  emailTokens: new SqliteEmailTokenRepository(repository.db),
-  eraser: new SqliteAccountEraser(repository.db),
-});
 
 describeSnapshotRepositoryContract(() => {
   const repository = openInMemory();
@@ -53,26 +33,8 @@ describe('SqliteSnapshotRepository busy timeout', () => {
 });
 describeProjectRepositoryContract(() => {
   const repository = openInMemory();
-  return { projects: repository.projects, users: accountsOf(repository).users };
+  return { projects: repository.projects, accounts: sqliteLegacyAccounts(repository.db) };
 });
-describeUserRepositoryContract(() => accountsOf(openInMemory()).users);
-describeSessionRepositoryContract(() => {
-  const repository = openInMemory();
-  return { sessions: accountsOf(repository).sessions, users: accountsOf(repository).users };
-});
-describeEmailTokenRepositoryContract(() => {
-  const repository = openInMemory();
-  return { emailTokens: accountsOf(repository).emailTokens, users: accountsOf(repository).users };
-});
-const storageOf = (repository: SqliteSnapshotRepository): AccountStorage => ({
-  users: accountsOf(repository).users,
-  projects: repository.projects,
-  snapshots: repository,
-  sessions: accountsOf(repository).sessions,
-  emailTokens: accountsOf(repository).emailTokens,
-  eraser: accountsOf(repository).eraser,
-});
-describeAccountEraserContract(() => storageOf(openInMemory()));
 
 describe('SqliteSnapshotRepository ping', () => {
   it('resolves while the database is open', async () => {
@@ -533,62 +495,6 @@ describe('migration 011 on a database at migration 010', () => {
   });
 });
 
-describe('SqliteSnapshotRepository secrets at rest', () => {
-  const openOnFile = (): { path: string; repository: SqliteSnapshotRepository } => {
-    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
-    return { path, repository: SqliteSnapshotRepository.open(path) };
-  };
-
-  const dump = (path: string, table: string): string => {
-    const db = new Database(path, { readonly: true });
-    const rows = JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all());
-    db.close();
-    return rows;
-  };
-
-  it('stores the SHA-256 of a session identifier, never the identifier', async () => {
-    const { path, repository } = openOnFile();
-    const user = await accountsOf(repository).users.create({
-      email: 'u@example.fr',
-      passwordHash: 'h',
-      createdAt: startedAt,
-    });
-    await accountsOf(repository).sessions.create({
-      id: 'raw-session-id',
-      userId: user.id,
-      createdAt: startedAt,
-      expiresAt: startedAt,
-    });
-    repository.close();
-
-    const stored = dump(path, 'sessions');
-    expect(stored).toContain(createHash('sha256').update('raw-session-id').digest('hex'));
-    expect(stored).not.toContain('raw-session-id');
-  });
-
-  it('stores the SHA-256 of an e-mail token, never the token', async () => {
-    const { path, repository } = openOnFile();
-    const user = await accountsOf(repository).users.create({
-      email: 'u@example.fr',
-      passwordHash: 'h',
-      createdAt: startedAt,
-    });
-    await accountsOf(repository).emailTokens.create({
-      token: 'raw-email-token',
-      userId: user.id,
-      email: user.email,
-      kind: 'verify',
-      createdAt: startedAt,
-      expiresAt: startedAt,
-    });
-    repository.close();
-
-    const stored = dump(path, 'email_tokens');
-    expect(stored).toContain(createHash('sha256').update('raw-email-token').digest('hex'));
-    expect(stored).not.toContain('raw-email-token');
-  });
-});
-
 describe('SqliteSnapshotRepository launch journal', () => {
   it('journals a launch under the SHA-256 of the e-mail of a user inserted with plain SQL', async () => {
     const repository = openInMemory();
@@ -613,73 +519,5 @@ describe('SqliteSnapshotRepository launch journal', () => {
     expect(rows).toEqual([
       { email_hash: createHash('sha256').update('journal@example.test').digest('hex') },
     ]);
-  });
-});
-
-describe('SqliteAccountEraser', () => {
-  const ALL_TABLES = [
-    'users',
-    'sessions',
-    'email_tokens',
-    'projects',
-    'snapshots',
-    'pages',
-    'links',
-    'site_files',
-    'host_probes',
-    'slash_probes',
-    'check_results',
-    'issue_occurrences',
-  ];
-
-  const openOnFile = (): { path: string; repository: SqliteSnapshotRepository } => {
-    const path = join(mkdtempSync(join(tmpdir(), 'zero-audit-')), 'audit.db');
-    return { path, repository: SqliteSnapshotRepository.open(path) };
-  };
-
-  const rowCounts = (path: string): Record<string, number> => {
-    const db = new Database(path, { readonly: true });
-    const counts = Object.fromEntries(
-      ALL_TABLES.map((table) => [
-        table,
-        (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n,
-      ]),
-    );
-    db.close();
-    return counts;
-  };
-
-  const seedOthers = async (repository: SqliteSnapshotRepository): Promise<void> => {
-    await seedAccount(storageOf(repository), { email: 'v@example.fr' });
-    await seedProject(storageOf(repository), { ownerId: null, rootUrl: 'https://showcase.test/' });
-  };
-
-  it('leaves exactly the rows of the other accounts and of the showcase', async () => {
-    const { path, repository } = openOnFile();
-    await seedOthers(repository);
-    const baseline = rowCounts(path);
-    const u = await seedAccount(storageOf(repository), { email: 'u@example.fr' });
-
-    await accountsOf(repository).eraser.eraseAccount(u.userId);
-
-    expect(rowCounts(path)).toEqual(baseline);
-    repository.close();
-  });
-
-  it('rolls back every deletion when the erasure fails midway', async () => {
-    const { path, repository } = openOnFile();
-    await seedOthers(repository);
-    const u = await seedAccount(storageOf(repository), { email: 'u@example.fr' });
-    const before = rowCounts(path);
-    const saboteur = new Database(path);
-    saboteur.exec(
-      "CREATE TRIGGER fail_user_erasure BEFORE DELETE ON users BEGIN SELECT RAISE(ABORT, 'boom'); END",
-    );
-    saboteur.close();
-
-    await expect(accountsOf(repository).eraser.eraseAccount(u.userId)).rejects.toThrow('boom');
-
-    expect(rowCounts(path)).toEqual(before);
-    repository.close();
   });
 });
