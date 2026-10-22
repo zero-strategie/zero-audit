@@ -51,6 +51,42 @@ const discover = async (replies: Record<string, Reply>) => {
   return { http, result: await useCase.execute(ROOT, HOST) };
 };
 
+describe('DiscoverSite robots.txt facts', () => {
+  it('records the grammar facts of a found robots.txt without storing the body', async () => {
+    const { result } = await discover({
+      'https://exemple.com/robots.txt': {
+        status: 200,
+        body: 'User-agent: *\nbogus line\nSitemap: https://exemple.com/sitemap.xml',
+      },
+    });
+
+    const robots = result.siteFiles.find((file) => file.kind === 'robots');
+    expect(robots?.facts).toEqual({ invalidLines: [2], invalidCount: 1, sitemapDeclarations: 1 });
+  });
+
+  it.each<[string, Reply]>([
+    ['a 404', { status: 404 }],
+    ['a 500', { status: 500, body: 'garbage' }],
+    ['a network error', 'network-error'],
+  ])('leaves facts null for %s', async (_label, reply) => {
+    const { result } = await discover({ 'https://exemple.com/robots.txt': reply });
+
+    expect(result.siteFiles.find((file) => file.kind === 'robots')?.facts).toBeNull();
+  });
+
+  it('emits no request beyond robots.txt, the sitemap and llms.txt', async () => {
+    const { http } = await discover({
+      'https://exemple.com/robots.txt': { status: 200, body: 'garbage' },
+    });
+
+    expect(http.requested).toEqual([
+      'https://exemple.com/robots.txt',
+      'https://exemple.com/sitemap.xml',
+      'https://exemple.com/llms.txt',
+    ]);
+  });
+});
+
 describe('DiscoverSite robots.txt', () => {
   it('applies the rules of a found robots.txt', async () => {
     const { result } = await discover({
@@ -193,7 +229,7 @@ describe('DiscoverSite technical files', () => {
         url: 'https://exemple.com/robots.txt',
         status: 200,
         error: null,
-        facts: null,
+        facts: { invalidLines: [], invalidCount: 0, sitemapDeclarations: 0 },
       },
       {
         kind: 'sitemap',

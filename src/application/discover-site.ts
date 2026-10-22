@@ -1,4 +1,5 @@
 import type { SiteFile, SiteFileKind } from '../domain/crawl.js';
+import { validateRobotsTxt } from '../domain/robots-grammar.js';
 import { isInternal, resolveUrl } from '../domain/url.js';
 import {
   isNetworkFailure,
@@ -78,10 +79,12 @@ export class DiscoverSite {
   ): Promise<{ policy: RobotsPolicy; found: boolean }> {
     const { http, robotsFactory } = this.dependencies;
     const response = await http.get(robotsUrl);
-    siteFiles.push(toSiteFile('robots', robotsUrl, response));
+    const robotsFile = toSiteFile('robots', robotsUrl, response);
     if (isNetworkFailure(response) || !this.isSuccess(response.status)) {
+      siteFiles.push(robotsFile);
       return { policy: robotsFactory.allowAll(), found: false };
     }
+    siteFiles.push({ ...robotsFile, facts: validateRobotsTxt(response.body) });
     return { policy: robotsFactory.fromRobotsTxt(robotsUrl, response.body), found: true };
   }
 

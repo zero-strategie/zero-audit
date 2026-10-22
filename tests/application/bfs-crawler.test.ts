@@ -295,7 +295,13 @@ describe('BfsCrawler technical files', () => {
     });
 
     expect(result.siteFiles).toEqual([
-      { kind: 'robots', url: `${SITE}/robots.txt`, status: 200, error: null, facts: null },
+      {
+        kind: 'robots',
+        url: `${SITE}/robots.txt`,
+        status: 200,
+        error: null,
+        facts: { invalidLines: [], invalidCount: 0, sitemapDeclarations: 0 },
+      },
       { kind: 'sitemap', url: `${SITE}/sitemap.xml`, status: 404, error: null, facts: null },
       { kind: 'llms', url: `${SITE}/llms.txt`, status: null, error: 'timeout', facts: null },
     ]);

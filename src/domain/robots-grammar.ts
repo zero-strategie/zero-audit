@@ -1,11 +1,11 @@
 import { MAX_FACT_EXAMPLES } from './thresholds.js';
 
-export interface RobotsGrammarFacts {
+export type RobotsGrammarFacts = {
   /** 1-based numbers of the invalid lines, capped at `MAX_FACT_EXAMPLES`. */
   readonly invalidLines: readonly number[];
   readonly invalidCount: number;
   readonly sitemapDeclarations: number;
-}
+};
 
 /** RFC 9309 section 2.2 keys plus the common extensions accepted without warning. */
 const KNOWN_KEYS: ReadonlySet<string> = new Set([
@@ -39,8 +39,7 @@ const isInvalidLine = (text: string, insideGroup: boolean): boolean => {
   return GROUP_RULE_KEYS.has(key) && !insideGroup;
 };
 
-const keyOf = (text: string): string =>
-  text.slice(0, text.indexOf(SEPARATOR)).trim().toLowerCase();
+const keyOf = (text: string): string => text.slice(0, text.indexOf(SEPARATOR)).trim().toLowerCase();
 
 export const validateRobotsTxt = (body: string): RobotsGrammarFacts => {
   const content = body.startsWith(BYTE_ORDER_MARK) ? body.slice(1) : body;
