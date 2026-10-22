@@ -1,8 +1,9 @@
+import { MAX_FACT_EXAMPLES } from './thresholds.js';
+
 export type FactValue =
   string | number | boolean | null | readonly FactValue[] | { readonly [key: string]: FactValue };
 
-/** At most this many examples are kept per fact; the total always tells the real count. */
-export const MAX_FACT_EXAMPLES = 20;
+export { MAX_FACT_EXAMPLES };
 
 /** Capped list of examples with the real total, so a huge page cannot bloat a snapshot. */
 export interface CappedExamples<T extends FactValue> {
