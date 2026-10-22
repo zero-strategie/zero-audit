@@ -577,6 +577,7 @@ describe('registry metadata', () => {
       123: 'warning',
       202: 'notice',
       216: 'notice',
+      217: 'notice',
     });
   });
 
@@ -753,6 +754,68 @@ describe('check 216 (links without anchor text)', () => {
     ];
     const result = runCheck(pageChecks, 216, crawlOf(pages, links));
     expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+});
+
+const GENERIC_ANCHORS = [
+  'cliquez ici',
+  'ici',
+  'en savoir plus',
+  'lire la suite',
+  'voir plus',
+  'plus',
+  'click here',
+  'here',
+  'read more',
+  'learn more',
+  'more',
+  'link',
+  'lien',
+];
+
+describe('check 217 (non-descriptive anchors)', () => {
+  const crawlWithAnchor = (anchor: string | null) =>
+    crawlOf([makePage(u('a'))], [makeLink(u('a'), u('b'), { anchor })]);
+
+  it('flags a generic anchor after normalising case, spaces and trailing punctuation', () => {
+    const result = runCheck(pageChecks, 217, crawlWithAnchor('  En   SAVOIR plus. '));
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ targets: [u('b')] });
+  });
+
+  it.each(GENERIC_ANCHORS)('recognises the anchor "%s"', (anchor) => {
+    expect(flaggedUrls(runCheck(pageChecks, 217, crawlWithAnchor(anchor)))).toEqual([u('a')]);
+  });
+
+  it('does not flag an anchor that merely contains a generic phrase', () => {
+    const result = runCheck(pageChecks, 217, crawlWithAnchor('en savoir plus sur nos tarifs'));
+    expect(flaggedUrls(result)).toEqual([]);
+  });
+
+  it.each([null, '', '   '])(
+    'does not flag the empty anchor %j (check 216 covers it)',
+    (anchor) => {
+      expect(flaggedUrls(runCheck(pageChecks, 217, crawlWithAnchor(anchor)))).toEqual([]);
+    },
+  );
+
+  it('emits one occurrence per page with sorted targets and ignores resources', () => {
+    const result = runCheck(
+      pageChecks,
+      217,
+      crawlOf(
+        [makePage(u('a')), makePage(u('error'), { status: 404 })],
+        [
+          makeLink(u('a'), u('z'), { anchor: 'ici' }),
+          makeLink(u('a'), u('m'), { anchor: 'Read more' }),
+          makeLink(u('a'), u('img.png'), { type: 'resource', anchor: 'here' }),
+          makeLink(u('error'), u('x'), { anchor: 'ici' }),
+        ],
+      ),
+    );
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ targets: [u('m'), u('z')] });
     expect(result.examined).toBe(1);
   });
 });

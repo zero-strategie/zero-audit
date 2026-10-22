@@ -23,6 +23,7 @@ const EXPECTED_THEME_BY_CHECK_ID: Readonly<Record<number, string>> = {
   212: 'crawlability',
   214: 'crawlability',
   216: 'linking',
+  217: 'linking',
   125: 'crawlability',
   203: 'crawlability',
   205: 'https',
