@@ -565,6 +565,7 @@ describe('registry metadata', () => {
       136: 'warning',
       201: 'notice',
       109: 'warning',
+      111: 'error',
       209: 'notice',
       212: 'notice',
       214: 'notice',
@@ -1008,6 +1009,37 @@ describe('check 129 (uncompressed pages)', () => {
       crawlOf([
         makePage(u('img'), { isHtml: false, contentType: 'image/png' }),
         makePage(u('gone'), { status: 404 }),
+      ]),
+    );
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 111 (slow response)', () => {
+  const timed = (name: string, responseTimeMs: number, overrides: Partial<Page> = {}): Page =>
+    makePage(u(name), { responseTimeMs, ...overrides });
+
+  it('flags an HTML 200 page slower than 3000 ms with its response time', () => {
+    const result = runCheck(pageChecks, 111, crawlOf([timed('slow', 3001)]));
+    expect(flaggedUrls(result)).toEqual([u('slow')]);
+    expect(result.occurrences[0]?.info).toEqual({ responseTimeMs: 3001 });
+    expect(result.examined).toBe(1);
+  });
+
+  it('does not flag a page at exactly 3000 ms', () => {
+    const result = runCheck(pageChecks, 111, crawlOf([timed('edge', 3000)]));
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(1);
+  });
+
+  it('does not examine 404 or non-HTML pages', () => {
+    const result = runCheck(
+      pageChecks,
+      111,
+      crawlOf([
+        timed('gone', 5000, { status: 404 }),
+        timed('img', 5000, { isHtml: false, contentType: 'image/png' }),
       ]),
     );
     expect(flaggedUrls(result)).toEqual([]);

@@ -8,3 +8,4 @@ export const MAX_QUERY_PARAMETERS = 2;
 export const URL_LENGTH_WARNING = 100;
 export const URL_LENGTH_NOTICE = 200;
 export const MAX_LINKS_PER_PAGE = 3000;
+export const SLOW_RESPONSE_MS = 3000;

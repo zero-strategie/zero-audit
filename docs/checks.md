@@ -34,6 +34,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 106 | warning | on-page | page | An HTML page has no meta description. | Add a meta description. |
 | 108 | warning | linking | page | A page has more than 3000 links. `info.count` gives the number of links. | Reduce the number of links: split the page or trim menus and lists. |
 | 109 | warning | crawlability | page | A page answers with a temporary redirect (302, 303 or 307). `info` gives the `status` and the `target`. | Replace it with a permanent redirect (301 or 308) if the move is final, and update the links. |
+| 111 | error | other | page | An HTML page answering 2xx took more than 3000 ms to respond. `info.responseTimeMs` gives the time. | Investigate server time: caching, database queries, hosting. |
 | 112 | warning | on-page | page | The text-to-HTML ratio is below 10 %. The ratio is the UTF-8 byte size of the visible body text divided by the byte size of the HTML. | Reduce markup bloat or add real content. |
 | 113 | warning | crawlability | page | A URL has more than 2 query parameters. `info.count` gives the number of parameters. | Simplify the URL: keep only the parameters that change the content. |
 | 117 | warning | on-page | page | The page has fewer than 200 words of visible text. | Expand thin content, or merge or noindex the page. |
@@ -80,6 +81,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 26 applies to HTML 2xx pages and reports each one whose URL starts with `http:`, whatever the scheme of the home page: a site served entirely over http has all its pages reported. An http URL that redirects (3xx) is not reported, since it does not serve content. As a consequence the `https` theme is now scored, and a crawl of an http-only site (including the local `http://127.0.0.1` fixtures) gets 0 for it.
   - Check 31 only applies when the final home page (after redirects) is `https:`; on an http site it examines nothing. It applies to HTML 2xx pages with at least one internal `<a>` link and reports internal links whose URL starts with `http:`, even when that URL redirects to https. External links are ignored.
   - Check 129 applies to HTML 2xx pages and reads the `content-encoding` response header. The crawler keeps the default `Accept-Encoding` of undici (gzip, deflate, and more), so a server that compresses only for browsers, or a CDN that negotiates differently, may be reported although real visitors get compressed pages.
+  - Check 111 applies to HTML 2xx pages and compares the response time strictly to 3000 ms. It is the time seen by the crawler, from sending the request to reading the whole body, not a browser loading time: network distance and the crawler's own load can inflate it.
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**
   - URLs are never merged: `/about` and `/about/` are distinct pages when both are linked.
