@@ -23,7 +23,7 @@ import { Snapshot, type SnapshotStatus } from '../../domain/snapshot.js';
 import { hashToken } from '../hash-token.js';
 import { withTransaction } from './pool.js';
 import { PostgresProjectRepository } from './postgres-project-repository.js';
-import { stringifyFacts } from '../facts-serialization.js';
+import { stringifyFacts, stringifyJson } from '../facts-serialization.js';
 
 type Queryable = pg.Pool | pg.PoolClient;
 
@@ -537,7 +537,7 @@ export class PostgresSnapshotRepository implements SnapshotRepository, AuditQueu
         for (const occurrence of result.occurrences) {
           await db.query(
             'INSERT INTO issue_occurrences (snapshot_id, check_id, page_url, info) VALUES ($1, $2, $3, $4)',
-            [id, occurrence.checkId, occurrence.pageUrl, JSON.stringify(occurrence.info)],
+            [id, occurrence.checkId, occurrence.pageUrl, stringifyJson(occurrence.info)],
           );
         }
       }

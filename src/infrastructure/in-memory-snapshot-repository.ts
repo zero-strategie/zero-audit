@@ -10,7 +10,7 @@ import type { HostProbe, Link, Page, SiteFile, SlashVariantProbe } from '../doma
 import { AuditAttemptLost, SnapshotNotFound } from '../domain/errors.js';
 import { Snapshot } from '../domain/snapshot.js';
 import { hashToken } from './hash-token.js';
-import { normalizeFacts } from './facts-serialization.js';
+import { normalizeFacts, normalizeOccurrenceInfo } from './facts-serialization.js';
 
 interface Stored {
   snapshot: Snapshot;
@@ -245,7 +245,14 @@ export class InMemorySnapshotRepository implements SnapshotRepository, AuditQueu
   }
 
   addCheckResults(id: string, results: readonly CheckResult[]): Promise<void> {
-    return this.write(id, (entry) => entry.checkResults.push(...results));
+    const normalized = results.map((result) => ({
+      ...result,
+      occurrences: result.occurrences.map((occurrence) => ({
+        ...occurrence,
+        info: normalizeOccurrenceInfo(occurrence.info),
+      })),
+    }));
+    return this.write(id, (entry) => entry.checkResults.push(...normalized));
   }
 
   finish(id: string, input: { finishedAt: Date; pagesCrawled: number }): Promise<void> {

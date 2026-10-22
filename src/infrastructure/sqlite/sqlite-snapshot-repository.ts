@@ -24,7 +24,7 @@ import { hashToken } from '../hash-token.js';
 import { SqliteProjectRepository } from './sqlite-project-repository.js';
 import { migrate } from './migrate.js';
 import { openDatabase } from './open-database.js';
-import { stringifyFacts } from '../facts-serialization.js';
+import { stringifyFacts, stringifyJson } from '../facts-serialization.js';
 
 interface SnapshotRow {
   id: string;
@@ -600,7 +600,7 @@ export class SqliteSnapshotRepository implements SnapshotRepository, AuditQueue 
             id,
             occurrence.checkId,
             occurrence.pageUrl,
-            JSON.stringify(occurrence.info),
+            stringifyJson(occurrence.info),
           );
         }
       }

@@ -206,6 +206,20 @@ export const describeSnapshotRepositoryContract = (
       });
     });
 
+    it('replaces NUL characters in the info of an occurrence', async () => {
+      const { repo, id } = await createRunning();
+      await repo.addCheckResults(id, [
+        checkResult({
+          occurrences: [
+            { checkId: 3, pageUrl: null, info: { lines: ['U\u0000s\u0000er', '\\u0000'] } },
+          ],
+        }),
+      ]);
+
+      const occurrences = (await repo.getById(id))?.checkResults[0]?.occurrences;
+      expect(occurrences?.[0]?.info).toEqual({ lines: ['U\uFFFDs\uFFFDer', '\\u0000'] });
+    });
+
     it('reads back the facts of a site file', async () => {
       const { repo, id } = await createRunning();
       const robots: SiteFile = {
