@@ -1,61 +1,94 @@
 # zero-audit
 
-Open-source technical SEO audit tool. zero-audit crawls a website, runs [20 checks](docs/checks.md), scores the site's health and tracks every change between two audits. You can use it from the command line, through an HTTP API, or in a web dashboard.
+`@zero-strategie/zero-audit-core` is the open-source engine of zero-audit, a technical SEO audit tool. It crawls a website, runs [20 checks](docs/checks.md), scores the site's health and keeps every audit as an immutable snapshot so that you can see what changed between two audits.
 
-- **Crawler**:
-  - honours robots.txt and sitemaps;
-  - runs breadth-first with a politeness delay;
-  - follows redirects;
-  - probes URL variants.
-- **Checks**:
-  - HTTP errors;
-  - titles, meta descriptions, headings;
-  - thin content and text ratio;
-  - internal linking;
-  - robots.txt, sitemap, llms.txt, HSTS;
-  - duplicate URL variants.
-- **Scores**:
-  - site health and per-theme scores (crawlability, https, linking, on-page);
-  - variation since the previous audit.
-- **History**: every audit is an immutable snapshot, with new and fixed issues and a `compare` command.
+It ships as a library and as a command-line tool. A hosted product built on this engine is available at [https://audit.zero-strategie.dev](https://audit.zero-strategie.dev).
+
+- **Crawler**: honours robots.txt and sitemaps, runs breadth-first with a politeness delay, follows redirects and probes URL variants.
+- **Checks**: HTTP errors, titles, meta descriptions, headings, thin content and text ratio, internal linking, robots.txt, sitemap, llms.txt, HSTS and duplicate URL variants.
+- **Scores**: site health and per-theme scores (crawlability, https, linking, on-page), with the variation since the previous audit.
+- **History**: new and fixed issues between two audits, and a `compare` command.
 - **Storage**: SQLite out of the box, or Postgres.
-- **Dashboard**: built with Astro, responsive, with a dark mode. The interface is in French. You can launch an audit, follow its progress and relaunch it from the dashboard.
-
-## Quick start
-
-Requires Node.js 22 and pnpm.
-
-```sh
-pnpm install
-pnpm zero-audit https://example.com          # run an audit
-pnpm zero-audit serve                        # API on http://127.0.0.1:3000
-pnpm --filter web dev                        # dashboard on http://127.0.0.1:4321
-```
-
-Or, with Docker:
-
-```sh
-POSTGRES_PASSWORD=change-me docker compose up --build
-```
+- **Queue and worker**: audits can be queued and processed by one or several worker processes.
 
 Only audit sites you own or are allowed to crawl.
 
+## Installation
+
+Requires Node.js 22 or later.
+
+```sh
+npm install @zero-strategie/zero-audit-core
+```
+
+## Command line
+
+Without installing anything:
+
+```sh
+npx @zero-strategie/zero-audit-core https://example.com --direct --json report.json
+```
+
+Once the package is installed, it provides a `zero-audit` binary:
+
+```sh
+npx zero-audit https://example.com --direct --json report.json
+```
+
+`--direct` crawls inside the current process and writes the full snapshot to `report.json`. Without it, `zero-audit https://example.com` puts the audit in a queue and prints its identifier; a worker started with `zero-audit worker` then processes it, and `--wait` waits for the result.
+
+```sh
+zero-audit https://example.com --wait          # queue, then wait for a worker
+zero-audit worker                              # process queued audits
+zero-audit compare <A> <B>                     # compare two completed snapshots
+zero-audit migrate --store postgres            # apply storage migrations (needs DATABASE_URL)
+```
+
+Run `zero-audit --help` for every option. The messages of the CLI (help, progress and errors) are in French.
+
+## Library
+
+```ts
+import { createStorage, createRunAudit, migrateStorage } from '@zero-strategie/zero-audit-core';
+
+const config = { store: 'sqlite', dbPath: './.zero-audit/audit.db', databaseUrl: null } as const;
+
+await migrateStorage(config);
+const storage = await createStorage(config);
+
+const runAudit = createRunAudit({
+  storage,
+  events: { started: () => undefined, finished: () => undefined, failed: () => undefined },
+});
+
+const { snapshot } = await runAudit.execute({
+  rootUrl: 'https://example.com',
+  limit: 100,
+  delayMs: 1000,
+});
+console.log(snapshot.id, snapshot.pagesCrawled);
+
+await storage.close();
+```
+
+`createRunAudit` refuses private network addresses by default (SSRF guard). The package also exports the use cases, ports, checks and scoring functions; the exported names are listed in `src/index.ts`.
+
 ## Documentation
 
-- [User guide](docs/user-guide.md): install, run audits, read scores, the dashboard, self-hosting.
+- [User guide](docs/user-guide.md): install, run audits, read scores, storage.
 - [Checks reference](docs/checks.md): what each check flags and how to fix it.
-- [Developer guide](docs/developer-guide.md): architecture, adding a check, storage, API, tests, CI.
+- [Developer guide](docs/developer-guide.md): architecture, adding a check, storage, tests, CI.
 - [Contributing](CONTRIBUTING.md)
 
 ## About
 
-zero-audit is built by [Zero Stratégie](https://zero-strategie.dev). Its feature set is inspired by commercial site-audit tools such as Semrush's Site Audit. It is an independent project, not affiliated with or endorsed by Semrush, and it contains no Semrush code, data or text.
+zero-audit is built by [Zero Stratégie](https://zero-strategie.dev). Its feature set is inspired by commercial site-audit tools such as Semrush's Site Audit, and the numeric identifiers of its checks follow the numbering of Semrush's public issue catalogue so that results can be compared. It is an independent project, not affiliated with or endorsed by Semrush. The check wording is original. The `docs/reference/` folder of the repository holds notes and a copy of that catalogue gathered while studying Semrush's tool; it is not part of the npm package.
 
 ## Licence
 
 zero-audit is free software, released under the [GNU Affero General Public License v3.0](LICENSE) (`AGPL-3.0-only`).
 
-You can use it freely, including inside a company, and you can modify it. If you offer a modified version to users over a network, for example as a hosted service, you must make your modified source code available to them under the same licence. The dashboard footer links to the source, and `ZERO_AUDIT_SOURCE_URL` changes where it points.
+You can use it freely, including inside a company, and you can modify it. If you offer a modified version to users over a network, for example as a hosted service, you must make your modified source code available to them under the same licence.
 
 Copyright © 2026 Zero Stratégie. See [COPYRIGHT](COPYRIGHT).
 
