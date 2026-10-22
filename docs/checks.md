@@ -1,6 +1,6 @@
 # Checks reference
 
-zero-audit runs 23 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 25 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
 - **Theme**: `crawlability`, `https`, `linking`, `on-page` or `other`. Each theme gets its own score.
@@ -27,6 +27,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 104 | notice | on-page | page | An HTML page has several `<h1>`. | Keep a single main heading. |
 | 105 | warning | on-page | page | The `<h1>` is identical to the `<title>`, compared after normalising case and whitespace. | Make the heading complement the title instead of repeating it. |
 | 106 | warning | on-page | page | An HTML page has no meta description. | Add a meta description. |
+| 109 | warning | crawlability | page | A page answers with a temporary redirect (302, 303 or 307). `info` gives the `status` and the `target`. | Replace it with a permanent redirect (301 or 308) if the move is final, and update the links. |
 | 112 | warning | on-page | page | The text-to-HTML ratio is below 10 %. The ratio is the UTF-8 byte size of the visible body text divided by the byte size of the HTML. | Reduce markup bloat or add real content. |
 | 117 | warning | on-page | page | The page has fewer than 200 words of visible text. | Expand thin content, or merge or noindex the page. |
 | 125 | warning | crawlability | site | No sitemap was found. | Publish a sitemap and declare it in robots.txt. |
@@ -34,6 +35,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 203 | notice | crawlability | site | There is no `robots.txt`. | Publish a robots.txt, even a permissive one. |
 | 205 | notice | https | site | The home page is served over HTTPS without a `Strict-Transport-Security` header. | Enable HSTS on the web server. |
 | 213 | notice | linking | page | A page receives internal links from exactly one other page. | Link to it from more pages (navigation, related content). |
+| 214 | notice | crawlability | page | A page answers with a permanent redirect (301 or 308). `info` gives the `status` and the `target`. | Update internal links to point directly to the target. |
 | 1000 | warning | crawlability | page | The same page is reachable at two URLs, with and without a trailing slash, or on `www.` and the apex domain. Both answer HTML 2xx and do not share a canonical URL. | Redirect one form to the other, or declare a common `<link rel="canonical">`. |
 
 ## Notes on some definitions
@@ -43,6 +45,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Checks 1 and 2 apply to every page that got an HTTP response.
   - Check 4 always applies: its `examined` is the number of pages explored, and the occurrences come from the URLs the crawler skipped because of `robots.txt`.
   - Check 8 applies to every page that has internal links.
+  - Checks 109 and 214 apply to every page that got an HTTP response. A page redirects when its status is 302, 303 or 307 (109) or 301 or 308 (214); a 304 is not a redirect. The page is reported where it redirects, not where it is linked.
   - Checks 9 and 11 always apply: their `examined` is the number of pages explored. A timeout goes to 9, every other network failure to 11. Check 8 also reports internal links to these pages, so the same failure can appear in both (on the linking page for 8, on the failed page for 9 and 11).
   - Only pages reached within the `--limit` are examined.
 - **URL variants (1000).**

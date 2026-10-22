@@ -113,6 +113,46 @@ describe('checks 9 and 11 (unreachable pages)', () => {
   });
 });
 
+describe('checks 109 and 214 (redirects)', () => {
+  const redirect = (name: string, status: number): Page =>
+    makePage(name, { status, isHtml: false, redirectTarget: u('target') });
+
+  it.each([302, 303, 307])('flags a %i in check 109 with its status and target', (status) => {
+    const result = run(109, [redirect(u('a'), status), makePage(u('b'))]);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ status, target: u('target') });
+    expect(run(214, [redirect(u('a'), status)]).count).toBe(0);
+  });
+
+  it.each([301, 308])('flags a %i in check 214 and not in check 109', (status) => {
+    const pages = [redirect(u('a'), status)];
+    const result = run(214, pages);
+    expect(flaggedUrls(result)).toEqual([u('a')]);
+    expect(result.occurrences[0]?.info).toEqual({ status, target: u('target') });
+    expect(run(109, pages).count).toBe(0);
+  });
+
+  it('ignores 200, 304 and network errors', () => {
+    const pages = [
+      makePage(u('ok')),
+      makePage(u('cached'), { status: 304, isHtml: false }),
+      makePage(u('down'), { status: null, isHtml: false, error: 'dns' }),
+    ];
+    expect(run(109, pages).count).toBe(0);
+    expect(run(214, pages).count).toBe(0);
+  });
+
+  it('examines the pages that got an HTTP response', () => {
+    const pages = [
+      redirect(u('a'), 301),
+      makePage(u('b')),
+      makePage(u('down'), { status: null, isHtml: false, error: 'dns' }),
+    ];
+    expect(run(109, pages).examined).toBe(2);
+    expect(run(214, pages).examined).toBe(2);
+  });
+});
+
 describe('check 3 (title missing)', () => {
   it('flags null and empty titles on HTML 2xx pages only', () => {
     const result = run(3, [
@@ -273,6 +313,8 @@ describe('registry metadata', () => {
       4: 'notice',
       9: 'error',
       11: 'error',
+      109: 'warning',
+      214: 'notice',
       101: 'warning',
       102: 'warning',
       103: 'warning',
