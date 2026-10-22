@@ -1,16 +1,37 @@
 {
-  "name": "zero-audit",
-  "version": "0.1.0",
+  "name": "@zero-strategie/zero-audit-core",
+  "version": "1.0.0",
+  "description": "Technical SEO audit engine: crawler, checks, scoring, storage and worker, with a CLI.",
   "license": "AGPL-3.0-only",
-  "private": true,
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "zero-audit": "dist/cli/main.js"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "COPYRIGHT",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zero-strategie/zero-audit.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22"
   },
   "packageManager": "pnpm@10.24.0",
-  "bin": {
-    "zero-audit": "dist/cli/main.js"
-  },
   "scripts": {
     "audit": "tsx src/cli/main.ts",
     "zero-audit": "tsx src/cli/main.ts",
@@ -18,7 +39,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "format": "prettier --write .",
-    "build": "tsc -p tsconfig.build.json && cp -R src/infrastructure/sqlite/migrations dist/infrastructure/sqlite/ && cp -R src/infrastructure/postgres/migrations dist/infrastructure/postgres/"
+    "build": "tsc -p tsconfig.build.json && cp -R src/infrastructure/sqlite/migrations dist/infrastructure/sqlite/ && cp -R src/infrastructure/postgres/migrations dist/infrastructure/postgres/",
+    "prepublishOnly": "pnpm build"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -27,6 +49,8 @@
     ]
   },
   "dependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/pg": "^8.23.1",
     "better-sqlite3": "^13.0.3",
     "cheerio": "^1.2.0",
     "fast-xml-parser": "^5.11.2",
@@ -37,9 +61,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.5",
-    "@types/pg": "^8.23.1",
     "eslint": "^10.13.0",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
