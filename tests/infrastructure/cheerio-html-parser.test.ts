@@ -203,7 +203,7 @@ describe('CheerioHtmlParser header facts', () => {
   });
 
   it('caps image examples at 20 while counting all of them', () => {
-    const html = Array.from({ length: 25 }, (_, i) => `<img src="/i${i}.png">`).join('');
+    const html = Array.from({ length: 25 }, (_, i) => `<img src="/i${String(i)}.png">`).join('');
     const { imagesWithoutAlt } = parse(html);
 
     expect(imagesWithoutAlt.total).toBe(25);
@@ -261,5 +261,17 @@ describe('CheerioHtmlParser header facts', () => {
         invalidReasons: [],
       });
     });
+  });
+
+  it('lists tracked semantic elements in a fixed order', () => {
+    expect(parse('<body><nav></nav><main><div></div></main></body>').semanticElements).toEqual([
+      'main',
+      'nav',
+    ]);
+    expect(parse('<body><div></div></body>').semanticElements).toEqual([]);
+  });
+
+  it('measures the received html in utf-8 bytes', () => {
+    expect(parse('<p>é</p>').htmlBytes).toBe(9);
   });
 });

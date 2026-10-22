@@ -7,6 +7,7 @@ import type {
   JsonLdInvalidReason,
   MetaRefresh,
   ParsedHtml,
+  SemanticElement,
   RawLink,
 } from '../application/ports/html-parser.js';
 import { MAX_FACT_EXAMPLES } from '../domain/thresholds.js';
@@ -19,6 +20,14 @@ const CHARSET_IN_CONTENT_TYPE = /charset\s*=\s*([^\s;]+)/i;
 
 const CANONICAL_SELECTOR = 'link[rel~="canonical" i][href]';
 const META_REFRESH = /^\s*(\d+)\s*(?:[;,]\s*(?:url\s*=\s*)?(.*))?$/i;
+const SEMANTIC_ELEMENTS: readonly SemanticElement[] = [
+  'main',
+  'article',
+  'section',
+  'nav',
+  'header',
+  'footer',
+];
 const HTML_COMMENT = /<!--[\s\S]*?(?:-->|$)/g;
 const FRAME_TAG = /<frame(?:set)?[\s/>]/i;
 const LEADING_DOCTYPE = /^(?:\s|<!--[\s\S]*?-->)*<!doctype\s/i;
@@ -91,6 +100,8 @@ export class CheerioHtmlParser implements HtmlParser {
       hasDoctype: LEADING_DOCTYPE.test(html),
       imagesWithoutAlt: this.extractImagesWithoutAlt($),
       jsonLd: this.extractJsonLd($),
+      semanticElements: SEMANTIC_ELEMENTS.filter((tag) => $(tag).length > 0),
+      htmlBytes: Buffer.byteLength(html, 'utf8'),
       hasFrames: FRAME_TAG.test(html.replace(HTML_COMMENT, '')),
       lang: orNull($('html').first().attr('lang')?.trim() ?? ''),
     };

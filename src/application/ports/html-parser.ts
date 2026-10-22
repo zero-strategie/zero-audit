@@ -14,6 +14,8 @@ export interface MetaRefresh {
   target: string | null;
 }
 
+export type SemanticElement = 'main' | 'article' | 'section' | 'nav' | 'header' | 'footer';
+
 export interface CappedExamples {
   total: number;
   /** At most `MAX_FACT_EXAMPLES` entries, in document order. */
@@ -59,6 +61,10 @@ export interface ParsedHtml {
   /** True when a `<frameset>` or `<frame>` exists; the raw html is scanned too, as parse5 drops misplaced ones. */
   hasFrames: boolean;
   jsonLd: JsonLdFacts;
+  /** Tracked HTML5 sectioning elements present in the page, in a fixed order. */
+  semanticElements: SemanticElement[];
+  /** UTF-8 bytes of the decoded html. */
+  htmlBytes: number;
 }
 
 export interface HtmlParser {
