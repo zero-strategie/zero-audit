@@ -1,9 +1,11 @@
-import { QUOTA_WINDOW_MS } from '../domain/quota.js';
 import { UNVERIFIED_ACCOUNT_TTL_MS } from '../domain/user.js';
 import type { AccountEraser } from './ports/account-eraser.js';
 import type { Clock } from './ports/clock.js';
 import type { EmailTokenRepository } from './ports/email-token-repository.js';
 import type { SessionRepository } from './ports/session-repository.js';
+
+/** The launch journal only matters over the 24 hours the quotas of the hosted product look back. */
+const LAUNCH_JOURNAL_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export interface PurgeStaleAccountsDependencies {
   readonly eraser: AccountEraser;
@@ -33,7 +35,9 @@ export class PurgeStaleAccounts {
       accounts,
       sessions: await sessions.deleteExpired(now),
       emailTokens: await emailTokens.deleteExpired(now),
-      launches: await eraser.purgeLaunchesBefore(new Date(now.getTime() - QUOTA_WINDOW_MS)),
+      launches: await eraser.purgeLaunchesBefore(
+        new Date(now.getTime() - LAUNCH_JOURNAL_RETENTION_MS),
+      ),
     };
   }
 }

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { GetCurrentAccount } from '../../../src/application/auth/get-current-account.js';
 import { Logout } from '../../../src/application/auth/logout.js';
 import { OpenSession } from '../../../src/application/auth/open-session.js';
 import { ResolveSession } from '../../../src/application/auth/resolve-session.js';
@@ -54,43 +53,5 @@ describe('Logout', () => {
 
     await expect(logout.execute(undefined)).rejects.toThrow(Unauthenticated);
     await expect(logout.execute('unknown')).rejects.toThrow(Unauthenticated);
-  });
-});
-
-const FREE_QUOTA = { pagesLimitMax: 100, auditsRemaining: 3, nextAuditAt: null };
-const quotaOf = (status = FREE_QUOTA) => ({ statusOf: () => Promise.resolve(status) });
-
-describe('GetCurrentAccount', () => {
-  it('returns the e-mail and flags administrators case-insensitively', async () => {
-    const { first, resolveSession } = await setup();
-
-    const admin = new GetCurrentAccount({
-      resolveSession,
-      quota: quotaOf(),
-      adminEmails: ['alice@exemple.test'],
-    });
-    const other = new GetCurrentAccount({
-      resolveSession,
-      quota: quotaOf(),
-      adminEmails: ['bob@exemple.test'],
-    });
-
-    expect(await admin.execute(first)).toEqual({
-      email: 'alice@exemple.test',
-      isAdmin: true,
-      ...FREE_QUOTA,
-    });
-    expect(await other.execute(first)).toEqual({
-      email: 'alice@exemple.test',
-      isAdmin: false,
-      ...FREE_QUOTA,
-    });
-  });
-
-  it('is refused without a valid session', async () => {
-    const { resolveSession } = await setup();
-    const current = new GetCurrentAccount({ resolveSession, quota: quotaOf(), adminEmails: [] });
-
-    await expect(current.execute(undefined)).rejects.toThrow(Unauthenticated);
   });
 });
