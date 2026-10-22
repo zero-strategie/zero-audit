@@ -561,6 +561,7 @@ describe('registry metadata', () => {
       38: 'error',
       113: 'warning',
       115: 'warning',
+      116: 'warning',
       122: 'warning',
       129: 'warning',
       136: 'warning',
@@ -1129,6 +1130,27 @@ describe('check 115 (encoding not declared)', () => {
       withCharset('gone', null, 'text/html', { status: 404 }),
       withCharset('img', null, 'image/png', { isHtml: false }),
       makePage(u('old'), { htmlFacts: null, contentType: 'text/html' }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 116 (doctype not declared)', () => {
+  const withDoctype = (name: string, hasDoctype: boolean, overrides: Partial<Page> = {}) =>
+    makePage(u(name), { htmlFacts: { hasDoctype }, ...overrides });
+
+  it('flags a page without doctype and not one with a doctype', () => {
+    const result = run(116, [withDoctype('bare', false), withDoctype('ok', true)]);
+    expect(flaggedUrls(result)).toEqual([u('bare')]);
+    expect(result.examined).toBe(2);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(116, [
+      withDoctype('gone', false, { status: 404 }),
+      withDoctype('img', false, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);
     expect(result.examined).toBe(0);
