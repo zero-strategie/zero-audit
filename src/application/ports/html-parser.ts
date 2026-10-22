@@ -8,6 +8,12 @@ export interface RawLink {
   anchor: string | null;
 }
 
+export interface MetaRefresh {
+  delaySeconds: number;
+  /** Absolute URL, null for a plain reload (no `url=`). */
+  target: string | null;
+}
+
 export interface ParsedHtml {
   links: RawLink[];
   title: string | null;
@@ -29,6 +35,8 @@ export interface ParsedHtml {
   lang: string | null;
   /** Number of `<link rel="canonical">` elements, duplicates included. */
   canonicalCount: number;
+  /** First `<meta http-equiv="refresh">` with a valid delay, else null. */
+  metaRefresh: MetaRefresh | null;
 }
 
 export interface HtmlParser {

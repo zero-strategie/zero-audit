@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 import { load, type CheerioAPI } from 'cheerio';
-import type { HtmlParser, ParsedHtml, RawLink } from '../application/ports/html-parser.js';
+import type {
+  HtmlParser,
+  MetaRefresh,
+  ParsedHtml,
+  RawLink,
+} from '../application/ports/html-parser.js';
 import { resolveUrl } from '../domain/url.js';
 
 const TEXT_NODE_TYPE = 3;
@@ -9,6 +14,7 @@ const NON_VISIBLE_SELECTOR = 'script, style, noscript, template';
 const CHARSET_IN_CONTENT_TYPE = /charset\s*=\s*([^\s;]+)/i;
 
 const CANONICAL_SELECTOR = 'link[rel~="canonical" i][href]';
+const META_REFRESH = /^\s*(\d+)\s*(?:[;,]\s*(?:url\s*=\s*)?(.*))?$/i;
 const LEADING_DOCTYPE = /^(?:\s|<!--[\s\S]*?-->)*<!doctype\s/i;
 
 const normalizeSpaces = (text: string): string => text.replace(/\s+/g, ' ').trim();
@@ -18,11 +24,13 @@ export class CheerioHtmlParser implements HtmlParser {
   parse(html: string, pageUrl: string): ParsedHtml {
     const $ = load(html);
     const visibleText = this.extractVisibleText($);
+    const baseUrl = this.baseUrlOf($, pageUrl);
     return {
-      links: this.extractLinks($, this.baseUrlOf($, pageUrl)),
+      links: this.extractLinks($, baseUrl),
       title: this.extractTitle($),
       metaDescription: $('meta[name="description" i]').first().attr('content')?.trim() ?? null,
       canonical: this.extractCanonical($, pageUrl),
+      metaRefresh: this.extractMetaRefresh($, baseUrl),
       canonicalCount: $(CANONICAL_SELECTOR).length,
       h1: $('h1')
         .toArray()
@@ -79,6 +87,15 @@ export class CheerioHtmlParser implements HtmlParser {
     if (direct) return direct;
     const contentType = $('meta[http-equiv="content-type" i]').first().attr('content') ?? '';
     return CHARSET_IN_CONTENT_TYPE.exec(contentType)?.[1] ?? null;
+  }
+
+  private extractMetaRefresh($: CheerioAPI, baseUrl: string): MetaRefresh | null {
+    const content = $('meta[http-equiv="refresh" i]').first().attr('content');
+    const match = content === undefined ? null : META_REFRESH.exec(content);
+    if (match?.[1] === undefined) return null;
+    const rawTarget = match[2]?.trim().replace(/^(["'])(.*)\1$/, '$2');
+    const target = rawTarget ? resolveUrl(rawTarget, baseUrl) : null;
+    return { delaySeconds: Number(match[1]), target };
   }
 
   private extractTitle($: CheerioAPI): string | null {

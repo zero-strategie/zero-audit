@@ -180,4 +180,19 @@ describe('CheerioHtmlParser header facts', () => {
     expect(parsed.canonical).toBe('https://h/a');
     expect(parse('<head></head>').canonicalCount).toBe(0);
   });
+
+  it('reads the meta refresh delay and absolute target, null target without url', () => {
+    const refresh = (content: string, base = '') =>
+      parse(`<head>${base}<meta http-equiv="Refresh" content="${content}"></head>`).metaRefresh;
+
+    expect(refresh('5; url=/x')).toEqual({ delaySeconds: 5, target: 'https://h/x' });
+    expect(refresh("0;URL='/y'")).toEqual({ delaySeconds: 0, target: 'https://h/y' });
+    expect(refresh('5')).toEqual({ delaySeconds: 5, target: null });
+    expect(refresh('3; url=z', '<base href="https://h/b/">')).toEqual({
+      delaySeconds: 3,
+      target: 'https://h/b/z',
+    });
+    expect(refresh('soon')).toBeNull();
+    expect(parse('<head></head>').metaRefresh).toBeNull();
+  });
 });
