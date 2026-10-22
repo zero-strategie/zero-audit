@@ -28,6 +28,7 @@ import { check110 } from './check-110-images-without-alt.js';
 import { check111 } from './check-111-slow-response.js';
 import { check112 } from './check-112-low-text-ratio.js';
 import { check113 } from './check-113-too-many-parameters.js';
+import { check114 } from './check-114-language-missing.js';
 import { check115 } from './check-115-encoding-not-declared.js';
 import { check116 } from './check-116-doctype-missing.js';
 import { check117 } from './check-117-low-word-count.js';
@@ -76,6 +77,7 @@ export const pageChecks: readonly PageCheck[] = [
   check111,
   check112,
   check113,
+  check114,
   check115,
   check116,
   check117,

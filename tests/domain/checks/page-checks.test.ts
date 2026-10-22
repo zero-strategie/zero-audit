@@ -570,6 +570,7 @@ describe('registry metadata', () => {
       121: 'warning',
       21: 'error',
       220: 'notice',
+      114: 'warning',
       122: 'warning',
       129: 'warning',
       136: 'warning',
@@ -1392,6 +1393,35 @@ describe('check 30 (mixed content)', () => {
       withInsecure('http://exemple.com/plain', 1, insecure),
       withInsecure(u('gone'), 1, insecure, { status: 404 }),
       withInsecure(u('img'), 1, insecure, { isHtml: false }),
+      makePage(u('old'), { htmlFacts: null }),
+    ]);
+    expect(flaggedUrls(result)).toEqual([]);
+    expect(result.examined).toBe(0);
+  });
+});
+
+describe('check 114 (language not declared)', () => {
+  const withLanguage = (
+    name: string,
+    lang: string | null,
+    hreflang: { lang: string; url: string }[],
+    overrides: Partial<Page> = {},
+  ) => makePage(u(name), { htmlFacts: { lang, hreflang }, ...overrides });
+
+  it('flags a page with neither lang nor hreflang, but not with one of them', () => {
+    const result = run(114, [
+      withLanguage('none', null, []),
+      withLanguage('lang', 'fr', []),
+      withLanguage('alternate', null, [{ lang: 'fr', url: u('fr') }]),
+    ]);
+    expect(flaggedUrls(result)).toEqual([u('none')]);
+    expect(result.examined).toBe(3);
+  });
+
+  it('does not examine error pages, non-HTML pages or pages without facts', () => {
+    const result = run(114, [
+      withLanguage('gone', null, [], { status: 404 }),
+      withLanguage('img', null, [], { isHtml: false }),
       makePage(u('old'), { htmlFacts: null }),
     ]);
     expect(flaggedUrls(result)).toEqual([]);

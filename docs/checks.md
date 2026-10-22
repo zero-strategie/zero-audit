@@ -1,9 +1,9 @@
 # Checks reference
 
-zero-audit runs 56 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
+zero-audit runs 57 checks on every audit. Each check has a numeric id, a severity, a theme and a scope:
 
 - **Severity**: `error`, `warning` or `notice`. Severity weighs on the health score (see [User guide → Scores](user-guide.md#scores)).
-- **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `international` and `markup` themes have no check yet and are not computable (no score) until their checks land.
+- **Theme**: `crawlability`, `https`, `linking`, `on-page`, `international`, `markup` or `other`. Each theme gets its own score. The `markup` theme has no check yet and is not computable (no score) until its checks land.
 - **Scope**: a *page* check examines each page it applies to, and its `examined` count is the number of those pages. A *site* check examines the site as a whole, so its `examined` is 1.
 
 The ids follow the numbering used by Semrush's Site Audit, so that results can be compared. zero-audit is an independent project, not affiliated with or endorsed by Semrush, and the check wording is original. Ids **1000–1999** are reserved for our own checks. The CLI and the dashboard show the labels in French.
@@ -45,6 +45,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
 | 111 | error | other | page | An HTML page answering 2xx took more than 3000 ms to respond. `info.responseTimeMs` gives the time. | Investigate server time: caching, database queries, hosting. |
 | 112 | warning | on-page | page | The text-to-HTML ratio is below 10 %. The ratio is the UTF-8 byte size of the visible body text divided by the byte size of the HTML. | Reduce markup bloat or add real content. |
 | 113 | warning | crawlability | page | A URL has more than 2 query parameters. `info.count` gives the number of parameters. | Simplify the URL: keep only the parameters that change the content. |
+| 114 | warning | international | page | An HTML page answering 2xx declares no language: no `lang` attribute on `<html>` and no `<link rel="alternate" hreflang>`. | Add `<html lang="...">` with the page language. |
 | 115 | warning | on-page | page | An HTML page answering 2xx declares no encoding: no `charset` in the `Content-Type` header and no `<meta charset>` (or `http-equiv="Content-Type"` charset) in the document. | Declare `<meta charset="utf-8">` in the head, or send a charset in the `Content-Type` header. |
 | 116 | warning | on-page | page | An HTML page answering 2xx does not start with a `<!DOCTYPE>` (comments and whitespace may come first), which leaves browsers in quirks mode. | Add `<!DOCTYPE html>` as the first line of the document. |
 | 117 | warning | on-page | page | The page has fewer than 200 words of visible text. | Expand thin content, or merge or noindex the page. |
@@ -101,6 +102,7 @@ Thresholds live in `src/domain/thresholds.ts`, and the checks themselves in `src
   - Check 30 applies to https HTML 2xx pages whose HTML facts were recorded. Resources are read from the markup, resolved against `<base>`, and never requested. `<a>` links are not resources (check 31). A `Content-Security-Policy: upgrade-insecure-requests` header, which makes browsers upgrade these requests, is not taken into account.
   - Check 44 applies to HTML 2xx pages whose HTML facts were recorded; only `<a href>` values are examined (rule A3), and the other link checks are unchanged.
   - Checks 39 and 40 apply to HTML 2xx pages whose HTML facts were recorded. Check 40 ignores a refresh with no `url=` (a plain reload).
+  - Check 114 applies to HTML 2xx pages whose HTML facts were recorded; either a non-empty `lang` or at least one hreflang alternate is enough.
   - Check 21 applies to HTML 2xx pages whose HTML facts were recorded; the size is the UTF-8 byte length of the document the crawler read (threshold `MAX_HTML_BYTES`, 2 MiB), strictly exceeded. Check 220 compares the visible word count to `TOO_MUCH_CONTENT_WORDS` (10,000 words), strictly exceeded.
   - Check 111 applies to HTML 2xx pages and compares the response time strictly to 3000 ms. It is the time seen by the crawler, from sending the request to reading the whole body, not a browser loading time: network distance and the crawler's own load can inflate it.
   - Only pages reached within the `--limit` are examined.
