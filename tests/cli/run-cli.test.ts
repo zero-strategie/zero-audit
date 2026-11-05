@@ -129,6 +129,10 @@ describe('runCli', () => {
     expect(run.out).toContain('Pages par groupe');
     expect(exported.scores.health.score).toEqual(expect.any(Number));
     expect(exported.scores.themes.https).toEqual({ score: 0, variation: null });
+    expect(Object.keys(exported.scores.themes)).toEqual(
+      expect.arrayContaining(['international', 'markup']),
+    );
+    expect(Object.keys(exported.scores.themes)).toHaveLength(7);
     expect(run.out).toMatch(/Santé du site : \d+\n/);
     expect(run.out).not.toContain('/ 100');
     expect(run.out).toMatch(/https : 0\b/);
@@ -141,7 +145,7 @@ describe('runCli', () => {
     expect(exported.siteFiles.map(({ kind }) => kind)).toEqual(['llms', 'robots', 'sitemap']);
     expect(run.out).toContain('llms.txt :');
     expect(exported.links.length).toBeGreaterThan(0);
-    expect(exported.checkResults).toHaveLength(44);
+    expect(exported.checkResults).toHaveLength(71);
     expect(exported.checkResults.some((result) => result.count === 0)).toBe(true);
 
     const stored = await snapshots(exported.snapshot.id);
@@ -169,7 +173,7 @@ describe('runCli', () => {
     };
     expect(Number.isInteger(exported.scores.health.score)).toBe(true);
     expect(exported.scores.health.variation).toBe(0);
-    expect(exported.checkResults).toHaveLength(44);
+    expect(exported.checkResults).toHaveLength(71);
     for (const result of exported.checkResults) {
       expect(result).toMatchObject({ delta: 0, newCount: 0, fixedCount: 0 });
     }

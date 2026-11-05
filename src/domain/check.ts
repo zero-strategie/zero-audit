@@ -1,7 +1,15 @@
 import type { CrawlResult, Page } from './crawl.js';
 import { DomainError } from './errors.js';
 
-export const THEMES = ['crawlability', 'https', 'linking', 'on-page', 'other'] as const;
+export const THEMES = [
+  'crawlability',
+  'https',
+  'linking',
+  'on-page',
+  'international',
+  'markup',
+  'other',
+] as const;
 export type Theme = (typeof THEMES)[number];
 
 export type Severity = 'error' | 'warning' | 'notice';

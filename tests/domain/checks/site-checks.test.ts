@@ -156,6 +156,174 @@ describe('check 125 (sitemap missing)', () => {
   });
 });
 
+describe('check 124 (sitemap not declared in robots.txt)', () => {
+  const declared = (count: number): SiteFile =>
+    robotsFile({ invalidLines: [], invalidCount: 0, sitemapDeclarations: count });
+  const crawlWith = (
+    files: SiteFile[],
+    site: { robotsFound: boolean; sitemapFound: boolean },
+  ): CrawlResult => crawlOf([], [], site, null, [], [], files);
+
+  it('flags a found sitemap when robots.txt has no Sitemap line', () => {
+    const result = runCheck(
+      siteChecks,
+      124,
+      crawlWith([declared(0)], { robotsFound: true, sitemapFound: true }),
+    );
+
+    expect(result.occurrences).toEqual([{ checkId: 124, pageUrl: null, info: {} }]);
+  });
+
+  it.each([
+    ['robots.txt declares a sitemap', [declared(1)], { robotsFound: true, sitemapFound: true }],
+    ['robots.txt is absent', [robotsFile(null, 404)], { robotsFound: false, sitemapFound: true }],
+    ['no sitemap was found', [declared(0)], { robotsFound: true, sitemapFound: false }],
+  ])('does not flag when %s', (_label, files, site) => {
+    expect(runCheck(siteChecks, 124, crawlWith(files, site)).count).toBe(0);
+  });
+});
+
+describe('check 17 (invalid sitemap)', () => {
+  const sitemapFile = (facts: SiteFile['facts']): SiteFile => ({
+    kind: 'sitemap',
+    url: u('sitemap.xml'),
+    status: 200,
+    error: null,
+    facts,
+  });
+  const facts = (overrides: Record<string, unknown> = {}): SiteFile['facts'] => ({
+    malformedXml: false,
+    truncated: false,
+    issues: { total: 0, examples: [] },
+    ...overrides,
+  });
+  const run17 = (file: SiteFile): CheckResult =>
+    runCheck(
+      siteChecks,
+      17,
+      crawlOf([], [], { robotsFound: true, sitemapFound: true }, null, [], [], [file]),
+    );
+
+  it('emits an occurrence with the schema issues of the sitemap', () => {
+    const issues = {
+      total: 1,
+      examples: [{ type: 'missing-loc', source: u('sitemap.xml'), loc: null, value: null }],
+    };
+
+    const result = run17(sitemapFile(facts({ issues })));
+
+    expect(result.occurrences).toEqual([
+      {
+        checkId: 17,
+        pageUrl: null,
+        info: { sitemap: u('sitemap.xml'), malformedXml: false, issues },
+      },
+    ]);
+  });
+
+  it('flags malformed XML even without schema issues (125 may report it too)', () => {
+    const result = run17(sitemapFile(facts({ malformedXml: true })));
+
+    expect(result.occurrences.map((o) => o.info)).toEqual([
+      expect.objectContaining({ malformedXml: true }),
+    ]);
+  });
+
+  it.each([
+    [
+      'a truncated sitemap',
+      sitemapFile(facts({ truncated: true, issues: { total: 2, examples: [] } })),
+    ],
+    ['a conforming sitemap', sitemapFile(facts())],
+    ['facts that are null', sitemapFile(null)],
+  ])('does not flag %s', (_label, file) => {
+    expect(run17(file).count).toBe(0);
+  });
+});
+
+describe('check 43 (oversized sitemap)', () => {
+  const MAX_URLS = 50_000;
+  const MAX_BYTES = 52_428_800;
+  const facts = (overrides: Record<string, unknown> = {}): SiteFile['facts'] => ({
+    truncated: false,
+    urlCount: 10,
+    maxUrlCount: 10,
+    contentLength: null,
+    contentEncoding: null,
+    ...overrides,
+  });
+  const run43 = (overrides: Record<string, unknown> | null): CheckResult =>
+    runCheck(
+      siteChecks,
+      43,
+      crawlOf(
+        [],
+        [],
+        { robotsFound: true, sitemapFound: true },
+        null,
+        [],
+        [],
+        [
+          {
+            kind: 'sitemap',
+            url: u('sitemap.xml'),
+            status: 200,
+            error: null,
+            facts: overrides === null ? null : facts(overrides),
+          },
+        ],
+      ),
+    );
+
+  it('flags a sitemap listing one URL more than the limit, not one at the limit', () => {
+    const over = run43({ urlCount: MAX_URLS + 1, maxUrlCount: MAX_URLS + 1 });
+
+    expect(over.occurrences).toEqual([
+      {
+        checkId: 43,
+        pageUrl: null,
+        info: {
+          sitemap: u('sitemap.xml'),
+          urlCount: MAX_URLS + 1,
+          maxUrlCount: MAX_URLS + 1,
+          truncated: false,
+        },
+      },
+    ]);
+    expect(run43({ maxUrlCount: MAX_URLS }).count).toBe(0);
+  });
+
+  it('does not flag an index whose files are each within the limit, however many URLs it totals', () => {
+    expect(run43({ urlCount: 2 * MAX_URLS, maxUrlCount: MAX_URLS }).count).toBe(0);
+  });
+
+  it('flags a declared content-length above 50 MiB when the body is not encoded', () => {
+    const result = run43({ contentLength: MAX_BYTES + 1 });
+
+    expect(result.occurrences.map((o) => o.info)).toEqual([
+      expect.objectContaining({ bytes: MAX_BYTES + 1 }),
+    ]);
+    expect(run43({ contentLength: MAX_BYTES }).count).toBe(0);
+  });
+
+  it('ignores a content-length that describes a compressed body', () => {
+    expect(run43({ contentLength: MAX_BYTES + 1, contentEncoding: 'gzip' }).count).toBe(0);
+  });
+
+  it('flags a truncated sitemap and says at least 5 MiB were received', () => {
+    const result = run43({ truncated: true });
+
+    expect(result.occurrences.map((o) => o.info)).toEqual([
+      expect.objectContaining({ truncated: true, note: 'au moins 5 Mio reçus' }),
+    ]);
+  });
+
+  it('does not flag a small sitemap or facts that are null', () => {
+    expect(run43({}).count).toBe(0);
+    expect(run43(null).count).toBe(0);
+  });
+});
+
 describe('check 203 (robots.txt missing)', () => {
   it('flags the site when no robots.txt was found', () => {
     const missing = runCheck(
@@ -228,6 +396,7 @@ const llmsFile = (status: number | null, error: string | null = null): SiteFile 
   url: u('llms.txt'),
   status,
   error,
+  facts: null,
 });
 
 describe('check 137 (llms.txt missing)', () => {
@@ -246,8 +415,82 @@ describe('check 137 (llms.txt missing)', () => {
   });
 
   it('does not flag a snapshot recorded without any llms row', () => {
-    const robots: SiteFile = { kind: 'robots', url: u('robots.txt'), status: 404, error: null };
+    const robots: SiteFile = {
+      kind: 'robots',
+      url: u('robots.txt'),
+      status: 404,
+      error: null,
+      facts: null,
+    };
     expect(runCheck(siteChecks, 137, llmsCrawl([robots])).count).toBe(0);
+  });
+});
+
+const robotsFile = (facts: SiteFile['facts'], status: number | null = 200): SiteFile => ({
+  kind: 'robots',
+  url: u('robots.txt'),
+  status,
+  error: null,
+  facts,
+});
+
+const robotsCrawl = (files: SiteFile[]): CrawlResult =>
+  crawlOf([], [], { robotsFound: true, sitemapFound: false }, null, [], [], files);
+
+describe('check 16 (invalid robots.txt)', () => {
+  it('emits a single occurrence listing the invalid lines with number and text', () => {
+    const lines = [
+      { number: 2, text: 'bogus' },
+      { number: 5, text: 'Noindex: /x' },
+    ];
+    const facts = { invalidLines: lines, invalidCount: 2, sitemapDeclarations: 0 };
+
+    const result = runCheck(siteChecks, 16, robotsCrawl([robotsFile(facts)]));
+
+    expect(result.occurrences).toEqual([{ checkId: 16, pageUrl: null, info: { lines } }]);
+  });
+
+  it.each([
+    ['a valid file', robotsFile({ invalidLines: [], invalidCount: 0, sitemapDeclarations: 1 })],
+    ['an absent file', robotsFile(null, 404)],
+    ['facts that are null', robotsFile(null)],
+  ])('does not flag %s', (_label, file) => {
+    expect(runCheck(siteChecks, 16, robotsCrawl([file])).count).toBe(0);
+  });
+
+  it('does not flag a snapshot without any robots row', () => {
+    expect(runCheck(siteChecks, 16, robotsCrawl([])).count).toBe(0);
+  });
+});
+
+describe('check 219 (malformed llms.txt)', () => {
+  const llmsFile = (facts: SiteFile['facts'], status: number | null = 200): SiteFile => ({
+    kind: 'llms',
+    url: u('llms.txt'),
+    status,
+    error: null,
+    facts,
+  });
+  const run219 = (files: SiteFile[]): CheckResult => runCheck(siteChecks, 219, robotsCrawl(files));
+
+  it('emits a single occurrence carrying the problems', () => {
+    const problems = [
+      { code: 'multiple-h1', line: 4 },
+      { code: 'invalid-list-entry', line: 7 },
+    ];
+
+    const result = run219([llmsFile({ problems, problemCount: 2 })]);
+
+    expect(result.occurrences).toEqual([{ checkId: 219, pageUrl: null, info: { problems } }]);
+  });
+
+  it.each([
+    ['a conforming file', [llmsFile({ problems: [], problemCount: 0 })]],
+    ['an absent file', [llmsFile(null, 404)]],
+    ['facts that are null', [llmsFile(null)]],
+    ['a snapshot without any llms row', []],
+  ])('does not flag %s', (_label, files) => {
+    expect(run219(files).count).toBe(0);
   });
 });
 
@@ -343,8 +586,13 @@ describe('registry metadata', () => {
         7: 'error',
         8: 'error',
         15: 'error',
+        16: 'error',
+        17: 'error',
+        43: 'error',
+        124: 'warning',
         125: 'warning',
         137: 'notice',
+        219: 'notice',
         205: 'notice',
         203: 'notice',
         213: 'notice',

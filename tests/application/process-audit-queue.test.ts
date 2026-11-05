@@ -32,6 +32,7 @@ const crawlResult: CrawlResult = {
   links: [],
   siteFiles: [],
   hostProbe: null,
+  sitemapUrls: [],
   slashProbes: [],
   site: { robotsFound: true, sitemapFound: true },
 };

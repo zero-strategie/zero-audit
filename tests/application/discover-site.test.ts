@@ -5,6 +5,7 @@ import type {
   HttpResponse,
   NetworkFailure,
 } from '../../src/application/ports/http-client.js';
+import { MAX_FACT_EXAMPLES } from '../../src/domain/crawl.js';
 import { RobotsParserAdapter } from '../../src/infrastructure/robots-parser-adapter.js';
 import { FastXmlSitemapReader } from '../../src/infrastructure/fast-xml-sitemap-reader.js';
 
@@ -12,7 +13,9 @@ const ROOT = 'https://exemple.com/';
 const HOST = 'exemple.com';
 const NS = 'xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"';
 
-type Reply = { status: number; body?: string } | 'network-error';
+type Reply =
+  | { status: number; body?: string; headers?: Record<string, string>; truncated?: boolean }
+  | 'network-error';
 
 class FakeHttpClient implements HttpClient {
   readonly requested: string[] = [];
@@ -28,9 +31,9 @@ class FakeHttpClient implements HttpClient {
     return Promise.resolve({
       url,
       status: reply.status,
-      headers: {},
+      headers: reply.headers ?? {},
       body: reply.body ?? '',
-      truncated: false,
+      truncated: reply.truncated ?? false,
       responseTimeMs: 1,
     });
   }
@@ -50,6 +53,83 @@ const discover = async (replies: Record<string, Reply>) => {
   });
   return { http, result: await useCase.execute(ROOT, HOST) };
 };
+
+describe('DiscoverSite robots.txt facts', () => {
+  it('records the grammar facts of a found robots.txt without storing the body', async () => {
+    const { result } = await discover({
+      'https://exemple.com/robots.txt': {
+        status: 200,
+        body: 'User-agent: *\nbogus line\nSitemap: https://exemple.com/sitemap.xml',
+      },
+    });
+
+    const robots = result.siteFiles.find((file) => file.kind === 'robots');
+    expect(robots?.facts).toEqual({
+      invalidLines: [{ number: 2, text: 'bogus line' }],
+      invalidCount: 1,
+      sitemapDeclarations: 1,
+    });
+  });
+
+  it.each<[string, Reply]>([
+    ['a 404', { status: 404 }],
+    ['a 500', { status: 500, body: 'garbage' }],
+    ['a network error', 'network-error'],
+  ])('leaves facts null for %s', async (_label, reply) => {
+    const { result } = await discover({ 'https://exemple.com/robots.txt': reply });
+
+    expect(result.siteFiles.find((file) => file.kind === 'robots')?.facts).toBeNull();
+  });
+
+  it('emits no request beyond robots.txt, the sitemap and llms.txt', async () => {
+    const { http } = await discover({
+      'https://exemple.com/robots.txt': { status: 200, body: 'garbage' },
+    });
+
+    expect(http.requested).toEqual([
+      'https://exemple.com/robots.txt',
+      'https://exemple.com/sitemap.xml',
+      'https://exemple.com/llms.txt',
+    ]);
+  });
+});
+
+describe('DiscoverSite llms.txt facts', () => {
+  const llmsOf = (result: Awaited<ReturnType<typeof discover>>['result']) =>
+    result.siteFiles.find((file) => file.kind === 'llms');
+
+  it('records the format problems of a found llms.txt', async () => {
+    const { result } = await discover({
+      'https://exemple.com/llms.txt': { status: 200, body: 'Bonjour\n# Titre' },
+    });
+
+    expect(llmsOf(result)?.facts).toEqual({
+      problems: [{ code: 'missing-h1', line: 1 }],
+      problemCount: 1,
+    });
+  });
+
+  it('records no problem for a conforming llms.txt', async () => {
+    const { result } = await discover({
+      'https://exemple.com/llms.txt': {
+        status: 200,
+        body: '# Titre\n\n## Docs\n- [A](https://exemple.com/a)',
+      },
+    });
+
+    expect(llmsOf(result)?.facts).toEqual({ problems: [], problemCount: 0 });
+  });
+
+  it.each<[string, Reply]>([
+    ['a 404', { status: 404 }],
+    ['a 500', { status: 500, body: 'garbage' }],
+    ['a network error', 'network-error'],
+  ])('leaves facts null for %s', async (_label, reply) => {
+    const { result } = await discover({ 'https://exemple.com/llms.txt': reply });
+
+    expect(llmsOf(result)?.facts).toBeNull();
+  });
+});
 
 describe('DiscoverSite robots.txt', () => {
   it('applies the rules of a found robots.txt', async () => {
@@ -180,6 +260,17 @@ describe('DiscoverSite sitemaps', () => {
   });
 });
 
+const oneUrlFacts = (body: string) => ({
+  malformedXml: false,
+  truncated: false,
+  sizeBytes: Buffer.byteLength(body),
+  contentLength: null,
+  contentEncoding: null,
+  urlCount: 1,
+  maxUrlCount: 1,
+  issues: { total: 0, examples: [] },
+});
+
 describe('DiscoverSite technical files', () => {
   it('records robots.txt, sitemap.xml and llms.txt with their absolute URL and status', async () => {
     const { result } = await discover({
@@ -188,9 +279,21 @@ describe('DiscoverSite technical files', () => {
     });
 
     expect(result.siteFiles).toEqual([
-      { kind: 'robots', url: 'https://exemple.com/robots.txt', status: 200, error: null },
-      { kind: 'sitemap', url: 'https://exemple.com/sitemap.xml', status: 200, error: null },
-      { kind: 'llms', url: 'https://exemple.com/llms.txt', status: 404, error: null },
+      {
+        kind: 'robots',
+        url: 'https://exemple.com/robots.txt',
+        status: 200,
+        error: null,
+        facts: { invalidLines: [], invalidCount: 0, sitemapDeclarations: 0 },
+      },
+      {
+        kind: 'sitemap',
+        url: 'https://exemple.com/sitemap.xml',
+        status: 200,
+        error: null,
+        facts: oneUrlFacts(urlset('https://exemple.com/a')),
+      },
+      { kind: 'llms', url: 'https://exemple.com/llms.txt', status: 404, error: null, facts: null },
     ]);
   });
 
@@ -204,8 +307,14 @@ describe('DiscoverSite technical files', () => {
     });
 
     expect(result.siteFiles.filter(({ kind }) => kind === 'sitemap')).toEqual([
-      { kind: 'sitemap', url: 'https://exemple.com/s1.xml', status: 200, error: null },
-      { kind: 'sitemap', url: 'https://exemple.com/s2.xml', status: 404, error: null },
+      {
+        kind: 'sitemap',
+        url: 'https://exemple.com/s1.xml',
+        status: 200,
+        error: null,
+        facts: oneUrlFacts(urlset('https://exemple.com/one')),
+      },
+      { kind: 'sitemap', url: 'https://exemple.com/s2.xml', status: 404, error: null, facts: null },
     ]);
     expect(http.requested).not.toContain('https://exemple.com/sitemap.xml');
   });
@@ -218,6 +327,7 @@ describe('DiscoverSite technical files', () => {
       url: 'https://exemple.com/llms.txt',
       status: null,
       error: 'connection',
+      facts: null,
     });
   });
 
@@ -228,5 +338,141 @@ describe('DiscoverSite technical files', () => {
     });
 
     expect(result.siteFiles.filter(({ kind }) => kind === 'sitemap')).toHaveLength(1);
+  });
+});
+
+describe('DiscoverSite sitemap facts', () => {
+  const sitemapFacts = async (replies: Record<string, Reply>) => {
+    const { result } = await discover(replies);
+    return {
+      result,
+      facts: result.siteFiles.find((file) => file.kind === 'sitemap')?.facts,
+    };
+  };
+  const SITEMAP = 'https://exemple.com/sitemap.xml';
+
+  it('records size, declared headers, url count and format issues of a urlset', async () => {
+    const body = `<urlset ${NS}><url><loc>https://exemple.com/a</loc><priority>7</priority></url><url><loc>/b</loc></url></urlset>`;
+    const { facts, result } = await sitemapFacts({
+      [SITEMAP]: {
+        status: 200,
+        body,
+        headers: { 'content-length': '4096', 'content-encoding': 'gzip' },
+      },
+    });
+
+    expect(result.sitemapFound).toBe(true);
+    expect(facts).toEqual({
+      malformedXml: false,
+      truncated: false,
+      sizeBytes: Buffer.byteLength(body),
+      contentLength: 4096,
+      contentEncoding: 'gzip',
+      urlCount: 2,
+      maxUrlCount: 2,
+      issues: {
+        total: 2,
+        examples: [
+          { type: 'invalid-priority', source: SITEMAP, loc: 'https://exemple.com/a', value: '7' },
+          { type: 'relative-loc', source: SITEMAP, loc: '/b', value: null },
+        ],
+      },
+    });
+  });
+
+  it('flags malformed XML without finding a sitemap', async () => {
+    const { facts, result } = await sitemapFacts({
+      [SITEMAP]: { status: 200, body: '<urlset><url></urlset>' },
+    });
+
+    expect(result.sitemapFound).toBe(false);
+    expect(facts).toMatchObject({ malformedXml: true, truncated: false, urlCount: 0 });
+  });
+
+  it('reports a truncated body as truncated rather than malformed', async () => {
+    const { facts } = await sitemapFacts({
+      [SITEMAP]: { status: 200, body: '<urlset><url><lo', truncated: true },
+    });
+
+    expect(facts).toMatchObject({ malformedXml: false, truncated: true });
+  });
+
+  it('reports the largest per-file url count, children of an index included', async () => {
+    const manyUrls = (count: number) =>
+      urlset(...Array.from({ length: count }, (_, i) => `https://exemple.com/p${String(i)}`));
+    const { facts } = await sitemapFacts({
+      [SITEMAP]: {
+        status: 200,
+        body: index('https://exemple.com/s1.xml', 'https://exemple.com/s2.xml'),
+      },
+      'https://exemple.com/s1.xml': { status: 200, body: manyUrls(30) },
+      'https://exemple.com/s2.xml': { status: 200, body: manyUrls(20) },
+    });
+
+    expect(facts).toMatchObject({ urlCount: 50, maxUrlCount: 30 });
+  });
+
+  it('keeps facts null when the sitemap is not served', async () => {
+    const { facts } = await sitemapFacts({});
+
+    expect(facts).toBeNull();
+  });
+
+  it('aggregates the facts of the children of an index', async () => {
+    const { facts, result } = await sitemapFacts({
+      [SITEMAP]: {
+        status: 200,
+        body: index('https://exemple.com/s1.xml', 'https://exemple.com/s2.xml'),
+      },
+      'https://exemple.com/s1.xml': {
+        status: 200,
+        body: urlset('https://exemple.com/a', 'https://exemple.com/b'),
+      },
+      'https://exemple.com/s2.xml': {
+        status: 200,
+        body: `<urlset ${NS}><url><loc>https://exemple.com/c</loc><changefreq>soon</changefreq></url></urlset>`,
+        truncated: true,
+      },
+    });
+
+    expect(result.sitemapUrls).toHaveLength(3);
+    expect(facts).toMatchObject({
+      urlCount: 3,
+      truncated: true,
+      malformedXml: false,
+      issues: {
+        total: 1,
+        examples: [
+          {
+            type: 'invalid-changefreq',
+            source: 'https://exemple.com/s2.xml',
+            loc: 'https://exemple.com/c',
+            value: 'soon',
+          },
+        ],
+      },
+    });
+  });
+
+  it('flags an index whose child is malformed', async () => {
+    const { facts } = await sitemapFacts({
+      [SITEMAP]: { status: 200, body: index('https://exemple.com/s1.xml') },
+      'https://exemple.com/s1.xml': { status: 200, body: 'not xml' },
+    });
+
+    expect(facts).toMatchObject({ malformedXml: true, urlCount: 0 });
+  });
+
+  it('caps the listed issues and keeps the real total', async () => {
+    const entries = Array.from(
+      { length: MAX_FACT_EXAMPLES + 5 },
+      (_, n) => `<url><loc>/p${String(n)}</loc></url>`,
+    ).join('');
+    const { facts } = await sitemapFacts({
+      [SITEMAP]: { status: 200, body: `<urlset ${NS}>${entries}</urlset>` },
+    });
+
+    expect(facts).toMatchObject({ issues: { total: MAX_FACT_EXAMPLES + 5 } });
+    expect((facts?.['issues'] as { examples: unknown[] }).examples).toHaveLength(MAX_FACT_EXAMPLES);
   });
 });

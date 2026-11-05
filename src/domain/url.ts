@@ -14,6 +14,33 @@ export const resolveUrl = (href: string, baseUrl: string): string | null => {
   return normalizeUrl(resolved.href);
 };
 
+const KNOWN_SCHEMES = new Set([
+  'http',
+  'https',
+  'mailto',
+  'tel',
+  'sms',
+  'ftp',
+  'javascript',
+  'data',
+]);
+const SCHEME_PREFIX = /^([a-z][a-z0-9+.-]*):/i;
+const WEB_SCHEME_WITHOUT_COLON = /^https?\/\//i;
+const WELL_FORMED_WEB_URL = /^https?:\/\/[^/?#\s]/i;
+const VOID_JAVASCRIPT = /^javascript:\s*void\(\s*0?\s*\)\s*;?$/i;
+
+/** True for an href that is broken rather than merely not followed (`#`, empty and `javascript:void(0)` are not). */
+export const isMalformedHref = (href: string, baseUrl: string): boolean => {
+  const trimmed = href.trim();
+  if (trimmed === '' || trimmed.startsWith('#') || VOID_JAVASCRIPT.test(trimmed)) return false;
+  if (WEB_SCHEME_WITHOUT_COLON.test(trimmed)) return true;
+  const scheme = SCHEME_PREFIX.exec(trimmed)?.[1]?.toLowerCase();
+  if (scheme === undefined) return URL.parse(trimmed, baseUrl) === null;
+  if (!KNOWN_SCHEMES.has(scheme)) return true;
+  const isWebScheme = scheme === 'http' || scheme === 'https';
+  return isWebScheme && (!WELL_FORMED_WEB_URL.test(trimmed) || URL.parse(trimmed) === null);
+};
+
 export const isInternal = (url: string, internalHost: string): boolean =>
   new URL(url).hostname === internalHost.toLowerCase();
 

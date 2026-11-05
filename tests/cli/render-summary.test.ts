@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SnapshotDetails } from '../../src/application/ports/snapshot-repository.js';
-import type { CheckResult, Severity } from '../../src/domain/check.js';
+import { THEMES, type CheckResult, type Severity } from '../../src/domain/check.js';
 import { Snapshot } from '../../src/domain/snapshot.js';
 import type { SnapshotReport } from '../../src/application/get-snapshot-report.js';
 import { buildScoreCard } from '../../src/domain/scoring.js';
@@ -49,9 +49,9 @@ const details: SnapshotDetails = {
   ],
   links: [],
   siteFiles: [
-    { kind: 'llms', url: 'https://e.com/llms.txt', status: null, error: 'connection' },
-    { kind: 'robots', url: 'https://e.com/robots.txt', status: 200, error: null },
-    { kind: 'sitemap', url: 'https://e.com/sitemap.xml', status: 404, error: null },
+    { kind: 'llms', url: 'https://e.com/llms.txt', status: null, error: 'connection', facts: null },
+    { kind: 'robots', url: 'https://e.com/robots.txt', status: 200, error: null, facts: null },
+    { kind: 'sitemap', url: 'https://e.com/sitemap.xml', status: 404, error: null, facts: null },
   ],
   hostProbe: null,
   slashProbes: [],
@@ -106,6 +106,15 @@ describe('renderSummary', () => {
     expect(text).toContain('https : non calculable');
     expect(text).toContain('linking : non calculable');
     expect(text).toContain('other : non calculable');
+  });
+
+  it('shows the international and markup themes, for seven theme lines', () => {
+    const themeLines = lines.filter((line) =>
+      THEMES.some((theme) => line.startsWith(`  ${theme} : `)),
+    );
+    expect(themeLines).toHaveLength(7);
+    expect(themeLines).toContain('  international : non calculable');
+    expect(themeLines).toContain('  markup : non calculable');
   });
 
   it('shows one line per technical file with its status or its network error', () => {

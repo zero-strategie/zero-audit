@@ -59,7 +59,9 @@ describe('computeThemeScores', () => {
     expect(scores).toEqual({
       crawlability: null,
       https: null,
+      international: null,
       linking: 100,
+      markup: null,
       'on-page': 75,
       other: null,
     });
